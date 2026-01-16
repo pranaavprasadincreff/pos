@@ -5,7 +5,7 @@ A modern Point of Sale system built with Spring Boot and MongoDB.
 ## Project Structure
 
 The project is divided into two main modules:
-- `pos-model`: Contains all DTOs, Forms, and Data classes
+- `pos-model`: Contains all Forms, and Data classes
 - `pos-server`: Contains the application logic, controllers, and database operations
 
 ### Architecture Layers
@@ -128,3 +128,5 @@ Anurag Singh
 
 
 
+# POS
+# POS
