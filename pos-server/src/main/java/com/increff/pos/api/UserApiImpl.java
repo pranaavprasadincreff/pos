@@ -4,6 +4,7 @@ import com.increff.pos.dao.UserDao;
 import com.increff.pos.db.UserPojo;
 import com.increff.pos.db.UserUpdatePojo;
 import com.increff.pos.exception.ApiException;
+import com.increff.pos.util.EmailNormalizer;
 import lombok.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +33,7 @@ public class UserApiImpl implements UserApi {
     @Transactional(rollbackFor = ApiException.class)
     public UserPojo addUser(UserPojo userPojo) throws ApiException {
         logger.info("Creating user with email: {}", userPojo.getEmail());
+        userPojo.setEmail(EmailNormalizer.normalize(userPojo.getEmail()));
         checkIfEmailExists(userPojo);
         UserPojo saved = dao.save(userPojo);
         logger.info("Created user with id: {}", saved.getId());
@@ -67,6 +69,8 @@ public class UserApiImpl implements UserApi {
     @Transactional(rollbackFor = ApiException.class)
     public UserPojo updateUser(UserUpdatePojo userUpdatePojo) throws ApiException {
         logger.info("Updating user with id: {}", userUpdatePojo.getId());
+        userUpdatePojo.setNewEmail(EmailNormalizer.normalize(userUpdatePojo.getNewEmail()));
+        userUpdatePojo.setOldEmail(EmailNormalizer.normalize(userUpdatePojo.getOldEmail()));
         UserPojo existing = getUserByEmail(userUpdatePojo.getOldEmail());
         checkIfEmailExistsForUpdate(userUpdatePojo);
         existing.setName(userUpdatePojo.getName());
