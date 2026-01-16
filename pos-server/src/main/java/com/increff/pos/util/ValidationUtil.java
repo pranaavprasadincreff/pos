@@ -3,14 +3,25 @@ package com.increff.pos.util;
 import com.increff.pos.exception.ApiException;
 import com.increff.pos.model.form.UserForm;
 import com.increff.pos.model.form.PageForm;
+import com.increff.pos.model.form.UserUpdateForm;
 import org.springframework.util.StringUtils;
 
 public class ValidationUtil {
-
-    // User validations
-    public static void validateUserForm(UserForm form) throws ApiException {
+    public static void validateForm(UserForm form) throws ApiException {
         validateEmail(form.getEmail());
         validateName(form.getName());
+    }
+
+    public static void validateUpdateForm(UserUpdateForm form) throws ApiException {
+        validateEmail(form.getOldEmail());
+        validateEmail(form.getNewEmail());
+        validateName(form.getName());
+    }
+
+    private static void validateId(String id) throws ApiException {
+        if (!StringUtils.hasText(id)) {
+            throw new ApiException("User id is required for update");
+        }
     }
 
     private static void validateEmail(String email) throws ApiException {
@@ -40,4 +51,4 @@ public class ValidationUtil {
             throw new ApiException("Page size cannot be greater than 100");
         }
     }
-} 
+}

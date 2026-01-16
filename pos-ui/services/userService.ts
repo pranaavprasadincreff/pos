@@ -1,6 +1,25 @@
-import {User, UserForm, PageResponse, UserUpdateForm} from './types';
+import { User, UserForm, PageResponse, UserUpdateForm } from './types'
 
-const BASE_URL = 'http://localhost:8080/api/user';
+const BASE_URL = 'http://localhost:8080/api/user'
+
+async function handleResponse<T>(res: Response): Promise<T> {
+    if (!res.ok) {
+        let message = 'Something went wrong'
+
+        try {
+            const errorBody = await res.json()
+            if (typeof errorBody?.message === 'string') {
+                message = errorBody.message
+            }
+        } catch {
+            throw new Error(message)
+        }
+
+        throw new Error(message)
+    }
+
+    return res.json()
+}
 
 export async function getUsers(
     page: number,
@@ -10,34 +29,27 @@ export async function getUsers(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ page, size }),
-    });
-    return res.json();
+    })
+
+    return handleResponse(res)
 }
 
 export async function addUser(form: UserForm) {
     const res = await fetch(`${BASE_URL}/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-    });
+        body: JSON.stringify(form), // ✅ correct
+    })
 
-    return handleResponse(res);
+    return handleResponse(res)
 }
 
 export async function updateUser(form: UserUpdateForm) {
     const res = await fetch(`${BASE_URL}/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ form }),
-    });
+        body: JSON.stringify(form), // ✅ FIXED
+    })
 
-    return handleResponse(res);
-}
-
-async function handleResponse(res: Response) {
-    if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || 'Request failed');
-    }
-    return res.json();
+    return handleResponse(res)
 }

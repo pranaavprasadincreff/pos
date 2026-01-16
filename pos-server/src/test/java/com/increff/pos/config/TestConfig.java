@@ -2,6 +2,7 @@ package com.increff.pos.config;
 
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.data.mongodb.config.EnableMongoAuditing;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootApplication
