@@ -18,6 +18,7 @@ export default function Pagination({
             <Button
                 variant="outline"
                 size="sm"
+                className="border-slate-300 text-slate-700 hover:bg-slate-100"
                 disabled={page === 0}
                 onClick={() => onPageChange(page - 1)}
             >
@@ -31,6 +32,7 @@ export default function Pagination({
             <Button
                 variant="outline"
                 size="sm"
+                className="border-slate-300 text-slate-700 hover:bg-slate-100"
                 disabled={page + 1 >= totalPages}
                 onClick={() => onPageChange(page + 1)}
             >

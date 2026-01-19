@@ -23,9 +23,10 @@ import { User, UserForm, UserUpdateForm } from '@/services/types'
 import { toast } from 'sonner'
 
 export default function ClientsPage() {
-    const [clients, setClients] = useState<User[]>([])
+    // const [clients, setClients] = useState<User[]>([])
     const [page, setPage] = useState(0)
-    const [totalPages, setTotalPages] = useState(0)
+    // const [totalPages, setTotalPages] = useState(0)
+    const [allClients, setAllClients] = useState<User[]>([])
 
     const [modalOpen, setModalOpen] = useState(false)
     const [editingClient, setEditingClient] = useState<User | null>(null)
@@ -39,26 +40,32 @@ export default function ClientsPage() {
     const pageSize = 10
 
     useEffect(() => {
-        fetchClients()
+        fetchAllClients()
     }, [page])
 
-    async function fetchClients() {
-        const showToast = clients.length > 0
+    useEffect(() => {
+        setPage(0)
+    }, [searchTerm, searchBy])
+
+    async function fetchAllClients() {
         let toastId: string | number | undefined
 
         try {
             setLoading(true)
+            toastId = toast.loading('Loading clients...')
 
-            if (showToast) {
-                toastId = toast.loading('Loading clients...')
+            const collected: User[] = []
+            let currentPage = 0
+            let totalPages = 1
+
+            while (currentPage < totalPages) {
+                const res = await getUsers(currentPage, pageSize)
+                collected.push(...res.content)
+                totalPages = res.totalPages
+                currentPage++
             }
 
-            // 👇 TEST DELAY (remove later)
-            // await new Promise(r => setTimeout(r, 1500))
-
-            const res = await getUsers(page, pageSize)
-            setClients(res.content)
-            setTotalPages(res.totalPages)
+            setAllClients(collected)
         } catch (err) {
             toast.error('Failed to load clients')
         } finally {
@@ -71,7 +78,7 @@ export default function ClientsPage() {
         try {
             if (editingClient) {
                 await updateUser(form as UserUpdateForm)
-                toast.success('Client added successfully')
+                toast.success('Client updated successfully')
             } else {
                 await addUser(form as UserForm)
                 toast.success('Client added successfully')
@@ -80,12 +87,14 @@ export default function ClientsPage() {
 
             setModalOpen(false)
             setEditingClient(null)
-            fetchClients()
+            fetchAllClients()
         } catch (err: unknown) {
             if (err instanceof Error) {
                 toast.error(err.message)
+                throw err
             } else {
                 toast.error('Something went wrong')
+                throw new Error('Something went wrong')
             }
         }
     }
@@ -100,21 +109,43 @@ export default function ClientsPage() {
         setModalOpen(true)
     }
 
-    // 🔍 frontend filtering
     const filteredClients = useMemo(() => {
-        if (!searchTerm) return clients
+        if (!searchTerm) return allClients
 
-        return clients.filter((c) =>
+        return allClients.filter((c) =>
             c[searchBy].toLowerCase().includes(searchTerm.toLowerCase())
         )
-    }, [clients, searchTerm, searchBy])
+    }, [allClients, searchTerm, searchBy])
+
+    const totalPages = Math.ceil(filteredClients.length / pageSize)
+
+    const paginatedClients = useMemo(() => {
+        const start = page * pageSize
+        return filteredClients.slice(start, start + pageSize)
+    }, [filteredClients, page, pageSize])
+
+    useEffect(() => {
+        if (page >= totalPages && totalPages > 0) {
+            setPage(totalPages - 1)
+        }
+    }, [page, totalPages])
 
     return (
-        <div className="space-y-6">
+        <div className="max-w-6xl mx-auto space-y-8">
             {/* Header */}
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-semibold">Clients</h1>
-                <Button onClick={openAddModal} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                <div className="space-y-1">
+                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                        Clients
+                    </h1>
+                    <p className="text-sm text-slate-500">
+                        Manage and view all registered clients
+                    </p>
+                </div>
+                <Button
+                    onClick={openAddModal}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                >
                     + Add Client
                 </Button>
             </div>
@@ -138,12 +169,13 @@ export default function ClientsPage() {
                     placeholder={`Search by ${searchBy}`}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    className="focus-visible:ring-1 focus-visible:ring-indigo-500"
                 />
             </div>
 
             {/* Table */}
             <ClientTable
-                clients={filteredClients}
+                clients={paginatedClients}
                 loading={loading}
                 page={page}
                 pageSize={pageSize}
@@ -151,14 +183,11 @@ export default function ClientsPage() {
             />
 
             {/* Pagination */}
-            {!isSearching && (
-                <Pagination
-                    page={page}
-                    totalPages={totalPages}
-                    onPageChange={setPage}
-                />
-            )}
-
+            <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+            />
 
             {/* Modal */}
             <ClientModal

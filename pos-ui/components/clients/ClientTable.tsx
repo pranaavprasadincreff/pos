@@ -34,7 +34,6 @@ export default function ClientTable({
                         <TableHead>S No</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
-                        {/*<TableHead className="text-right">Action</TableHead>*/}
                     </TableRow>
                 </TableHeader>
 
@@ -59,14 +58,15 @@ export default function ClientTable({
                         </TableRow>
                     ) : (
                         clients.map((c, index) => (
-                            <TableRow key={c.email} className="hover:bg-muted/40 transition-colors">
+                            <TableRow key={c.email} className="hover:bg-slate-50 transition-colors">
                                 <TableCell >{page * pageSize + index + 1}</TableCell>
-                                <TableCell className="font-medium text-gray-900">{c.name}</TableCell>
-                                <TableCell className="text-muted-foreground">{c.email}</TableCell>
+                                <TableCell className="font-medium text-slate-900">{c.name}</TableCell>
+                                <TableCell className="text-slate-500">{c.email}</TableCell>
                                 <TableCell className="text-right">
                                     <Button
                                         size="sm"
                                         variant="ghost"
+                                        className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
                                         onClick={() => onEdit(c)}
                                     >
                                         Edit
