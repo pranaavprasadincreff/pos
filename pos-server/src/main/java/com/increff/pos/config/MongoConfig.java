@@ -10,7 +10,6 @@ import org.springframework.data.mongodb.core.mapping.MongoMappingContext;
 
 @Configuration
 @EnableMongoRepositories(basePackages = "com.increff.pos.dao")
-@EnableMongoAuditing
 public class MongoConfig {
 
     @Autowired

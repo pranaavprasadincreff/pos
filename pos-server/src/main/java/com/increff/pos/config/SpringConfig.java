@@ -7,6 +7,7 @@ import org.springframework.data.mongodb.config.EnableMongoAuditing;
 import org.springframework.web.bind.annotation.RestController;
 
 @SpringBootApplication
+@EnableMongoAuditing(dateTimeProviderRef = "auditingDateTimeProvider")
 @ComponentScan(basePackages = {"com.increff.pos"})
 public class SpringConfig {
 
