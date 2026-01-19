@@ -1,27 +1,19 @@
 package com.increff.pos.util;
 
 import com.increff.pos.exception.ApiException;
-import com.increff.pos.model.form.UserForm;
-import com.increff.pos.model.form.PageForm;
-import com.increff.pos.model.form.UserUpdateForm;
+import com.increff.pos.model.form.*;
 import org.springframework.util.StringUtils;
 
 public class ValidationUtil {
-    public static void validateForm(UserForm form) throws ApiException {
+    public static void validateUserForm(UserForm form) throws ApiException {
         validateEmail(form.getEmail());
         validateName(form.getName());
     }
 
-    public static void validateUpdateForm(UserUpdateForm form) throws ApiException {
+    public static void validateUserUpdateForm(UserUpdateForm form) throws ApiException {
         validateEmail(form.getOldEmail());
         validateEmail(form.getNewEmail());
         validateName(form.getName());
-    }
-
-    private static void validateId(String id) throws ApiException {
-        if (!StringUtils.hasText(id)) {
-            throw new ApiException("User id is required for update");
-        }
     }
 
     private static void validateEmail(String email) throws ApiException {
@@ -39,7 +31,57 @@ public class ValidationUtil {
         }
     }
 
-    // Pagination validations
+    public static void validateProductForm(ProductForm form) throws ApiException {
+        validateProductCommon(
+                form.getBarcode(),
+                form.getClientId(),
+                form.getName(),
+                form.getMrp()
+        );
+    }
+
+    public static void validateProductUpdateForm(ProductUpdateForm form) throws ApiException {
+        if (!StringUtils.hasText(form.getOldBarcode())) {
+            throw new ApiException("Old barcode cannot be empty");
+        }
+        validateProductCommon(
+                form.getNewBarcode(),
+                form.getClientId(),
+                form.getName(),
+                form.getMrp()
+        );
+    }
+
+    private static void validateProductCommon(
+            String barcode,
+            String clientId,
+            String name,
+            Double mrp
+    ) throws ApiException {
+
+        if (!StringUtils.hasText(barcode)) {
+            throw new ApiException("Barcode cannot be empty");
+        }
+        if (!StringUtils.hasText(clientId)) {
+            throw new ApiException("Client is required");
+        }
+        if (!StringUtils.hasText(name)) {
+            throw new ApiException("Product name cannot be empty");
+        }
+        if (mrp == null || mrp <= 0) {
+            throw new ApiException("Invalid MRP");
+        }
+    }
+
+    public static void validateInventoryUpdateForm(InventoryUpdateForm form) throws ApiException {
+        if (!StringUtils.hasText(form.getProductId())) {
+            throw new ApiException("Product id cannot be empty");
+        }
+        if (form.getQuantity() == null || form.getQuantity() < 0) {
+            throw new ApiException("Invalid inventory quantity");
+        }
+    }
+
     public static void validatePageForm(PageForm form) throws ApiException {
         if (form.getPage() < 0) {
             throw new ApiException("Page number cannot be negative");

@@ -35,7 +35,7 @@ public class UserController {
         return userDto.getAllUsers(form);
     }
 
-    @Operation(summary = "Get user by ID")
+    @Operation(summary = "Get user by email")
     @RequestMapping(path = "/get-by-email/{email}", method = RequestMethod.GET)
     public UserData getByEmail(@PathVariable String email) throws ApiException {
         return userDto.getByEmail(email);

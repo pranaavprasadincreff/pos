@@ -13,10 +13,7 @@ public final class EmailNormalizer {
         }
 
         String email = rawEmail.trim().toLowerCase(Locale.ROOT);
-
-        // Unicode normalization (important in enterprise systems)
         email = Normalizer.normalize(email, Normalizer.Form.NFKC);
-
         return email;
     }
 }

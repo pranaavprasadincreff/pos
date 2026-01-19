@@ -26,7 +26,7 @@ public class UserDto {
     }
 
     public UserData createUser(UserForm userForm) throws ApiException {
-        ValidationUtil.validateForm(userForm);
+        ValidationUtil.validateUserForm(userForm);
         UserPojo userPojo = UserHelper.convertFormToEntity(userForm);
         UserPojo savedUserPojo = userApi.addUser(userPojo);
         return UserHelper.convertFormToDto(savedUserPojo);
@@ -49,7 +49,7 @@ public class UserDto {
     }
 
     public UserData updateUser(UserUpdateForm userUpdateForm) throws ApiException {
-        ValidationUtil.validateUpdateForm(userUpdateForm);
+        ValidationUtil.validateUserUpdateForm(userUpdateForm);
         UserUpdatePojo userUpdatePojo = UserHelper.convertUpdateFormToEntity(userUpdateForm);
         UserPojo updated = userApi.updateUser(userUpdatePojo);
         return UserHelper.convertFormToDto(updated);
