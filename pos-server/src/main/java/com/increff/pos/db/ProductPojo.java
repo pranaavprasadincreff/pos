@@ -9,7 +9,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class ProductPojo extends AbstractPojo {
     @Indexed(unique = true)
     private String barcode;
-    private String clientId;
+    private String clientEmail;
     private String name;
     private Double mrp;
     private String imageUrl;

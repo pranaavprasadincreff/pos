@@ -5,6 +5,7 @@ import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.exception.ApiException;
 import com.increff.pos.util.BarcodeNormalizer;
+import com.increff.pos.util.EmailNormalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -31,8 +32,9 @@ public class ProductApiImpl implements ProductApi {
     public ProductPojo addProduct(ProductPojo productPojo) throws ApiException {
         logger.info("Creating product with barcode: {}", productPojo.getBarcode());
         productPojo.setBarcode(BarcodeNormalizer.normalize(productPojo.getBarcode()));
+        productPojo.setClientEmail(EmailNormalizer.normalize((productPojo.getClientEmail())));
         checkIfBarcodeExists(productPojo);
-        checkIfIdExists(productPojo.getClientId());
+        checkIfEmailExists(productPojo.getClientEmail());
         ProductPojo saved = dao.save(productPojo);
         logger.info("Created product with id: {}", saved.getId());
         return saved;
@@ -70,13 +72,13 @@ public class ProductApiImpl implements ProductApi {
         logger.info("Updating product with barcode: {}", updatePojo.getOldBarcode());
         updatePojo.setOldBarcode(BarcodeNormalizer.normalize(updatePojo.getOldBarcode()));
         updatePojo.setNewBarcode(BarcodeNormalizer.normalize(updatePojo.getNewBarcode()));
-
+        updatePojo.setClientEmail(EmailNormalizer.normalize((updatePojo.getClientEmail())));
         ProductPojo existing = getProductByBarcode(updatePojo.getOldBarcode());
         checkIfBarcodeExistsForUpdate(updatePojo);
-        checkIfIdExists(updatePojo.getClientId());
+        checkIfEmailExists(updatePojo.getClientEmail());
 
         existing.setBarcode(updatePojo.getNewBarcode());
-        existing.setClientId(updatePojo.getClientId());
+        existing.setClientEmail(updatePojo.getClientEmail());
         existing.setName(updatePojo.getName());
         existing.setMrp(updatePojo.getMrp());
         existing.setImageUrl(updatePojo.getImageUrl());
@@ -104,11 +106,11 @@ public class ProductApiImpl implements ProductApi {
         }
     }
 
-    private void checkIfIdExists(String clientId) throws ApiException {
+    private void checkIfEmailExists(String clientEmail) throws ApiException {
         try {
-            userApi.getUserById(clientId);
+            userApi.getUserByEmail(clientEmail);
         } catch (ApiException e) {
-            throw new ApiException("Client does not exist with id: " + clientId);
+            throw new ApiException("Client does not exist with email: " + clientEmail);
         }
     }
 }

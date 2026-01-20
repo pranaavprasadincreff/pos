@@ -21,7 +21,7 @@ public class InventoryController {
     }
 
     @Operation(summary = "Update inventory for a product")
-    @RequestMapping(path = "/update", method = RequestMethod.POST)
+    @RequestMapping(path = "/update", method = RequestMethod.PUT)
     public ProductData updateInventory(@RequestBody InventoryUpdateForm form) throws ApiException {
         return productDto.updateInventory(form);
     }

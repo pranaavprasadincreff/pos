@@ -6,7 +6,7 @@ import lombok.Data;
 public class ProductData {
     private String id;
     private String barcode;
-    private String clientId;
+    private String clientEmail;
     private String name;
     private Double mrp;
     private String imageUrl;

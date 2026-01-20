@@ -34,7 +34,7 @@ public class ValidationUtil {
     public static void validateProductForm(ProductForm form) throws ApiException {
         validateProductCommon(
                 form.getBarcode(),
-                form.getClientId(),
+                form.getClientEmail(),
                 form.getName(),
                 form.getMrp()
         );
@@ -46,7 +46,7 @@ public class ValidationUtil {
         }
         validateProductCommon(
                 form.getNewBarcode(),
-                form.getClientId(),
+                form.getClientEmail(),
                 form.getName(),
                 form.getMrp()
         );

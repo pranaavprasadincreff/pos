@@ -42,7 +42,7 @@ public class ProductController {
     }
 
     @Operation(summary = "Update product details")
-    @RequestMapping(path = "/update", method = RequestMethod.POST)
+    @RequestMapping(path = "/update", method = RequestMethod.PUT)
     public ProductData update(@RequestBody ProductUpdateForm form) throws ApiException {
         return productDto.updateProduct(form);
     }

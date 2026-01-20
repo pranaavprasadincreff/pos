@@ -42,7 +42,7 @@ public class UserController {
     }
 
     @Operation(summary = "Update existing user")
-    @RequestMapping(path = "/update", method = RequestMethod.POST)
+    @RequestMapping(path = "/update", method = RequestMethod.PUT)
     public UserData updateUser(@RequestBody UserUpdateForm userUpdateForm) throws ApiException {
         return userDto.updateUser(userUpdateForm);
     }

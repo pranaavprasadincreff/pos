@@ -6,7 +6,7 @@ import lombok.Data;
 public class ProductUpdateForm {
     private String oldBarcode;
     private String newBarcode;
-    private String clientId;
+    private String clientEmail;
     private String name;
     private Double mrp;
     private String imageUrl;

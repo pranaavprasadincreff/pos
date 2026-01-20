@@ -8,7 +8,7 @@ public class ProductUpdatePojo extends AbstractPojo{
     @Indexed(unique = true)
     private String oldBarcode;
     private String newBarcode;
-    private String clientId;
+    private String clientEmail;
     private String name;
     private Double mrp;
     private String imageUrl;

@@ -11,7 +11,7 @@ public class ProductHelper {
     public static ProductPojo convertFormToEntity(ProductForm form) {
         ProductPojo pojo = new ProductPojo();
         pojo.setBarcode(form.getBarcode());
-        pojo.setClientId(form.getClientId());
+        pojo.setClientEmail(form.getClientEmail());
         pojo.setName(form.getName());
         pojo.setMrp(form.getMrp());
         pojo.setImageUrl(form.getImageUrl());
@@ -24,7 +24,7 @@ public class ProductHelper {
         ProductUpdatePojo pojo = new ProductUpdatePojo();
         pojo.setOldBarcode(form.getOldBarcode());
         pojo.setNewBarcode(form.getNewBarcode());
-        pojo.setClientId(form.getClientId());
+        pojo.setClientEmail(form.getClientEmail());
         pojo.setName(form.getName());
         pojo.setMrp(form.getMrp());
         pojo.setImageUrl(form.getImageUrl());
@@ -38,7 +38,7 @@ public class ProductHelper {
         ProductData data = new ProductData();
         data.setId(product.getId());
         data.setBarcode(product.getBarcode());
-        data.setClientId(product.getClientId());
+        data.setClientEmail(product.getClientEmail());
         data.setName(product.getName());
         data.setMrp(product.getMrp());
         data.setImageUrl(product.getImageUrl());
