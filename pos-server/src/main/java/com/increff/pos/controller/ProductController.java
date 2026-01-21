@@ -2,7 +2,9 @@ package com.increff.pos.controller;
 
 import com.increff.pos.dto.ProductDto;
 import com.increff.pos.exception.ApiException;
+import com.increff.pos.model.data.BulkUploadData;
 import com.increff.pos.model.data.ProductData;
+import com.increff.pos.model.form.BulkUploadForm;
 import com.increff.pos.model.form.PageForm;
 import com.increff.pos.model.form.ProductForm;
 import com.increff.pos.model.form.ProductUpdateForm;
@@ -45,5 +47,11 @@ public class ProductController {
     @RequestMapping(path = "/update", method = RequestMethod.PUT)
     public ProductData update(@RequestBody ProductUpdateForm form) throws ApiException {
         return productDto.updateProduct(form);
+    }
+
+    @Operation(summary = "Bulk add products via TSV")
+    @RequestMapping(path = "/bulk-add-products", method = RequestMethod.POST)
+    public BulkUploadData bulkAddProducts(@RequestBody BulkUploadForm form) throws ApiException {
+        return productDto.bulkAddProducts(form);
     }
 }

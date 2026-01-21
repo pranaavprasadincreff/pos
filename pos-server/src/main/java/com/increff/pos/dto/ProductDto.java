@@ -7,17 +7,20 @@ import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.exception.ApiException;
 import com.increff.pos.helper.ProductHelper;
+import com.increff.pos.helper.TsvHelper;
+import com.increff.pos.model.data.BulkUploadData;
 import com.increff.pos.model.data.ProductData;
-import com.increff.pos.model.form.InventoryUpdateForm;
-import com.increff.pos.model.form.ProductForm;
-import com.increff.pos.model.form.ProductUpdateForm;
-import com.increff.pos.model.form.PageForm;
+import com.increff.pos.model.form.*;
 import com.increff.pos.util.ValidationUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Component
 public class ProductDto {
+
     private final ProductApi productApi;
     private final InventoryApi inventoryApi;
 
@@ -26,19 +29,20 @@ public class ProductDto {
         this.inventoryApi = inventoryApi;
     }
 
+    /* -------------------- SINGLE APIs -------------------- */
+
     public ProductData addProduct(ProductForm form) throws ApiException {
         ValidationUtil.validateProductForm(form);
-        ProductPojo productPojo = ProductHelper.convertFormToEntity(form);
-        ProductPojo savedProduct = productApi.addProduct(productPojo);
 
-        InventoryPojo inventoryPojo = new InventoryPojo();
-        inventoryPojo.setProductId(savedProduct.getId());
-        inventoryPojo.setQuantity(0);
-        inventoryApi.addInventory(inventoryPojo);
-        return ProductHelper.convertToProductData(
-                savedProduct,
-                inventoryPojo
-        );
+        ProductPojo product =
+                ProductHelper.convertProductFormToEntity(form);
+        ProductPojo savedProduct =
+                productApi.addProduct(product);
+
+        InventoryPojo inventory =
+                inventoryApi.getByProductId(savedProduct.getId());
+
+        return ProductHelper.convertToProductData(savedProduct, inventory);
     }
 
     public ProductData getByBarcode(String barcode) throws ApiException {
@@ -49,31 +53,140 @@ public class ProductDto {
 
     public Page<ProductData> getAll(PageForm form) throws ApiException {
         ValidationUtil.validatePageForm(form);
-        Page<ProductPojo> page = productApi.getAllProducts(form.getPage(), form.getSize());
-        return page.map(product -> {
-            try {
-                InventoryPojo inventory = inventoryApi.getByProductId(product.getId());
-                return ProductHelper.convertToProductData(product, inventory);
-            } catch (ApiException e) {
-                throw new RuntimeException(e);
-            }
-        });
+
+        return productApi
+                .getAllProducts(form.getPage(), form.getSize())
+                .map(this::attachInventory);
     }
 
     public ProductData updateProduct(ProductUpdateForm form) throws ApiException {
         ValidationUtil.validateProductUpdateForm(form);
-        ProductUpdatePojo updatePojo = ProductHelper.convertUpdateFormToEntity(form);
-        ProductPojo updated = productApi.updateProduct(updatePojo);
-        InventoryPojo inventory = inventoryApi.getByProductId(updated.getId());
-        return ProductHelper.convertToProductData(updated, inventory);
+
+        ProductUpdatePojo updatePojo =
+                ProductHelper.convertProductUpdateFormToEntity(form);
+        ProductPojo updatedProduct =
+                productApi.updateProduct(updatePojo);
+
+        InventoryPojo inventory =
+                inventoryApi.getByProductId(updatedProduct.getId());
+
+        return ProductHelper.convertToProductData(updatedProduct, inventory);
     }
 
     public ProductData updateInventory(InventoryUpdateForm form) throws ApiException {
         ValidationUtil.validateInventoryUpdateForm(form);
-        InventoryPojo inventory = inventoryApi.getByProductId(form.getProductId());
-        inventory.setQuantity(form.getQuantity());
-        InventoryPojo updatedInventory = inventoryApi.updateInventory(inventory);
-        ProductPojo product = productApi.getProductById(form.getProductId());
+
+        InventoryPojo inventory =
+                ProductHelper.convertInventoryUpdateFormToEntity(form);
+        InventoryPojo updatedInventory =
+                inventoryApi.updateInventory(inventory);
+
+        ProductPojo product =
+                productApi.getProductById(form.getProductId());
+
         return ProductHelper.convertToProductData(product, updatedInventory);
+    }
+
+    /* -------------------- BULK APIs -------------------- */
+
+    public BulkUploadData bulkAddProducts(BulkUploadForm form) throws ApiException {
+        List<String[]> rows = TsvHelper.decode(form.getFile());
+        List<String[]> result = new ArrayList<>();
+
+        for (String[] row : rows) {
+            if (isHeader(row)) continue;
+
+            String barcode = row[0];
+            try {
+                ProductForm productForm = parseProductRow(row);
+                ProductPojo product =
+                        ProductHelper.convertProductFormToEntity(productForm);
+                productApi.addProduct(product);
+
+                result.add(success(barcode, "Product added"));
+            } catch (Exception e) {
+                result.add(failure(barcode, e.getMessage()));
+            }
+        }
+
+        return new BulkUploadData(TsvHelper.encodeResult(result));
+    }
+
+    public BulkUploadData bulkUpdateInventory(BulkUploadForm form)
+            throws ApiException {
+
+        List<String[]> rows = TsvHelper.decode(form.getFile());
+        List<String[]> result = new ArrayList<>();
+
+        for (String[] row : rows) {
+
+            String barcode = row[0];
+
+            try {
+                int delta = parseQuantity(row);
+
+                ProductPojo product =
+                        productApi.getProductByBarcode(barcode);
+
+                InventoryPojo inventory =
+                        inventoryApi.getByProductId(product.getId());
+
+                inventoryApi.incrementInventory(inventory, delta);
+
+                result.add(success(barcode, "Inventory updated"));
+
+            } catch (ApiException e) {
+                result.add(failure(barcode, e.getMessage()));
+            }
+        }
+
+        return new BulkUploadData(
+                TsvHelper.encodeResult(result)
+        );
+    }
+
+    /* -------------------- PRIVATE HELPERS -------------------- */
+
+    private ProductData attachInventory(ProductPojo product) {
+        try {
+            InventoryPojo inventory =
+                    inventoryApi.getByProductId(product.getId());
+            return ProductHelper.convertToProductData(product, inventory);
+        } catch (ApiException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private ProductForm parseProductRow(String[] row) {
+        if (row.length != 5) {
+            throw new IllegalArgumentException("Invalid TSV format");
+        }
+
+        ProductForm form = new ProductForm();
+        form.setBarcode(row[0]);
+        form.setClientEmail(row[1]);
+        form.setName(row[2]);
+        form.setMrp(Double.parseDouble(row[3]));
+        form.setImageUrl(row[4]);
+        return form;
+    }
+
+    private int parseQuantity(String[] row) {
+        if (row.length != 2) {
+            throw new IllegalArgumentException("Invalid TSV format");
+        }
+        return Integer.parseInt(row[1]);
+    }
+
+    private boolean isHeader(String[] row) {
+        return "barcode".equalsIgnoreCase(row[0]);
+    }
+
+    private String[] success(String barcode, String message) {
+        return new String[]{barcode, "SUCCESS", message};
+    }
+
+    private String[] failure(String barcode, String message) {
+        return new String[]{barcode, "FAILURE", message};
     }
 }
