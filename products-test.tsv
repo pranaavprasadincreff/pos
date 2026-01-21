@@ -1,0 +1,8 @@
+barcode	clientEmail	name	mrp	imageUrl
+SKU-201	pranaav@increff.com	iPhone 15	79999	https://m.media-amazon.com/images/I/71d7rfSl0wL.jpg
+SKU-202	pranaav@increff.com	Samsung S24	69999	https://m.media-amazon.com/images/I/61+g6KrDXdL.jpg
+SKU-203	pranaav@increff.com	Pixel 8	64999	https://m.media-amazon.com/images/I/61iLQG-KbLL._AC_UF1000,1000_QL80_.jpg
+SKU-201	pranaav@increff.com	Duplicate Barcode	100	https://m.media-amazon.com/images/I/71d7rfSl0wL.jpg
+SKU-204	invalid-email	iPhone SE	29999	https://m.media-amazon.com/images/I/71d7rfSl0wL.jpg
+SKU-205	pranaav@increff.com	Invalid Mrp	NOT_A_NUMBER	https://m.media-amazon.com/images/I/61+g6KrDXdL.jpg
+SKU-206	pranaav@increff.com	Missing Image	19999

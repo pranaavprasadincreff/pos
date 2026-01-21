@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users } from 'lucide-react'
+import {Home, Package, Users} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -16,6 +16,11 @@ const navItems = [
         href: '/clients',
         icon: Users,
     },
+    {
+        label: 'Products',
+        href: '/products',
+        icon: Package,
+    }
 ]
 
 export default function Sidebar() {
