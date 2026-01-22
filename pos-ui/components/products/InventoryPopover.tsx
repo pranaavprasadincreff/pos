@@ -53,8 +53,13 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
             setOpen(false)
             toast.success('Inventory updated')
             onUpdated()
-        } catch (e: any) {
-            toast.error(e?.response?.data?.message || 'Inventory update failed')
+        } catch (e: unknown) {
+            const message =
+                e instanceof Error
+                    ? e.message
+                    : 'Inventory update failed'
+
+            toast.error(message)
         }
     }
 
@@ -105,7 +110,8 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
                         variant="outline"
                         onClick={() =>
                             setValue((v) => {
-                                const nv = v - 1
+                                const base = v ?? 0
+                                const nv = base - 1
                                 validate(nv)
                                 return nv
                             })
@@ -146,7 +152,8 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
                         variant="outline"
                         onClick={() =>
                             setValue((v) => {
-                                const nv = v + 1
+                                const base = v ?? 0
+                                const nv = base + 1
                                 validate(nv)
                                 return nv
                             })

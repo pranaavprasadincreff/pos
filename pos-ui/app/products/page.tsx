@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select'
 import ProductCardGrid from '@/components/products/ProductCardGrid'
 import ProductModal from '@/components/products/ProductModal'
+import BulkUploadModal from '@/components/products/BulkUploadModal'
 import Pagination from '@/components/clients/Pagination'
 import { getAllProducts } from '@/services/productService'
 import { ProductData } from '@/services/types'
@@ -21,6 +22,7 @@ export default function ProductsPage() {
     const [page, setPage] = useState(0)
     const [allProducts, setAllProducts] = useState<ProductData[]>([])
     const [modalOpen, setModalOpen] = useState(false)
+    const [bulkModalOpen, setBulkModalOpen] = useState(false)
     const [editingProduct, setEditingProduct] = useState<ProductData | null>(null)
 
     const [searchTerm, setSearchTerm] = useState('')
@@ -29,6 +31,7 @@ export default function ProductsPage() {
 
     const pageSize = 9 // 3-column grid
 
+    // Fetch all products
     useEffect(() => {
         fetchAllProducts()
     }, [])
@@ -59,27 +62,28 @@ export default function ProductsPage() {
         }
     }
 
+    // Filter products
     const filteredProducts = useMemo(() => {
         if (!searchTerm) return allProducts
         return allProducts.filter((p) =>
-            p[searchBy]
-                ?.toString()
-                .toLowerCase()
-                .includes(searchTerm.toLowerCase())
+            p[searchBy]?.toString().toLowerCase().includes(searchTerm.toLowerCase())
         )
     }, [allProducts, searchTerm, searchBy])
 
     const totalPages = Math.ceil(filteredProducts.length / pageSize)
 
+    // Paginate
     const paginatedProducts = useMemo(() => {
         const start = page * pageSize
         return filteredProducts.slice(start, start + pageSize)
     }, [filteredProducts, page])
 
+    // Ensure current page is valid
     useEffect(() => {
         if (page >= totalPages && totalPages > 0) {
             setPage(totalPages - 1)
         }
+        if (page < 0) setPage(0)
     }, [page, totalPages])
 
     return (
@@ -92,19 +96,27 @@ export default function ProductsPage() {
                         Manage products and inventory
                     </p>
                 </div>
-                <Button
-                    onClick={() => setModalOpen(true)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                >
-                    + Add Product
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        onClick={() => setModalOpen(true)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                    >
+                        + Add Product
+                    </Button>
+                    <Button
+                        onClick={() => setBulkModalOpen(true)}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                        Bulk Upload
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}
             <div className="flex gap-2 max-w-2xl">
                 <Select
                     value={searchBy}
-                    onValueChange={(v) => setSearchBy(v as any)}
+                    onValueChange={(v) => setSearchBy(v as 'name' | 'barcode' | 'clientEmail')}
                 >
                     <SelectTrigger className="w-[160px]">
                         <SelectValue />
@@ -123,7 +135,7 @@ export default function ProductsPage() {
                 />
             </div>
 
-            {/* Cards */}
+            {/* Product Cards */}
             <ProductCardGrid
                 products={paginatedProducts}
                 loading={loading}
@@ -138,10 +150,14 @@ export default function ProductsPage() {
             <Pagination
                 page={page}
                 totalPages={totalPages}
-                onPageChange={setPage}
+                onPageChange={(p) => {
+                    if (p < 0) return
+                    if (p >= totalPages) return
+                    setPage(p)
+                }}
             />
 
-            {/* Modal */}
+            {/* Add/Edit Product Modal */}
             <ProductModal
                 isOpen={modalOpen}
                 initialData={editingProduct}
@@ -149,6 +165,13 @@ export default function ProductsPage() {
                     setModalOpen(false)
                     setEditingProduct(null)
                 }}
+                onSuccess={fetchAllProducts}
+            />
+
+            {/* Bulk Upload Modal */}
+            <BulkUploadModal
+                isOpen={bulkModalOpen}
+                onClose={() => setBulkModalOpen(false)}
                 onSuccess={fetchAllProducts}
             />
         </div>

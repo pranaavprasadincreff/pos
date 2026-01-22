@@ -33,12 +33,14 @@ export interface ProductForm {
 }
 
 export interface ProductUpdateForm {
-    barcode: string
+    oldBarcode: string
+    newBarcode: string
     clientEmail: string
     name: string
     mrp: number
     imageUrl?: string
 }
+
 export interface InventoryUpdateForm {
     barcode: string
     quantity: number
@@ -63,3 +65,9 @@ export interface PageResponse<T> {
     totalPages: number
     totalElements?: number
 }
+
+export interface ParsedRow {
+    values: string[]
+    isError: boolean
+}
+

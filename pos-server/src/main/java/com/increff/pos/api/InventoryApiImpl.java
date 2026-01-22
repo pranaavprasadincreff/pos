@@ -50,7 +50,9 @@ public class InventoryApiImpl implements InventoryApi {
     @Transactional(rollbackFor = ApiException.class)
     public void incrementInventory(InventoryPojo inventory, int delta) throws ApiException {
         logger.info("Incrementing inventory for productId: {} by {}", inventory.getProductId(), delta);
-        validateDelta(delta);
+        if (delta < 0) {
+            throw new ApiException("Quantity increment cannot be negative");
+        }
         InventoryPojo existing = getByProductId(inventory.getProductId());
         existing.setQuantity(existing.getQuantity() + delta);
         dao.save(existing);

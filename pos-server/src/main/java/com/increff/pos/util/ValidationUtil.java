@@ -93,4 +93,40 @@ public class ValidationUtil {
             throw new ApiException("Page size cannot be greater than 100");
         }
     }
+
+    public static void validateBulkProductRow(String[] row) throws ApiException {
+        if (row.length != 5) {
+            throw new ApiException("Expected 5 columns: barcode, clientEmail, name, mrp, imageUrl");
+        }
+        validateProductCommon(
+                row[0],
+                row[1],
+                row[2],
+                parseMrp(row[3])
+        );
+    }
+
+    private static Double parseMrp(String value) throws ApiException {
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            throw new ApiException("MRP must be a valid number");
+        }
+    }
+
+    public static int validateBulkInventoryRow(String[] row) throws ApiException {
+        if (row.length != 2) {
+            throw new ApiException("Expected 2 columns: barcode and quantity");
+        }
+        try {
+            int qty = Integer.parseInt(row[1]);
+            if (qty < 0) {
+                throw new ApiException("Quantity increment cannot be negative");
+            }
+            return qty;
+        } catch (NumberFormatException e) {
+            throw new ApiException("Quantity must be a valid integer");
+        }
+    }
+
 }

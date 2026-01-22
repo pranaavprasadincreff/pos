@@ -29,19 +29,11 @@ public class ProductDto {
         this.inventoryApi = inventoryApi;
     }
 
-    /* -------------------- SINGLE APIs -------------------- */
-
     public ProductData addProduct(ProductForm form) throws ApiException {
         ValidationUtil.validateProductForm(form);
-
-        ProductPojo product =
-                ProductHelper.convertProductFormToEntity(form);
-        ProductPojo savedProduct =
-                productApi.addProduct(product);
-
-        InventoryPojo inventory =
-                inventoryApi.getByProductId(savedProduct.getId());
-
+        ProductPojo product = ProductHelper.convertProductFormToEntity(form);
+        ProductPojo savedProduct = productApi.addProduct(product);
+        InventoryPojo inventory = inventoryApi.getByProductId(savedProduct.getId());
         return ProductHelper.convertToProductData(savedProduct, inventory);
     }
 
@@ -53,7 +45,6 @@ public class ProductDto {
 
     public Page<ProductData> getAll(PageForm form) throws ApiException {
         ValidationUtil.validatePageForm(form);
-
         return productApi
                 .getAllProducts(form.getPage(), form.getSize())
                 .map(this::attachInventory);
@@ -61,33 +52,19 @@ public class ProductDto {
 
     public ProductData updateProduct(ProductUpdateForm form) throws ApiException {
         ValidationUtil.validateProductUpdateForm(form);
-
-        ProductUpdatePojo updatePojo =
-                ProductHelper.convertProductUpdateFormToEntity(form);
-        ProductPojo updatedProduct =
-                productApi.updateProduct(updatePojo);
-
-        InventoryPojo inventory =
-                inventoryApi.getByProductId(updatedProduct.getId());
-
+        ProductUpdatePojo updatePojo = ProductHelper.convertProductUpdateFormToEntity(form);
+        ProductPojo updatedProduct = productApi.updateProduct(updatePojo);
+        InventoryPojo inventory = inventoryApi.getByProductId(updatedProduct.getId());
         return ProductHelper.convertToProductData(updatedProduct, inventory);
     }
 
     public ProductData updateInventory(InventoryUpdateForm form) throws ApiException {
         ValidationUtil.validateInventoryUpdateForm(form);
-
-        InventoryPojo inventory =
-                ProductHelper.convertInventoryUpdateFormToEntity(form);
-        InventoryPojo updatedInventory =
-                inventoryApi.updateInventory(inventory);
-
-        ProductPojo product =
-                productApi.getProductById(form.getProductId());
-
+        InventoryPojo inventory = ProductHelper.convertInventoryUpdateFormToEntity(form);
+        InventoryPojo updatedInventory = inventoryApi.updateInventory(inventory);
+        ProductPojo product = productApi.getProductById(form.getProductId());
         return ProductHelper.convertToProductData(product, updatedInventory);
     }
-
-    /* -------------------- BULK APIs -------------------- */
 
     public BulkUploadData bulkAddProducts(BulkUploadForm form) throws ApiException {
         List<String[]> rows = TsvHelper.decode(form.getFile());
@@ -95,62 +72,43 @@ public class ProductDto {
 
         for (String[] row : rows) {
             if (isHeader(row)) continue;
-
             String barcode = row[0];
             try {
+                ValidationUtil.validateBulkProductRow(row);
                 ProductForm productForm = parseProductRow(row);
-                ProductPojo product =
-                        ProductHelper.convertProductFormToEntity(productForm);
+                ProductPojo product = ProductHelper.convertProductFormToEntity(productForm);
                 productApi.addProduct(product);
-
                 result.add(success(barcode, "Product added"));
             } catch (Exception e) {
                 result.add(failure(barcode, e.getMessage()));
             }
         }
-
         return new BulkUploadData(TsvHelper.encodeResult(result));
     }
 
-    public BulkUploadData bulkUpdateInventory(BulkUploadForm form)
-            throws ApiException {
-
+    public BulkUploadData bulkUpdateInventory(BulkUploadForm form) throws ApiException {
         List<String[]> rows = TsvHelper.decode(form.getFile());
         List<String[]> result = new ArrayList<>();
 
         for (String[] row : rows) {
-
             String barcode = row[0];
-
             try {
-                int delta = parseQuantity(row);
-
-                ProductPojo product =
-                        productApi.getProductByBarcode(barcode);
-
-                InventoryPojo inventory =
-                        inventoryApi.getByProductId(product.getId());
-
+                int delta = ValidationUtil.validateBulkInventoryRow(row);
+                ProductPojo product = productApi.getProductByBarcode(barcode);
+                InventoryPojo inventory = inventoryApi.getByProductId(product.getId());
                 inventoryApi.incrementInventory(inventory, delta);
-
                 result.add(success(barcode, "Inventory updated"));
-
             } catch (ApiException e) {
                 result.add(failure(barcode, e.getMessage()));
             }
         }
-
-        return new BulkUploadData(
-                TsvHelper.encodeResult(result)
+        return new BulkUploadData(TsvHelper.encodeResult(result)
         );
     }
 
-    /* -------------------- PRIVATE HELPERS -------------------- */
-
     private ProductData attachInventory(ProductPojo product) {
         try {
-            InventoryPojo inventory =
-                    inventoryApi.getByProductId(product.getId());
+            InventoryPojo inventory = inventoryApi.getByProductId(product.getId());
             return ProductHelper.convertToProductData(product, inventory);
         } catch (ApiException e) {
             throw new RuntimeException(e);
@@ -158,10 +116,6 @@ public class ProductDto {
     }
 
     private ProductForm parseProductRow(String[] row) {
-        if (row.length != 5) {
-            throw new IllegalArgumentException("Invalid TSV format");
-        }
-
         ProductForm form = new ProductForm();
         form.setBarcode(row[0]);
         form.setClientEmail(row[1]);
@@ -169,13 +123,6 @@ public class ProductDto {
         form.setMrp(Double.parseDouble(row[3]));
         form.setImageUrl(row[4]);
         return form;
-    }
-
-    private int parseQuantity(String[] row) {
-        if (row.length != 2) {
-            throw new IllegalArgumentException("Invalid TSV format");
-        }
-        return Integer.parseInt(row[1]);
     }
 
     private boolean isHeader(String[] row) {
