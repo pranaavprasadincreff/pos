@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/invoice")
 public class InvoiceController {
-
     private final InvoiceDto invoiceDto;
 
     public InvoiceController(InvoiceDto invoiceDto) {

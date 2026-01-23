@@ -10,7 +10,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class InventoryDao extends AbstractDao<InventoryPojo> {
-
     public InventoryDao(MongoOperations mongoOperations) {
         super(
                 new MongoRepositoryFactory(mongoOperations)

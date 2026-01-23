@@ -24,9 +24,7 @@ import java.util.stream.Collectors;
 
 @Component
 public class InvoiceClient {
-
-    private static final String INVOICE_BASE_URL =
-            "http://localhost:8081/api/invoice";
+    private static final String INVOICE_BASE_URL = "http://localhost:8081/api/invoice";
 
     private final RestTemplate restTemplate;
     private final OrderApi orderApi;
@@ -42,18 +40,13 @@ public class InvoiceClient {
         this.productApi = productApi;
     }
 
-    /* ================== GENERATE ================== */
-
     @Retry(name = "invoiceService")
     @CircuitBreaker(
             name = "invoiceService",
             fallbackMethod = "generateFallback"
     )
-    public InvoiceData generateInvoice(String orderReferenceId)
-            throws ApiException {
-
+    public InvoiceData generateInvoice(String orderReferenceId) throws ApiException {
         InvoiceGenerateForm form = buildInvoiceForm(orderReferenceId);
-
         try {
             ResponseEntity<InvoiceData> response =
                     restTemplate.postForEntity(
@@ -62,25 +55,19 @@ public class InvoiceClient {
                             InvoiceData.class
                     );
             return response.getBody();
-
         } catch (HttpClientErrorException e) {
             throw new ApiException(extractMessage(e));
         } catch (ResourceAccessException e) {
-            // Service down / connection refused
-            throw new ApiException(
-                    "Invoice service unavailable. Please try again later."
+            throw new ApiException("Invoice service unavailable. Please try again later."
             );
         }
     }
-
-    /* ================== GET ================== */
 
     @CircuitBreaker(
             name = "invoiceService",
             fallbackMethod = "getFallback"
     )
-    public InvoiceData getInvoice(String orderReferenceId)
-            throws ApiException {
+    public InvoiceData getInvoice(String orderReferenceId) throws ApiException {
         orderApi.getByOrderReferenceId(orderReferenceId);
         try {
             return restTemplate.getForObject(
@@ -92,14 +79,8 @@ public class InvoiceClient {
         }
     }
 
-    /* ================== HELPERS ================== */
-
-    private InvoiceGenerateForm buildInvoiceForm(String orderReferenceId)
-            throws ApiException {
-
-        OrderPojo order =
-                orderApi.getByOrderReferenceId(orderReferenceId);
-
+    private InvoiceGenerateForm buildInvoiceForm(String orderReferenceId) throws ApiException {
+        OrderPojo order = orderApi.getByOrderReferenceId(orderReferenceId);
         List<InvoiceItemForm> items =
                 order.getOrderItems()
                         .stream()
@@ -115,22 +96,16 @@ public class InvoiceClient {
         InvoiceGenerateForm form = new InvoiceGenerateForm();
         form.setOrderReferenceId(orderReferenceId);
         form.setItems(items);
-
         return form;
     }
 
-    private InvoiceItemForm convertToInvoiceItem(OrderItemPojo item)
-            throws ApiException {
-
-        ProductPojo product =
-                productApi.getProductByBarcode(item.getProductBarcode());
-
+    private InvoiceItemForm convertToInvoiceItem(OrderItemPojo item) throws ApiException {
+        ProductPojo product = productApi.getProductByBarcode(item.getProductBarcode());
         InvoiceItemForm form = new InvoiceItemForm();
         form.setBarcode(product.getBarcode());
         form.setProductName(product.getName());
         form.setQuantity(item.getOrderedQuantity());
         form.setSellingPrice(item.getSellingPrice());
-
         return form;
     }
 
@@ -145,23 +120,13 @@ public class InvoiceClient {
         }
     }
 
-    /* ================== FALLBACKS ================== */
-
-    private InvoiceData generateFallback(
-            String orderReferenceId,
-            Throwable t
-    ) throws ApiException {
-
+    private InvoiceData generateFallback(String orderReferenceId, Throwable t) throws ApiException {
         throw new ApiException(
                 "Invoice service unavailable. Please try again later."
         );
     }
 
-    private InvoiceData getFallback(
-            String orderReferenceId,
-            Throwable t
-    ) throws ApiException {
-
+    private InvoiceData getFallback(String orderReferenceId, Throwable t) throws ApiException {
         throw new ApiException(
                 "Unable to fetch invoice at the moment."
         );

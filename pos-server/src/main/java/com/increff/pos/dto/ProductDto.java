@@ -20,7 +20,6 @@ import java.util.List;
 
 @Component
 public class ProductDto {
-
     private final ProductApi productApi;
     private final InventoryApi inventoryApi;
 

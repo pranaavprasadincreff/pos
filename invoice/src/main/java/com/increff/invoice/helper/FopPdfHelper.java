@@ -5,7 +5,6 @@ import org.apache.fop.apps.*;
 
 import javax.xml.transform.*;
 import javax.xml.transform.sax.SAXResult;
-import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import java.io.*;
 import java.nio.file.Files;
@@ -13,11 +12,9 @@ import java.nio.file.Paths;
 import java.util.Base64;
 
 public class FopPdfHelper {
-
     private static final String INVOICE_DIR = "invoices/";
 
     static {
-        // Create directory if it doesn't exist
         try {
             Files.createDirectories(Paths.get(INVOICE_DIR));
         } catch (IOException e) {
@@ -27,7 +24,6 @@ public class FopPdfHelper {
 
     public static String generatePdfBase64(String invoiceFileName, String xslFoContent) throws ApiException {
         try (ByteArrayOutputStream outStream = new ByteArrayOutputStream()) {
-
             FopFactory fopFactory = FopFactory.newInstance(new File(".").toURI());
             FOUserAgent foUserAgent = fopFactory.newFOUserAgent();
 
@@ -41,14 +37,11 @@ public class FopPdfHelper {
 
             transformer.transform(src, res);
 
-            // Save PDF to disk
             byte[] pdfBytes = outStream.toByteArray();
             String pdfPath = INVOICE_DIR + invoiceFileName + ".pdf";
             Files.write(Paths.get(pdfPath), pdfBytes);
 
-            // Return Base64 string
             return Base64.getEncoder().encodeToString(pdfBytes);
-
         } catch (Exception e) {
             throw new ApiException("Invoice PDF generation failed: " + e.getMessage());
         }

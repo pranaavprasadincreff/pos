@@ -9,7 +9,6 @@ import java.util.Optional;
 
 @Configuration
 public class AuditingConfig {
-
     @Bean
     public DateTimeProvider auditingDateTimeProvider() {
         return () -> Optional.of(ZonedDateTime.now());

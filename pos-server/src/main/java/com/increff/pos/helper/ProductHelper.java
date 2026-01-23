@@ -26,9 +26,7 @@ public class ProductHelper {
         return pojo;
     }
 
-    public static ProductUpdatePojo convertProductUpdateFormToEntity(
-            ProductUpdateForm form) {
-
+    public static ProductUpdatePojo convertProductUpdateFormToEntity(ProductUpdateForm form) {
         ProductUpdatePojo pojo = new ProductUpdatePojo();
         pojo.setOldBarcode(form.getOldBarcode());
         pojo.setNewBarcode(form.getNewBarcode());
@@ -39,10 +37,7 @@ public class ProductHelper {
         return pojo;
     }
 
-    public static ProductData convertToProductData(
-            ProductPojo product,
-            InventoryPojo inventory) {
-
+    public static ProductData convertToProductData(ProductPojo product, InventoryPojo inventory) {
         ProductData data = new ProductData();
         data.setId(product.getId());
         data.setBarcode(product.getBarcode());

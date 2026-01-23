@@ -8,7 +8,6 @@ import java.util.List;
 
 @Configuration
 public class MongoDateTimeConfig {
-
     @Bean
     public MongoCustomConversions mongoCustomConversions() {
         return new MongoCustomConversions(

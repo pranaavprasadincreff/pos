@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/inventory")
 public class InventoryController {
-
     private final ProductDto productDto;
 
     public InventoryController(ProductDto productDto) {

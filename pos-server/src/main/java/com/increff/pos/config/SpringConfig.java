@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RestController;
 @EnableMongoAuditing(dateTimeProviderRef = "auditingDateTimeProvider")
 @ComponentScan(basePackages = {"com.increff.pos"})
 public class SpringConfig {
-
 	public static void main(String[] args) {
 		SpringApplication.run(SpringConfig.class, args);
 	}

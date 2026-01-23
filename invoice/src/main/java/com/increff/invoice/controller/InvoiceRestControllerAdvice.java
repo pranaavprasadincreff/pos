@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class InvoiceRestControllerAdvice {
-
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorData> handleApiException(ApiException e) {
         return ResponseEntity

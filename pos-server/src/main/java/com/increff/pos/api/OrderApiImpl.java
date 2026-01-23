@@ -45,34 +45,16 @@ public class OrderApiImpl implements OrderApi {
 
     @Override
     public OrderPojo getByOrderReferenceId(String orderReferenceId) throws ApiException {
-        OrderPojo order = orderDao.findByOrderReferenceId(orderReferenceId);
-        if (order == null) {
-            throw new ApiException(
-                    "Order not found with referenceId: " + orderReferenceId
-            );
-        }
-        return order;
+        return findOrderOrThrow(orderReferenceId);
     }
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public void markOrderInvoiced(String orderReferenceId)
-            throws ApiException {
-
-        OrderPojo order = orderDao.findByOrderReferenceId(orderReferenceId);
-
-        if (order == null) {
-            throw new ApiException(
-                    "Order not found: " + orderReferenceId
-            );
+    public void markOrderInvoiced(String orderReferenceId) throws ApiException {
+        OrderPojo order = findOrderOrThrow(orderReferenceId);
+        if (!isInvoiced(order)) {
+            setOrderInvoiced(order);
         }
-
-        if ("INVOICED".equals(order.getStatus())) {
-            return; // idempotent
-        }
-
-        order.setStatus("INVOICED");
-        orderDao.save(order);
     }
 
     private void initializeOrder(OrderPojo order) {
@@ -110,5 +92,22 @@ public class OrderApiImpl implements OrderApi {
 
         return "ORD-" + uuid.substring(0, 4)
                 + "-" + uuid.substring(4, 8);
+    }
+
+    private OrderPojo findOrderOrThrow(String orderReferenceId) throws ApiException {
+        OrderPojo order = orderDao.findByOrderReferenceId(orderReferenceId);
+        if (order == null) {
+            throw new ApiException("Order not present: " + orderReferenceId);
+        }
+        return order;
+    }
+
+    private boolean isInvoiced(OrderPojo order) {
+        return "INVOICED".equals(order.getStatus());
+    }
+
+    private void setOrderInvoiced(OrderPojo order) {
+        order.setStatus("INVOICED");
+        orderDao.save(order);
     }
 }

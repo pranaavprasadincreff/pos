@@ -9,7 +9,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class ProductDao extends AbstractDao<ProductPojo> {
-
     public ProductDao(MongoOperations mongoOperations) {
         super(
                 new MongoRepositoryFactory(mongoOperations)

@@ -3,6 +3,7 @@ package com.increff.pos.controller;
 import com.increff.pos.dto.InvoiceDto;
 import com.increff.pos.exception.ApiException;
 import com.increff.pos.model.data.InvoiceData;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,13 +11,13 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/pos/invoice")
 public class InvoiceController {
-
     private final InvoiceDto invoiceDto;
 
     public InvoiceController(InvoiceDto invoiceDto) {
         this.invoiceDto = invoiceDto;
     }
 
+    @Operation(summary = "Generate invoice for an order (one-time operation)")
     @RequestMapping(path = "/generate/{orderReferenceId}", method = RequestMethod.POST)
     public InvoiceData generate(@PathVariable String orderReferenceId)
             throws ApiException {
@@ -24,6 +25,7 @@ public class InvoiceController {
         return invoiceDto.generateInvoice(orderReferenceId);
     }
 
+    @Operation(summary = "Get invoice by order reference id")
     @RequestMapping(path = "/get/{orderReferenceId}", method = RequestMethod.GET)
     public InvoiceData get(@PathVariable String orderReferenceId)
             throws ApiException {

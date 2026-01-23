@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/product")
 public class ProductController {
-
     private final ProductDto productDto;
 
     public ProductController(ProductDto productDto) {

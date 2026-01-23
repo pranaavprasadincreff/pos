@@ -8,7 +8,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class InvoiceDto {
-
     private final InvoiceClient invoiceClient;
     private final OrderApi orderApi;
 
@@ -20,20 +19,13 @@ public class InvoiceDto {
         this.orderApi = orderApi;
     }
 
-    public InvoiceData generateInvoice(String orderReferenceId)
-            throws ApiException {
-
-        InvoiceData invoice =
-                invoiceClient.generateInvoice(orderReferenceId);
-
+    public InvoiceData generateInvoice(String orderReferenceId) throws ApiException {
+        InvoiceData invoice = invoiceClient.generateInvoice(orderReferenceId);
         orderApi.markOrderInvoiced(orderReferenceId);
-
         return invoice;
     }
 
-    public InvoiceData getInvoice(String orderReferenceId)
-            throws ApiException {
-
+    public InvoiceData getInvoice(String orderReferenceId) throws ApiException {
         return invoiceClient.getInvoice(orderReferenceId);
     }
 }

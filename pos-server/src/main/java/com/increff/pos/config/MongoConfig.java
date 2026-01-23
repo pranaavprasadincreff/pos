@@ -11,10 +11,8 @@ import org.springframework.data.mongodb.core.mapping.MongoMappingContext;
 @Configuration
 @EnableMongoRepositories(basePackages = "com.increff.pos.dao")
 public class MongoConfig {
-
     @Autowired
     private MongoTemplate mongoTemplate;
-
     @Autowired
     private MongoMappingContext mongoMappingContext;
 } 

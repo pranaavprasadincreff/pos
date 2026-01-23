@@ -3,7 +3,6 @@ package com.increff.pos.util;
 import java.text.Normalizer;
 
 public final class BarcodeNormalizer {
-
     private BarcodeNormalizer() {}
 
     public static String normalize(String rawBarcode) {
