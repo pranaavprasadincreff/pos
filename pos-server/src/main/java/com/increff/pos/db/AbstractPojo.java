@@ -10,13 +10,10 @@ import java.time.ZonedDateTime;
 
 @Data
 public abstract class AbstractPojo {
-
     @Id
     private String id;
-
     @CreatedDate
     private ZonedDateTime createdAt;
-
     @LastModifiedDate
     private ZonedDateTime updatedAt;
 }

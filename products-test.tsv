@@ -1,8 +1,6 @@
 barcode	clientEmail	name	mrp	imageUrl
-SKU-201	pranaav@increff.com	iPhone 15	79999	https://m.media-amazon.com/images/I/71d7rfSl0wL.jpg
-SKU-202	pranaav@increff.com	Samsung S24	69999	https://m.media-amazon.com/images/I/61+g6KrDXdL.jpg
-SKU-203	pranaav@increff.com	Pixel 8	64999	https://m.media-amazon.com/images/I/61iLQG-KbLL._AC_UF1000,1000_QL80_.jpg
-SKU-201	pranaav@increff.com	Duplicate Barcode	100	https://m.media-amazon.com/images/I/71d7rfSl0wL.jpg
-SKU-204	invalid-email	iPhone SE	29999	https://m.media-amazon.com/images/I/71d7rfSl0wL.jpg
-SKU-205	pranaav@increff.com	Invalid Mrp	NOT_A_NUMBER	https://m.media-amazon.com/images/I/61+g6KrDXdL.jpg
-SKU-206	pranaav@increff.com	Missing Image	19999
+P1001	pranaav@increff.com	Notebook	100	https://solo.in/cdn/shop/files/5-subjects-notebook-pack-of-4-pcs-a5-na553-436198.webp?v=1742021571&width=1080
+P1002	pranaav@increff.com	Pen	20	https://www.onlinemantra.in/cdn/shop/products/WR_Hemisphere_MT_BLK_GT_FPF_9d4d14aa-8cd0-4d55-afac-08612b61e7c0_1024x1024.jpg?v=1747049799
+P2001	user@gmail.com	Stapler	250	https://m.media-amazon.com/images/I/51oYKG7XoUL.jpg
+P2002	user@gmail.com	Marker	50	https://rukminim2.flixcart.com/image/480/640/xif0q/marker-highlighter/a/o/e/-original-imagr82z36v4b9yk.jpeg?q=90
+P3001	pranaav@increff.com	Calculator	500	https://m.media-amazon.com/images/I/61w1PMHiZoL._AC_UF1000,1000_QL80_.jpg
