@@ -58,6 +58,26 @@ public class InventoryApiImpl implements InventoryApi {
         dao.save(existing);
     }
 
+    @Override
+    @Transactional(rollbackFor = ApiException.class)
+    public void deductInventory(InventoryPojo inventory, int quantity) throws ApiException {
+        if (inventory == null) {
+            throw new ApiException("Inventory cannot be null");
+        }
+        if (quantity <= 0) {
+            throw new ApiException("Deduction quantity must be positive");
+        }
+        boolean success = dao.deductInventoryAtomically(
+                inventory.getProductId(),
+                quantity
+        );
+        if (!success) {
+            throw new ApiException(
+                    "Insufficient inventory for productId: " + inventory.getProductId()
+            );
+        }
+    }
+
     private void validateNewInventory(InventoryPojo inventory) throws ApiException {
         ensureInventoryDoesNotExist(inventory.getProductId());
         validateQuantity(inventory.getQuantity());

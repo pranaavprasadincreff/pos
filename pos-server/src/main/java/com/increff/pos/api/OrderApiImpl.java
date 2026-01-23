@@ -8,12 +8,12 @@ import com.increff.pos.db.ProductPojo;
 import com.increff.pos.exception.ApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -37,11 +37,10 @@ public class OrderApiImpl implements OrderApi {
     @Transactional(rollbackFor = ApiException.class)
     public OrderPojo createOrder(OrderPojo order) throws ApiException {
         logger.info("Creating order with {} items", order.getOrderItems().size());
-        order.setOrderReferenceId(generateOrderReferenceId());
-        order.setOrderTime(ZonedDateTime.now(ZoneId.of("Asia/Kolkata")));
-        order.setStatus("created");
-        deductInventory(order.getOrderItems());
-        return orderDao.save(order);
+        initializeOrder(order);
+        deductInventoryForOrder(order);
+        persistOrderWithUniqueReference(order);
+        return order;
     }
 
     @Override
@@ -55,23 +54,52 @@ public class OrderApiImpl implements OrderApi {
         return order;
     }
 
-    private void deductInventory(List<OrderItemPojo> items) throws ApiException {
-        for (OrderItemPojo item : items) {
+    @Override
+    @Transactional(rollbackFor = ApiException.class)
+    public void markOrderInvoiced(String orderReferenceId)
+            throws ApiException {
+
+        OrderPojo order = orderDao.findByOrderReferenceId(orderReferenceId);
+
+        if (order == null) {
+            throw new ApiException(
+                    "Order not found: " + orderReferenceId
+            );
+        }
+
+        if ("INVOICED".equals(order.getStatus())) {
+            return; // idempotent
+        }
+
+        order.setStatus("INVOICED");
+        orderDao.save(order);
+    }
+
+    private void initializeOrder(OrderPojo order) {
+        order.setOrderTime(ZonedDateTime.now(ZoneId.of("Asia/Kolkata")));
+        order.setStatus("CREATED");
+    }
+
+    private void deductInventoryForOrder(OrderPojo order) throws ApiException {
+        for (OrderItemPojo item : order.getOrderItems()) {
             ProductPojo product = productApi.getProductByBarcode(item.getProductBarcode());
             InventoryPojo inventory = inventoryApi.getByProductId(product.getId());
-            int available = inventory.getQuantity();
-            int required = item.getOrderedQuantity();
-            if (available < required) {
-                throw new ApiException(
-                        "Insufficient inventory for barcode: "
-                                + item.getProductBarcode()
-                                + ", available: " + available
-                                + ", required: " + required
-                );
-            }
-            inventory.setQuantity(available - required);
-            inventoryApi.updateInventory(inventory);
+            inventoryApi.deductInventory(inventory, item.getOrderedQuantity()
+            );
         }
+    }
+
+    private void persistOrderWithUniqueReference(OrderPojo order) throws ApiException {
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                order.setOrderReferenceId(generateOrderReferenceId());
+                orderDao.save(order);
+                return;
+            } catch (DuplicateKeyException e) {
+                logger.warn("Order referenceId collision, retrying...");
+            }
+        }
+        throw new ApiException("Unable to generate unique order reference id");
     }
 
     private String generateOrderReferenceId() {

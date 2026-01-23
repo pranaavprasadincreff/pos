@@ -11,6 +11,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Component
 public class OrderDto {
     private final OrderApi orderApi;
@@ -38,8 +41,15 @@ public class OrderDto {
         if (form == null || CollectionUtils.isEmpty(form.getItems())) {
             throw new ApiException("Order must contain at least one item");
         }
+        Set<String> seenBarcodes = new HashSet<>();
         for (OrderCreateItemForm item : form.getItems()) {
             validateItem(item);
+            String barcode = item.getProductBarcode().trim().toUpperCase();
+            if (!seenBarcodes.add(barcode)) {
+                throw new ApiException(
+                        "Duplicate product barcode in order: " + barcode
+                );
+            }
         }
     }
 

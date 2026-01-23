@@ -26,20 +26,6 @@ public class TsvHelper {
         }
     }
 
-    public static List<String[]> decode(String base64, int expectedColumns)
-            throws ApiException {
-        List<String[]> rows = decode(base64);
-
-        for (String[] row : rows) {
-            if (row.length != expectedColumns) {
-                throw new ApiException(
-                        "Invalid TSV format: expected " + expectedColumns + " columns"
-                );
-            }
-        }
-        return rows;
-    }
-
     public static String encodeResult(List<String[]> rows) {
         StringBuilder sb = new StringBuilder();
         sb.append("barcode\tstatus\tmessage\n");

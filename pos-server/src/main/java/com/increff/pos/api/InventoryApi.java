@@ -8,4 +8,5 @@ public interface InventoryApi {
     InventoryPojo getByProductId(String productId) throws ApiException;
     InventoryPojo updateInventory(InventoryPojo inventoryPojo) throws ApiException;
     void incrementInventory(InventoryPojo inventoryPojo, int delta) throws ApiException;
+    void deductInventory(InventoryPojo inventory, int quantity) throws ApiException;
 }
