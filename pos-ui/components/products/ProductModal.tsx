@@ -11,10 +11,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { ProductData } from '@/services/types'
 import { cn } from '@/lib/utils'
 import { createProduct, updateProduct } from '@/services/productService'
+import { ProductData } from '@/services/types'
 import type { AxiosError } from 'axios'
+
+/* ---------------- types ---------------- */
 
 interface Props {
     isOpen: boolean
@@ -35,6 +37,8 @@ type FieldErrors = Partial<{
     imageUrl: string
 }>
 
+/* ---------------- component ---------------- */
+
 export default function ProductModal({
                                          isOpen,
                                          onClose,
@@ -51,8 +55,9 @@ export default function ProductModal({
     const [submitting, setSubmitting] = useState(false)
 
     const [errors, setErrors] = useState<FieldErrors>({})
-
     const barcodeRef = useRef<HTMLInputElement>(null)
+
+    /* ---------------- prefill / reset ---------------- */
 
     useEffect(() => {
         if (initialData) {
@@ -60,7 +65,7 @@ export default function ProductModal({
             setClientEmail(initialData.clientEmail)
             setName(initialData.name)
             setMrp(String(initialData.mrp))
-            setImageUrl(initialData.imageUrl || '')
+            setImageUrl(initialData.imageUrl ?? '')
         } else {
             setBarcode('')
             setClientEmail('')
@@ -70,6 +75,8 @@ export default function ProductModal({
         }
         setErrors({})
     }, [initialData, isOpen])
+
+    /* ---------------- submit ---------------- */
 
     async function handleSubmit() {
         setSubmitting(true)
@@ -101,7 +108,10 @@ export default function ProductModal({
             let message = 'Invalid input'
 
             if (isAxiosError(err)) {
-                message = err.response?.data?.message ?? err.message
+                message =
+                    err.response?.data?.message ??
+                    err.message ??
+                    message
             } else if (err instanceof Error) {
                 message = err.message
             }
@@ -125,6 +135,8 @@ export default function ProductModal({
         }
     }
 
+    /* ---------------- render ---------------- */
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="animate-in fade-in zoom-in-95 duration-200">
@@ -143,7 +155,7 @@ export default function ProductModal({
                             value={barcode}
                             onChange={(e) => {
                                 setBarcode(e.target.value)
-                                setErrors((p) => ({ ...p, barcode: undefined }))
+                                setErrors(p => ({ ...p, barcode: undefined }))
                             }}
                             placeholder="SKU-001"
                             className={cn(
@@ -166,7 +178,7 @@ export default function ProductModal({
                             value={clientEmail}
                             onChange={(e) => {
                                 setClientEmail(e.target.value)
-                                setErrors((p) => ({
+                                setErrors(p => ({
                                     ...p,
                                     clientEmail: undefined,
                                 }))
@@ -192,7 +204,7 @@ export default function ProductModal({
                             value={name}
                             onChange={(e) => {
                                 setName(e.target.value)
-                                setErrors((p) => ({ ...p, name: undefined }))
+                                setErrors(p => ({ ...p, name: undefined }))
                             }}
                             placeholder="Product name"
                             className={cn(
@@ -216,7 +228,7 @@ export default function ProductModal({
                             value={mrp}
                             onChange={(e) => {
                                 setMrp(e.target.value)
-                                setErrors((p) => ({ ...p, mrp: undefined }))
+                                setErrors(p => ({ ...p, mrp: undefined }))
                             }}
                             placeholder="79999"
                             className={cn(
@@ -239,7 +251,7 @@ export default function ProductModal({
                             value={imageUrl}
                             onChange={(e) => {
                                 setImageUrl(e.target.value)
-                                setErrors((p) => ({
+                                setErrors(p => ({
                                     ...p,
                                     imageUrl: undefined,
                                 }))
@@ -253,7 +265,6 @@ export default function ProductModal({
                 <DialogFooter>
                     <Button
                         variant="outline"
-                        className="border-slate-300"
                         onClick={onClose}
                         disabled={submitting}
                     >
@@ -269,9 +280,9 @@ export default function ProductModal({
                             !name ||
                             !mrp
                         }
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white"
                     >
-                        {submitting ? 'Saving...' : 'Save'}
+                        {submitting ? 'Saving…' : 'Save'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -279,12 +290,12 @@ export default function ProductModal({
     )
 }
 
-function isAxiosError(error: unknown): error is AxiosError<ApiErrorResponse> {
+function isAxiosError(
+    error: unknown
+): error is AxiosError<ApiErrorResponse> {
     return (
         typeof error === 'object' &&
         error !== null &&
-        'isAxiosError' in error &&
-        (error as { isAxiosError?: boolean }).isAxiosError === true
+        'isAxiosError' in error
     )
 }
-

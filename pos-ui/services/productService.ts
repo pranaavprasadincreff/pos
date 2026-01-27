@@ -49,3 +49,14 @@ export async function updateInventory(
     )
     return res.data
 }
+
+export async function getProductByBarcode(barcode: string): Promise<ProductData> {
+    const res = await axios.get<ProductData>(`${API}/product/get-by-barcode/${barcode}`)
+    return res.data
+}
+
+export async function searchProducts(query: string, size = 10): Promise<ProductData[]> {
+    if (!query.trim()) return []
+    const res = await axios.post(`${API}/product/search`, { query, size })
+    return res.data
+}

@@ -41,33 +41,43 @@ export interface ProductUpdateForm {
     imageUrl?: string
 }
 
-export interface InventoryUpdateForm {
-    barcode: string
-    quantity: number
-}
-export interface BulkUploadForm {
-    tsv: string
-}
-
-export interface BulkUploadError {
-    row: number
-    message: string
-}
-
-export interface BulkUploadData {
-    successCount: number
-    errorCount: number
-    errors: BulkUploadError[]
-}
-
 export interface PageResponse<T> {
     content: T[]
     totalPages: number
-    totalElements?: number
+    totalElements: number
+    number: number // current page
+    size: number
 }
 
-export interface ParsedRow {
-    values: string[]
-    isError: boolean
+export interface OrderItemData {
+    productBarcode: string
+    quantity: number
+    sellingPrice: number
 }
 
+export interface OrderData {
+    orderReferenceId: string
+    orderTime: string
+    status: 'CREATED' | 'INVOICED'
+    items: OrderItemData[]
+}
+
+export interface OrderCreateItemForm {
+    productBarcode: string
+    quantity: number
+    sellingPrice: number
+}
+
+export interface OrderCreateForm {
+    items: OrderCreateItemForm[]
+}
+
+export interface InvoiceData {
+    orderReferenceId: string
+    pdfBase64: string
+    pdfPath?: string
+}
+
+export interface ApiError {
+    message: string
+}

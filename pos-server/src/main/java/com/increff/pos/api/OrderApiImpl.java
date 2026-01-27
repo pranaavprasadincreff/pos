@@ -9,11 +9,15 @@ import com.increff.pos.exception.ApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -57,6 +61,16 @@ public class OrderApiImpl implements OrderApi {
         }
     }
 
+    @Override
+    public Page<OrderPojo> getAllOrders(int page, int size) {
+        PageRequest pageRequest = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "orderTime")
+        );
+        return orderDao.findAll(pageRequest);
+    }
+
     private void initializeOrder(OrderPojo order) {
         order.setOrderTime(ZonedDateTime.now(ZoneId.of("Asia/Kolkata")));
         order.setStatus("CREATED");
@@ -64,10 +78,7 @@ public class OrderApiImpl implements OrderApi {
 
     private void deductInventoryForOrder(OrderPojo order) throws ApiException {
         for (OrderItemPojo item : order.getOrderItems()) {
-            ProductPojo product = productApi.getProductByBarcode(item.getProductBarcode());
-            InventoryPojo inventory = inventoryApi.getByProductId(product.getId());
-            inventoryApi.deductInventory(inventory, item.getOrderedQuantity()
-            );
+            deductInventoryForItem(item);
         }
     }
 
@@ -109,5 +120,21 @@ public class OrderApiImpl implements OrderApi {
     private void setOrderInvoiced(OrderPojo order) {
         order.setStatus("INVOICED");
         orderDao.save(order);
+    }
+
+    private void deductInventoryForItem(OrderItemPojo item) throws ApiException {
+        String barcode = item.getProductBarcode();
+        try {
+            ProductPojo product = productApi.getProductByBarcode(barcode);
+            InventoryPojo inventory = inventoryApi.getByProductId(product.getId());
+            inventoryApi.deductInventory(
+                    inventory,
+                    item.getOrderedQuantity()
+            );
+        } catch (ApiException e) {
+            throw new ApiException(
+                    "Insufficient inventory for product barcode: " + barcode
+            );
+        }
     }
 }

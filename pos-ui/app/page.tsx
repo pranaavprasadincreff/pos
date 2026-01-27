@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
-import { Users, Package } from 'lucide-react'
+import { Users, Package, ShoppingCart } from 'lucide-react'
 
 export default function HomePage() {
     return (
         <div className="max-w-5xl mx-auto py-20 space-y-8">
+            {/* Header */}
             <div className="text-center space-y-2">
                 <h1 className="text-3xl font-semibold tracking-tight">
                     POS Dashboard
@@ -16,7 +17,9 @@ export default function HomePage() {
                 </p>
             </div>
 
+            {/* Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* Clients Card */}
                 <Link href="/clients">
                     <Card className="hover:shadow-md transition cursor-pointer">
                         <CardContent className="flex items-center gap-4 p-6">
@@ -31,6 +34,7 @@ export default function HomePage() {
                     </Card>
                 </Link>
 
+                {/* Products Card */}
                 <Link href="/products">
                     <Card className="hover:shadow-md transition cursor-pointer">
                         <CardContent className="flex items-center gap-4 p-6">
@@ -39,6 +43,21 @@ export default function HomePage() {
                                 <p className="font-medium">Products</p>
                                 <p className="text-sm text-muted-foreground">
                                     Manage products & inventory
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </Link>
+
+                {/* Orders Card */}
+                <Link href="/orders">
+                    <Card className="hover:shadow-md transition cursor-pointer">
+                        <CardContent className="flex items-center gap-4 p-6">
+                            <ShoppingCart className="h-8 w-8 text-orange-500" />
+                            <div>
+                                <p className="font-medium">Orders</p>
+                                <p className="text-sm text-muted-foreground">
+                                    Create orders and manage invoices
                                 </p>
                             </div>
                         </CardContent>

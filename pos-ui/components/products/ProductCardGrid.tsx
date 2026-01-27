@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 interface Props {
     products: ProductData[]
     loading: boolean
-    onEdit: (p: ProductData) => void
+    onEdit: (product: ProductData) => void
     onInventoryUpdated: () => void
 }
 
@@ -38,11 +38,11 @@ export default function ProductCardGrid({
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((p) => (
+            {products.map((product) => (
                 <ProductCard
-                    key={p.id}
-                    product={p}
-                    onEdit={onEdit}
+                    key={product.id}
+                    product={product}
+                    onEdit={() => onEdit(product)}
                     onInventoryUpdated={onInventoryUpdated}
                 />
             ))}

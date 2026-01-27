@@ -15,16 +15,18 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en">
-            <body className="bg-muted/40">
-                <div className="flex min-h-screen">
-                    <Sidebar />
-                    <main className="flex-1 p-6">{children}</main>
-                </div>
-                <Toaster
-                    position="bottom-right"
-                    richColors
-                />
-            </body>
+        <body className="bg-muted/40 overflow-hidden">
+        <div className="flex h-screen">
+            <Sidebar />
+
+            <main className="flex-1 overflow-y-auto p-6">
+                {children}
+            </main>
+        </div>
+
+        <Toaster position="bottom-right" richColors />
+        </body>
         </html>
     )
 }
+

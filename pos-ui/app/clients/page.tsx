@@ -10,191 +10,173 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+
 import ClientTable from '@/components/clients/ClientTable'
 import ClientModal from '@/components/clients/ClientModal'
 import Pagination from '@/components/clients/Pagination'
 
-import {
-    getUsers,
-    addUser,
-    updateUser,
-} from '@/services/userService'
+import { getUsers, addUser, updateUser } from '@/services/userService'
 import { User, UserForm, UserUpdateForm } from '@/services/types'
 import { toast } from 'sonner'
 
 export default function ClientsPage() {
-    // const [clients, setClients] = useState<User[]>([])
-    const [page, setPage] = useState(0)
-    // const [totalPages, setTotalPages] = useState(0)
     const [allClients, setAllClients] = useState<User[]>([])
+    const [page, setPage] = useState(0)
+    const [loading, setLoading] = useState(false)
 
     const [modalOpen, setModalOpen] = useState(false)
     const [editingClient, setEditingClient] = useState<User | null>(null)
 
-    // 🔍 search state
     const [searchTerm, setSearchTerm] = useState('')
     const [searchBy, setSearchBy] = useState<'name' | 'email'>('name')
-    const [loading, setLoading] = useState(false)
-    const isSearching = searchTerm.trim().length > 0
 
     const pageSize = 10
 
     useEffect(() => {
         fetchAllClients()
-    }, [page])
-
-    useEffect(() => {
-        setPage(0)
-    }, [searchTerm, searchBy])
+    }, [])
 
     async function fetchAllClients() {
-        let toastId: string | number | undefined
-
+        let toastId
         try {
             setLoading(true)
             toastId = toast.loading('Loading clients...')
-
             const collected: User[] = []
-            let currentPage = 0
-            let totalPages = 1
 
-            while (currentPage < totalPages) {
-                const res = await getUsers(currentPage, pageSize)
+            let p = 0, total = 1
+            while (p < total) {
+                const res = await getUsers(p, pageSize)
                 collected.push(...res.content)
-                totalPages = res.totalPages
-                currentPage++
+                total = res.totalPages
+                p++
             }
 
             setAllClients(collected)
-        } catch (err) {
-            toast.error('Failed to load clients')
         } finally {
             setLoading(false)
-            if (toastId) toast.dismiss(toastId)
+            toast.dismiss(toastId)
         }
     }
 
     async function handleSubmit(form: UserForm | UserUpdateForm) {
-        try {
-            if (editingClient) {
-                await updateUser(form as UserUpdateForm)
-                toast.success('Client updated successfully')
-            } else {
-                await addUser(form as UserForm)
-                toast.success('Client added successfully')
-                setPage(0)
-            }
+        editingClient
+            ? await updateUser(form as UserUpdateForm)
+            : await addUser(form as UserForm)
 
-            setModalOpen(false)
-            setEditingClient(null)
-            fetchAllClients()
-        } catch (err: unknown) {
-            if (err instanceof Error) {
-                toast.error(err.message)
-                throw err
-            } else {
-                toast.error('Something went wrong')
-                throw new Error('Something went wrong')
-            }
-        }
-    }
-
-    function openAddModal() {
+        setModalOpen(false)
         setEditingClient(null)
-        setModalOpen(true)
-    }
-
-    function openEditModal(client: User) {
-        setEditingClient(client)
-        setModalOpen(true)
+        fetchAllClients()
     }
 
     const filteredClients = useMemo(() => {
         if (!searchTerm) return allClients
-
-        return allClients.filter((c) =>
+        return allClients.filter(c =>
             c[searchBy].toLowerCase().includes(searchTerm.toLowerCase())
         )
     }, [allClients, searchTerm, searchBy])
 
     const totalPages = Math.ceil(filteredClients.length / pageSize)
-
-    const paginatedClients = useMemo(() => {
-        const start = page * pageSize
-        return filteredClients.slice(start, start + pageSize)
-    }, [filteredClients, page, pageSize])
-
-    useEffect(() => {
-        if (page >= totalPages && totalPages > 0) {
-            setPage(totalPages - 1)
-        }
-    }, [page, totalPages])
+    const paginatedClients = filteredClients.slice(
+        page * pageSize,
+        page * pageSize + pageSize
+    )
 
     return (
-        <div className="max-w-6xl mx-auto space-y-8">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                        Clients
-                    </h1>
-                    <p className="text-sm text-slate-500">
-                        Manage and view all registered clients
-                    </p>
+        <div className="space-y-6">
+            {/* Sticky Header */}
+            <div className="sticky top-0 z-20 border-b
+                bg-background/95 backdrop-blur
+                supports-[backdrop-filter]:bg-background/80">
+                <div className="max-w-6xl mx-auto px-6 py-4 space-y-4">
+                    {/* Title + CTA */}
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h1 className="text-2xl font-semibold">Clients</h1>
+                            <p className="text-sm text-muted-foreground">
+                                Manage registered clients
+                            </p>
+                        </div>
+                        <Button
+                            className="bg-indigo-600 hover:bg-indigo-700"
+                            onClick={() => setModalOpen(true)}
+                        >
+                            + Add Client
+                        </Button>
+                    </div>
+
+                    {/* Filters */}
+                    <div className="flex items-center gap-2 max-w-xl">
+                        <Select
+                            value={searchBy}
+                            onValueChange={(v) => {
+                                if (v === 'name' || v === 'email') {
+                                    setSearchBy(v)
+                                }
+                            }}
+                        >
+                            <SelectTrigger className="w-32">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="name">Name</SelectItem>
+                                <SelectItem value="email">Email</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Input
+                            placeholder={`Search by ${searchBy}`}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="focus-visible:ring-2
+                                       focus-visible:ring-indigo-500
+                                       transition"
+                        />
+
+                        {searchTerm && (
+                            <Button
+                                variant="outline"
+                                className="
+            border-slate-900 text-slate-900
+            hover:bg-slate-900 hover:text-white
+            transition-colors
+        "
+                                onClick={() => {
+                                    setSearchTerm('')
+                                    setPage(0)
+                                }}
+                            >
+                                Clear
+                            </Button>
+                        )}
+                    </div>
                 </div>
-                <Button
-                    onClick={openAddModal}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
-                >
-                    + Add Client
-                </Button>
             </div>
 
-            {/* Search */}
-            <div className="flex gap-2 max-w-xl">
-                <Select
-                    value={searchBy}
-                    onValueChange={(v) => setSearchBy(v as 'name' | 'email')}
-                >
-                    <SelectTrigger className="w-[140px]">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="name">Name</SelectItem>
-                        <SelectItem value="email">Email</SelectItem>
-                    </SelectContent>
-                </Select>
+            {/* Content */}
+            <div className="max-w-6xl mx-auto px-6 space-y-6">
+                <ClientTable
+                    clients={paginatedClients}
+                    loading={loading}
+                    page={page}
+                    pageSize={pageSize}
+                    onEdit={(c) => {
+                        setEditingClient(c)
+                        setModalOpen(true)
+                    }}
+                />
 
-                <Input
-                    placeholder={`Search by ${searchBy}`}
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="focus-visible:ring-1 focus-visible:ring-indigo-500"
+                <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    onPageChange={setPage}
                 />
             </div>
 
-            {/* Table */}
-            <ClientTable
-                clients={paginatedClients}
-                loading={loading}
-                page={page}
-                pageSize={pageSize}
-                onEdit={openEditModal}
-            />
-
-            {/* Pagination */}
-            <Pagination
-                page={page}
-                totalPages={totalPages}
-                onPageChange={setPage}
-            />
-
-            {/* Modal */}
             <ClientModal
                 isOpen={modalOpen}
+                initialData={editingClient}
                 onClose={() => setModalOpen(false)}
                 onSubmit={handleSubmit}
-                initialData={editingClient}
             />
         </div>
     )

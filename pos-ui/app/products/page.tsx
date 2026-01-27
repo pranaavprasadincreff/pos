@@ -1,6 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -10,169 +17,191 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+
 import ProductCardGrid from '@/components/products/ProductCardGrid'
 import ProductModal from '@/components/products/ProductModal'
 import BulkUploadModal from '@/components/products/BulkUploadModal'
-import Pagination from '@/components/clients/Pagination'
+
 import { getAllProducts } from '@/services/productService'
 import { ProductData } from '@/services/types'
-import { toast } from 'sonner'
+
+/* ---------------- constants ---------------- */
+
+const PAGE_SIZE = 9
+
+const SEARCH_BY_OPTIONS = ['name', 'barcode', 'clientEmail'] as const
+type SearchBy = typeof SEARCH_BY_OPTIONS[number]
+
+/* ---------------- page ---------------- */
 
 export default function ProductsPage() {
+    const [products, setProducts] = useState<ProductData[]>([])
     const [page, setPage] = useState(0)
-    const [allProducts, setAllProducts] = useState<ProductData[]>([])
-    const [modalOpen, setModalOpen] = useState(false)
-    const [bulkModalOpen, setBulkModalOpen] = useState(false)
-    const [editingProduct, setEditingProduct] = useState<ProductData | null>(null)
-
-    const [searchTerm, setSearchTerm] = useState('')
-    const [searchBy, setSearchBy] = useState<'name' | 'barcode' | 'clientEmail'>('name')
+    const [hasMore, setHasMore] = useState(true)
     const [loading, setLoading] = useState(false)
 
-    const pageSize = 9 // 3-column grid
+    const [searchTerm, setSearchTerm] = useState('')
+    const [searchBy, setSearchBy] = useState<SearchBy>('name')
 
-    // Fetch all products
+    const [modalOpen, setModalOpen] = useState(false)
+    const [bulkOpen, setBulkOpen] = useState(false)
+
+    const observerRef = useRef<HTMLDivElement | null>(null)
+    const [editingProduct, setEditingProduct] = useState<ProductData | null>(null)
+
+
+    const fetchPage = useCallback(
+        async (pageToLoad: number) => {
+            const res = await getAllProducts(pageToLoad, PAGE_SIZE)
+
+            setProducts(prev => {
+                const map = new Map(prev.map(p => [p.id, p]))
+                res.content.forEach(p => map.set(p.id, p))
+                return Array.from(map.values())
+            })
+
+            setHasMore(pageToLoad + 1 < res.totalPages)
+            setPage(pageToLoad + 1)
+        },
+        []
+    )
+
+    const loadNextPage = useCallback(async () => {
+        if (loading || !hasMore) return
+
+        setLoading(true)
+        await fetchPage(page)
+        setLoading(false)
+    }, [page, hasMore, loading, fetchPage])
+
     useEffect(() => {
-        fetchAllProducts()
+        fetchPage(0)
     }, [])
 
-    async function fetchAllProducts() {
-        let toastId
-        try {
-            setLoading(true)
-            toastId = toast.loading('Loading products...')
+    useEffect(() => {
+        if (!observerRef.current) return
 
-            const collected: ProductData[] = []
-            let currentPage = 0
-            let totalPages = 1
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) {
+                    loadNextPage()
+                }
+            },
+            { rootMargin: '150px' }
+        )
 
-            while (currentPage < totalPages) {
-                const res = await getAllProducts(currentPage, pageSize)
-                collected.push(...res.content)
-                totalPages = res.totalPages
-                currentPage++
-            }
+        observer.observe(observerRef.current)
+        return () => observer.disconnect()
+    }, [loadNextPage])
 
-            setAllProducts(collected)
-        } catch (e) {
-            toast.error('Failed to load products')
-        } finally {
-            setLoading(false)
-            if (toastId) toast.dismiss(toastId)
-        }
+    const filteredProducts = useMemo(() => {
+        if (!searchTerm) return products
+
+        return products.filter(p =>
+            p[searchBy]
+                ?.toString()
+                .toLowerCase()
+                .includes(searchTerm.toLowerCase())
+        )
+    }, [products, searchTerm, searchBy])
+
+    const hardReload = async () => {
+        setProducts([])
+        setHasMore(true)
+        setPage(0)
+        await fetchPage(0)
     }
 
-    // Filter products
-    const filteredProducts = useMemo(() => {
-        if (!searchTerm) return allProducts
-        return allProducts.filter((p) =>
-            p[searchBy]?.toString().toLowerCase().includes(searchTerm.toLowerCase())
-        )
-    }, [allProducts, searchTerm, searchBy])
-
-    const totalPages = Math.ceil(filteredProducts.length / pageSize)
-
-    // Paginate
-    const paginatedProducts = useMemo(() => {
-        const start = page * pageSize
-        return filteredProducts.slice(start, start + pageSize)
-    }, [filteredProducts, page])
-
-    // Ensure current page is valid
-    useEffect(() => {
-        if (page >= totalPages && totalPages > 0) {
-            setPage(totalPages - 1)
-        }
-        if (page < 0) setPage(0)
-    }, [page, totalPages])
-
     return (
-        <div className="max-w-7xl mx-auto space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-semibold">Products</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Manage products and inventory
-                    </p>
-                </div>
-                <div className="flex gap-2">
-                    <Button
-                        onClick={() => setModalOpen(true)}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                    >
-                        + Add Product
-                    </Button>
-                    <Button
-                        onClick={() => setBulkModalOpen(true)}
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                    >
-                        Bulk Upload
-                    </Button>
+        <div className="space-y-6">
+            <div className="sticky top-0 z-30 bg-background border-b">
+                <div className="max-w-7xl mx-auto px-6 py-4 space-y-4">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h1 className="text-2xl font-semibold">Products</h1>
+                            <p className="text-sm text-muted-foreground">
+                                Manage products and inventory
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <Button
+                                className="bg-indigo-600 hover:bg-indigo-700"
+                                onClick={() => {
+                                    setEditingProduct(null)
+                                    setModalOpen(true)
+                                }}
+                            >
+                                + Add Product
+                            </Button>
+
+                            <Button
+                                className="bg-emerald-600 hover:bg-emerald-700"
+                                onClick={() => setBulkOpen(true)}
+                            >
+                                Bulk Upload
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2 max-w-2xl">
+                        <Select
+                            value={searchBy}
+                            onValueChange={v => setSearchBy(v as SearchBy)}
+                        >
+                            <SelectTrigger className="w-40">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="name">Name</SelectItem>
+                                <SelectItem value="barcode">Barcode</SelectItem>
+                                <SelectItem value="clientEmail">
+                                    Client Email
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Input
+                            placeholder={`Search by ${searchBy}`}
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
+                    </div>
                 </div>
             </div>
 
-            {/* Filters */}
-            <div className="flex gap-2 max-w-2xl">
-                <Select
-                    value={searchBy}
-                    onValueChange={(v) => setSearchBy(v as 'name' | 'barcode' | 'clientEmail')}
-                >
-                    <SelectTrigger className="w-[160px]">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="name">Name</SelectItem>
-                        <SelectItem value="barcode">Barcode</SelectItem>
-                        <SelectItem value="clientEmail">Client Email</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                <Input
-                    placeholder={`Search by ${searchBy}`}
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+            <div className="max-w-7xl mx-auto px-6 pt-6 space-y-6">
+                <ProductCardGrid
+                    products={filteredProducts}
+                    loading={false}
+                    onEdit={(product) => {
+                        setEditingProduct(product)
+                        setModalOpen(true)
+                    }}
+                    onInventoryUpdated={hardReload}
                 />
+
+                {hasMore && (
+                    <div
+                        ref={observerRef}
+                        className="h-16 flex items-center justify-center text-sm text-muted-foreground"
+                    >
+                        {loading && 'Loading more products…'}
+                    </div>
+                )}
             </div>
 
-            {/* Product Cards */}
-            <ProductCardGrid
-                products={paginatedProducts}
-                loading={loading}
-                onEdit={(p) => {
-                    setEditingProduct(p)
-                    setModalOpen(true)
-                }}
-                onInventoryUpdated={fetchAllProducts}
-            />
-
-            {/* Pagination */}
-            <Pagination
-                page={page}
-                totalPages={totalPages}
-                onPageChange={(p) => {
-                    if (p < 0) return
-                    if (p >= totalPages) return
-                    setPage(p)
-                }}
-            />
-
-            {/* Add/Edit Product Modal */}
             <ProductModal
                 isOpen={modalOpen}
                 initialData={editingProduct}
-                onClose={() => {
-                    setModalOpen(false)
-                    setEditingProduct(null)
-                }}
-                onSuccess={fetchAllProducts}
+                onClose={() => setModalOpen(false)}
+                onSuccess={hardReload}
             />
 
-            {/* Bulk Upload Modal */}
             <BulkUploadModal
-                isOpen={bulkModalOpen}
-                onClose={() => setBulkModalOpen(false)}
-                onSuccess={fetchAllProducts}
+                isOpen={bulkOpen}
+                onClose={() => setBulkOpen(false)}
+                onSuccess={hardReload}
             />
         </div>
     )

@@ -4,9 +4,13 @@ import com.increff.pos.dto.OrderDto;
 import com.increff.pos.exception.ApiException;
 import com.increff.pos.model.data.OrderData;
 import com.increff.pos.model.form.OrderCreateForm;
+import com.increff.pos.model.form.PageForm;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Tag(name = "Order Management",
         description = "APIs for creating and viewing orders")
@@ -31,4 +35,11 @@ public class OrderController {
     public OrderData get(@PathVariable String orderReferenceId) throws ApiException {
         return orderDto.getByOrderReferenceId(orderReferenceId);
     }
+
+    @Operation(summary = "Get all orders (paginated)")
+    @RequestMapping(path = "/get-all-paginated", method = RequestMethod.POST)
+    public Page<OrderData> getAll(@RequestBody PageForm form) throws ApiException {
+        return orderDto.getAllOrders(form);
+    }
+
 }

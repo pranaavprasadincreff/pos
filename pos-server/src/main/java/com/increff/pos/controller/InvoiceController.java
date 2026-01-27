@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Invoice Management", description = "APIs for generating and fetching invoices")
+@CrossOrigin(origins = "http://localhost:3000")
 @RestController
 @RequestMapping("/api/pos/invoice")
 public class InvoiceController {
@@ -19,8 +20,7 @@ public class InvoiceController {
 
     @Operation(summary = "Generate invoice for an order (one-time operation)")
     @RequestMapping(path = "/generate/{orderReferenceId}", method = RequestMethod.POST)
-    public InvoiceData generate(@PathVariable String orderReferenceId)
-            throws ApiException {
+    public InvoiceData generate(@PathVariable String orderReferenceId) throws ApiException {
 
         return invoiceDto.generateInvoice(orderReferenceId);
     }

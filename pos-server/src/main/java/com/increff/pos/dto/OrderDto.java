@@ -7,12 +7,18 @@ import com.increff.pos.helper.OrderHelper;
 import com.increff.pos.model.data.OrderData;
 import com.increff.pos.model.form.OrderCreateForm;
 import com.increff.pos.model.form.OrderCreateItemForm;
+import com.increff.pos.model.form.PageForm;
+import com.increff.pos.util.ValidationUtil;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 public class OrderDto {
@@ -36,6 +42,17 @@ public class OrderDto {
         OrderPojo order = orderApi.getByOrderReferenceId(orderReferenceId);
         return OrderHelper.convertToData(order);
     }
+
+    public Page<OrderData> getAllOrders(PageForm form) throws ApiException {
+        ValidationUtil.validatePageForm(form);
+        Page<OrderPojo> orderPage = orderApi.getAllOrders(form.getPage(), form.getSize());
+        List<OrderData> data = orderPage.getContent()
+                .stream()
+                .map(OrderHelper::convertToData)
+                .collect(Collectors.toList());
+        return new PageImpl<>(data, orderPage.getPageable(), orderPage.getTotalElements());
+    }
+
 
     private void validateCreateOrderForm(OrderCreateForm form) throws ApiException {
         if (form == null || CollectionUtils.isEmpty(form.getItems())) {
