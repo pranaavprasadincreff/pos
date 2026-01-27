@@ -11,7 +11,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { User } from '@/services/types'
+import { Client } from '@/services/types'
 import { cn } from '@/lib/utils'
 
 interface CreateClientForm {
@@ -31,7 +31,7 @@ interface Props {
     isOpen: boolean
     onClose: () => void
     onSubmit: (form: ClientForm) => Promise<void>
-    initialData: User | null
+    initialData: Client | null
 }
 
 export default function ClientModal({

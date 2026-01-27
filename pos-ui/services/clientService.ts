@@ -1,6 +1,6 @@
-import { User, UserForm, PageResponse, UserUpdateForm } from './types'
+import { Client, ClientForm, PageResponse, ClientUpdateForm } from './types'
 
-const BASE_URL = 'http://localhost:8080/api/user'
+const BASE_URL = 'http://localhost:8080/api/client'
 
 async function handleResponse<T>(res: Response): Promise<T> {
     if (!res.ok) {
@@ -21,10 +21,10 @@ async function handleResponse<T>(res: Response): Promise<T> {
     return res.json()
 }
 
-export async function getUsers(
+export async function getClients(
     page: number,
     size: number
-): Promise<PageResponse<User>> {
+): Promise<PageResponse<Client>> {
     const res = await fetch(`${BASE_URL}/get-all-paginated`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -34,7 +34,7 @@ export async function getUsers(
     return handleResponse(res)
 }
 
-export async function addUser(form: UserForm) {
+export async function addClient(form: ClientForm) {
     const res = await fetch(`${BASE_URL}/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,7 +44,7 @@ export async function addUser(form: UserForm) {
     return handleResponse(res)
 }
 
-export async function updateUser(form: UserUpdateForm) {
+export async function updateClient(form: ClientUpdateForm) {
     const res = await fetch(`${BASE_URL}/update`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

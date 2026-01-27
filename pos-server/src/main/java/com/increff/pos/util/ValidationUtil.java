@@ -5,12 +5,12 @@ import com.increff.pos.model.form.*;
 import org.springframework.util.StringUtils;
 
 public class ValidationUtil {
-    public static void validateUserForm(UserForm form) throws ApiException {
+    public static void validateClientForm(ClientForm form) throws ApiException {
         validateEmail(form.getEmail());
         validateName(form.getName());
     }
 
-    public static void validateUserUpdateForm(UserUpdateForm form) throws ApiException {
+    public static void validateClientUpdateForm(ClientUpdateForm form) throws ApiException {
         validateEmail(form.getOldEmail());
         validateEmail(form.getNewEmail());
         validateName(form.getName());

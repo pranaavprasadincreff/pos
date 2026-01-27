@@ -7,16 +7,16 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { User } from '@/services/types'
+import { Client } from '@/services/types'
 import { Users } from 'lucide-react'
 import {LoadingIndicator} from "@/components/ui/LoadingIndicator";
 
 interface Props {
-    clients: User[]
+    clients: Client[]
     loading: boolean
     page: number
     pageSize: number
-    onEdit: (client: User) => void
+    onEdit: (client: Client) => void
 }
 
 export default function ClientTable({

@@ -1,15 +1,15 @@
-export interface User {
+export interface Client {
     id: string
     name: string
     email: string
 }
 
-export interface UserForm {
+export interface ClientForm {
     name: string
     email: string
 }
 
-export interface UserUpdateForm {
+export interface ClientUpdateForm {
     name: string
     oldEmail: string
     newEmail: string

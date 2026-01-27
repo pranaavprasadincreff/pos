@@ -15,18 +15,16 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Objects;
-
 @Service
 public class ProductApiImpl implements ProductApi {
     private static final Logger logger = LoggerFactory.getLogger(ProductApiImpl.class);
     private final ProductDao dao;
-    private final UserApi userApi;
+    private final ClientApi clientApi;
     private final InventoryApi inventoryApi;
 
-    public ProductApiImpl(ProductDao dao, UserApi userApi, InventoryApi inventoryApi) {
+    public ProductApiImpl(ProductDao dao, ClientApi clientApi, InventoryApi inventoryApi) {
         this.dao = dao;
-        this.userApi = userApi;
+        this.clientApi = clientApi;
         this.inventoryApi = inventoryApi;
     }
 
@@ -115,7 +113,7 @@ public class ProductApiImpl implements ProductApi {
 
     private void ensureClientExists(String clientEmail) throws ApiException {
         try {
-            userApi.getUserByEmail(clientEmail);
+            clientApi.getClientByEmail(clientEmail);
         } catch (ApiException e) {
             throw new ApiException("Client does not exist with email: " + clientEmail
             );

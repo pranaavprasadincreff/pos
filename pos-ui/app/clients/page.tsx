@@ -15,17 +15,17 @@ import ClientTable from '@/components/clients/ClientTable'
 import ClientModal from '@/components/clients/ClientModal'
 import Pagination from '@/components/clients/Pagination'
 
-import { getUsers, addUser, updateUser } from '@/services/userService'
-import { User, UserForm, UserUpdateForm } from '@/services/types'
+import { getClients, addClient, updateClient } from '@/services/clientService'
+import { Client, ClientForm, ClientUpdateForm } from '@/services/types'
 import { toast } from 'sonner'
 
 export default function ClientsPage() {
-    const [allClients, setAllClients] = useState<User[]>([])
+    const [allClients, setAllClients] = useState<Client[]>([])
     const [page, setPage] = useState(0)
     const [loading, setLoading] = useState(false)
 
     const [modalOpen, setModalOpen] = useState(false)
-    const [editingClient, setEditingClient] = useState<User | null>(null)
+    const [editingClient, setEditingClient] = useState<Client | null>(null)
 
     const [searchTerm, setSearchTerm] = useState('')
     const [searchBy, setSearchBy] = useState<'name' | 'email'>('name')
@@ -41,11 +41,11 @@ export default function ClientsPage() {
         try {
             setLoading(true)
             toastId = toast.loading('Loading clients...')
-            const collected: User[] = []
+            const collected: Client[] = []
 
             let p = 0, total = 1
             while (p < total) {
-                const res = await getUsers(p, pageSize)
+                const res = await getClients(p, pageSize)
                 collected.push(...res.content)
                 total = res.totalPages
                 p++
@@ -58,10 +58,10 @@ export default function ClientsPage() {
         }
     }
 
-    async function handleSubmit(form: UserForm | UserUpdateForm) {
+    async function handleSubmit(form: ClientForm | ClientUpdateForm) {
         editingClient
-            ? await updateUser(form as UserUpdateForm)
-            : await addUser(form as UserForm)
+            ? await updateClient(form as ClientUpdateForm)
+            : await addClient(form as ClientForm)
 
         setModalOpen(false)
         setEditingClient(null)

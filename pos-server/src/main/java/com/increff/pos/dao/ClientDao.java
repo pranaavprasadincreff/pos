@@ -1,6 +1,6 @@
 package com.increff.pos.dao;
 
-import com.increff.pos.db.UserPojo;
+import com.increff.pos.db.ClientPojo;
 import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -10,22 +10,22 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class UserDao extends AbstractDao<UserPojo> {
-    public UserDao(MongoOperations mongoOperations) {
+public class ClientDao extends AbstractDao<ClientPojo> {
+    public ClientDao(MongoOperations mongoOperations) {
         super(
             new MongoRepositoryFactory(mongoOperations)
-                .getEntityInformation(UserPojo.class),
+                .getEntityInformation(ClientPojo.class),
             mongoOperations
         );
     }
 
-    public UserPojo findByEmail(String email) {
+    public ClientPojo findByEmail(String email) {
         Query query = Query.query(Criteria.where("email").is(email));
-        return mongoOperations.findOne(query, UserPojo.class);
+        return mongoOperations.findOne(query, ClientPojo.class);
     }
 
     @Override
-    public Page<UserPojo> findAll(Pageable pageable) {
+    public Page<ClientPojo> findAll(Pageable pageable) {
         return super.findAll(pageable);
     }
 }
