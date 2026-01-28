@@ -1,6 +1,6 @@
 package com.increff.invoice.helper;
 
-import com.increff.invoice.exception.ApiException;
+import com.increff.pos.model.exception.ApiException;
 import org.apache.fop.apps.*;
 
 import javax.xml.transform.*;

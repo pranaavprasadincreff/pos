@@ -1,7 +1,7 @@
 package com.increff.invoice.helper;
 
-import com.increff.invoice.modal.form.InvoiceGenerateForm;
-import com.increff.invoice.modal.form.InvoiceItemForm;
+import com.increff.pos.model.form.InvoiceGenerateForm;
+import com.increff.pos.model.form.InvoiceItemForm;
 
 import java.text.DecimalFormat;
 import java.time.ZonedDateTime;

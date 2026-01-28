@@ -1,7 +1,7 @@
 package com.increff.pos.controller;
 
 import com.increff.pos.dto.InvoiceDto;
-import com.increff.pos.exception.ApiException;
+import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.data.InvoiceData;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

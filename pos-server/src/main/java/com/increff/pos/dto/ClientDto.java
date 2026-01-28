@@ -6,7 +6,7 @@ import com.increff.pos.helper.ClientHelper;
 import com.increff.pos.model.data.ClientData;
 import com.increff.pos.model.form.ClientForm;
 import com.increff.pos.db.ClientPojo;
-import com.increff.pos.exception.ApiException;
+import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.PageForm;
 import com.increff.pos.model.form.ClientUpdateForm;
 import com.increff.pos.util.ValidationUtil;

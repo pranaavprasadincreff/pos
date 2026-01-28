@@ -1,18 +1,21 @@
 package com.increff.pos.dto;
 
+import com.increff.pos.client.InvoiceClient;
 import com.increff.pos.test.AbstractUnitTest;
-import com.increff.pos.exception.ApiException;
+import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.data.ClientData;
 import com.increff.pos.model.form.PageForm;
 import com.increff.pos.model.form.ClientForm;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ClientDtoTest extends AbstractUnitTest {
-    
+    @MockBean
+    private InvoiceClient invoiceClient;
     @Autowired
     private ClientDto clientDto;
     

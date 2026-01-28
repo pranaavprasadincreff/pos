@@ -1,6 +1,6 @@
 package com.increff.pos.util;
 
-import com.increff.pos.exception.ApiException;
+import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.*;
 import org.springframework.util.StringUtils;
 

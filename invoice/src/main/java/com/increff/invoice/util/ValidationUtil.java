@@ -1,7 +1,7 @@
 package com.increff.invoice.util;
 
-import com.increff.invoice.exception.ApiException;
-import com.increff.invoice.modal.form.InvoiceGenerateForm;
+import com.increff.pos.model.exception.ApiException;
+import com.increff.pos.model.form.InvoiceGenerateForm;
 import org.springframework.util.StringUtils;
 
 public class ValidationUtil {

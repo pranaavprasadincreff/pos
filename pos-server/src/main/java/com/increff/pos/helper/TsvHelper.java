@@ -1,6 +1,6 @@
 package com.increff.pos.helper;
 
-import com.increff.pos.exception.ApiException;
+import com.increff.pos.model.exception.ApiException;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;

@@ -1,140 +1,158 @@
 package com.increff.pos.api;
 
 import com.increff.pos.dao.OrderDao;
-import com.increff.pos.db.InventoryPojo;
-import com.increff.pos.db.OrderItemPojo;
 import com.increff.pos.db.OrderPojo;
-import com.increff.pos.db.ProductPojo;
-import com.increff.pos.exception.ApiException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.dao.DuplicateKeyException;
+import com.increff.pos.model.constants.OrderStatus;
+import com.increff.pos.model.exception.ApiException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.List;
-import java.util.UUID;
 
 @Service
 public class OrderApiImpl implements OrderApi {
-    private static final Logger logger = LoggerFactory.getLogger(OrderApiImpl.class);
+
     private final OrderDao orderDao;
-    private final ProductApi productApi;
     private final InventoryApi inventoryApi;
 
-    public OrderApiImpl(
-            OrderDao orderDao,
-            ProductApi productApi,
-            InventoryApi inventoryApi
-    ) {
+    public OrderApiImpl(OrderDao orderDao, InventoryApi inventoryApi) {
         this.orderDao = orderDao;
-        this.productApi = productApi;
         this.inventoryApi = inventoryApi;
     }
+
+    // ---------- Create Order ----------
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public OrderPojo createOrder(OrderPojo order) throws ApiException {
-        logger.info("Creating order with {} items", order.getOrderItems().size());
-        initializeOrder(order);
-        deductInventoryForOrder(order);
-        persistOrderWithUniqueReference(order);
-        return order;
+        order.setOrderReferenceId(generateUniqueOrderReferenceId());
+
+        order.setOrderTime(ZonedDateTime.now());
+
+        boolean fulfillable = inventoryApi.tryDeductInventoryForOrder(order.getOrderItems());
+        order.setStatus(
+                fulfillable ? OrderStatus.FULFILLABLE.name() : OrderStatus.UNFULFILLABLE.name()
+        );
+
+        return orderDao.save(order);
     }
 
-    @Override
-    public OrderPojo getByOrderReferenceId(String orderReferenceId) throws ApiException {
-        return findOrderOrThrow(orderReferenceId);
-    }
+    // ---------- Update Order ----------
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public void markOrderInvoiced(String orderReferenceId) throws ApiException {
-        OrderPojo order = findOrderOrThrow(orderReferenceId);
-        if (!isInvoiced(order)) {
-            setOrderInvoiced(order);
+    public OrderPojo updateOrder(String ref, OrderPojo updated) throws ApiException {
+
+        OrderPojo existing = getByOrderReferenceId(ref);
+        validateEditable(existing);
+
+        if (isFulfillable(existing)) {
+            inventoryApi.restoreInventoryForOrder(existing.getOrderItems());
         }
+
+        boolean fulfillable =
+                inventoryApi.tryDeductInventoryForOrder(updated.getOrderItems());
+
+        existing.setOrderItems(updated.getOrderItems());
+        existing.setStatus(
+                fulfillable
+                        ? OrderStatus.FULFILLABLE.name()
+                        : OrderStatus.UNFULFILLABLE.name()
+        );
+
+        return orderDao.save(existing);
+    }
+
+    // ---------- Cancel Order ----------
+
+    @Override
+    @Transactional(rollbackFor = ApiException.class)
+    public void cancelOrder(String ref) throws ApiException {
+
+        OrderPojo order = getByOrderReferenceId(ref);
+        validateEditable(order);
+
+        if (isFulfillable(order)) {
+            inventoryApi.restoreInventoryForOrder(order.getOrderItems());
+        }
+
+        order.setStatus(OrderStatus.CANCELLED.name());
+        orderDao.save(order);
+    }
+
+    // ---------- Invoice ----------
+
+    @Override
+    @Transactional(rollbackFor = ApiException.class)
+    public void markOrderInvoiced(String ref) throws ApiException {
+
+        OrderPojo order = getByOrderReferenceId(ref);
+
+        if (isInvoiced(order)) {
+            throw new ApiException("Order already invoiced");
+        }
+        if (!isFulfillable(order)) {
+            throw new ApiException("Only fulfillable orders can be invoiced");
+        }
+
+        order.setStatus(OrderStatus.INVOICED.name());
+        orderDao.save(order);
+    }
+
+    // ---------- Getters ----------
+
+    @Override
+    public OrderPojo getByOrderReferenceId(String ref) throws ApiException {
+        OrderPojo order = orderDao.findByOrderReferenceId(ref);
+        if (order == null) {
+            throw new ApiException("Order not found: " + ref);
+        }
+        return order;
     }
 
     @Override
     public Page<OrderPojo> getAllOrders(int page, int size) {
-        PageRequest pageRequest = PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, "orderTime")
+        return orderDao.findAll(
+                PageRequest.of(page, size, Sort.by("orderTime").descending())
         );
-        return orderDao.findAll(pageRequest);
     }
 
-    private void initializeOrder(OrderPojo order) {
-        order.setOrderTime(ZonedDateTime.now(ZoneId.of("Asia/Kolkata")));
-        order.setStatus("CREATED");
-    }
+    // ---------- Helpers ----------
 
-    private void deductInventoryForOrder(OrderPojo order) throws ApiException {
-        for (OrderItemPojo item : order.getOrderItems()) {
-            deductInventoryForItem(item);
+    private void validateEditable(OrderPojo order) throws ApiException {
+        if (isCancelled(order) || isInvoiced(order)) {
+            throw new ApiException("Order cannot be modified in current state");
         }
     }
 
-    private void persistOrderWithUniqueReference(OrderPojo order) throws ApiException {
-        for (int attempt = 0; attempt < 2; attempt++) {
-            try {
-                order.setOrderReferenceId(generateOrderReferenceId());
-                orderDao.save(order);
-                return;
-            } catch (DuplicateKeyException e) {
-                logger.warn("Order referenceId collision, retrying...");
+    private boolean isFulfillable(OrderPojo o) {
+        return OrderStatus.FULFILLABLE.name().equals(o.getStatus());
+    }
+
+    private boolean isCancelled(OrderPojo o) {
+        return OrderStatus.CANCELLED.name().equals(o.getStatus());
+    }
+
+    private boolean isInvoiced(OrderPojo o) {
+        return OrderStatus.INVOICED.name().equals(o.getStatus());
+    }
+
+    private String generateUniqueOrderReferenceId() {
+        String ref;
+        int attempts = 0;
+        do {
+            if (attempts > 2) {
+                // fallback in case of an unlikely collision loop
+                throw new RuntimeException("Unable to generate unique order ID after 10 attempts");
             }
-        }
-        throw new ApiException("Unable to generate unique order reference id");
-    }
-
-    private String generateOrderReferenceId() {
-        String uuid = UUID.randomUUID()
-                .toString()
-                .substring(0, 8)
-                .toUpperCase();
-
-        return "ORD-" + uuid.substring(0, 4)
-                + "-" + uuid.substring(4, 8);
-    }
-
-    private OrderPojo findOrderOrThrow(String orderReferenceId) throws ApiException {
-        OrderPojo order = orderDao.findByOrderReferenceId(orderReferenceId);
-        if (order == null) {
-            throw new ApiException("Order not present: " + orderReferenceId);
-        }
-        return order;
-    }
-
-    private boolean isInvoiced(OrderPojo order) {
-        return "INVOICED".equals(order.getStatus());
-    }
-
-    private void setOrderInvoiced(OrderPojo order) {
-        order.setStatus("INVOICED");
-        orderDao.save(order);
-    }
-
-    private void deductInventoryForItem(OrderItemPojo item) throws ApiException {
-        String barcode = item.getProductBarcode();
-        try {
-            ProductPojo product = productApi.getProductByBarcode(barcode);
-            InventoryPojo inventory = inventoryApi.getByProductId(product.getId());
-            inventoryApi.deductInventory(
-                    inventory,
-                    item.getOrderedQuantity()
-            );
-        } catch (ApiException e) {
-            throw new ApiException(
-                    "Insufficient inventory for product barcode: " + barcode
-            );
-        }
+            String part1 = String.format("%04d", (int) (Math.random() * 10000));
+            String part2 = String.format("%04d", (int) (Math.random() * 10000));
+            ref = "ORD-" + part1 + "-" + part2;
+            attempts++;
+        } while (orderDao.findByOrderReferenceId(ref) != null); // check DB for uniqueness
+        return ref;
     }
 }

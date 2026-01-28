@@ -1,6 +1,6 @@
 package com.increff.pos.controller;
 
-import com.increff.pos.exception.ApiException;
+import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.data.MessageData;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;

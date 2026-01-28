@@ -1,6 +1,6 @@
 package com.increff.invoice.controller;
 
-import com.increff.invoice.exception.ApiException;
+import com.increff.pos.model.exception.ApiException;
 import com.increff.invoice.modal.data.ErrorData;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

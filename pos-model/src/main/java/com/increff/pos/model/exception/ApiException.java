@@ -1,4 +1,4 @@
-package com.increff.invoice.exception;
+package com.increff.pos.model.exception;
 
 public class ApiException extends Exception {
     private static final long serialVersionUID = 1L;

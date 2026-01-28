@@ -1,31 +1,44 @@
 package com.increff.invoice.dto;
 
-import com.increff.invoice.api.InvoiceApi;
-import com.increff.invoice.db.InvoicePojo;
-import com.increff.invoice.exception.ApiException;
-import com.increff.invoice.helper.InvoiceHelper;
-import com.increff.invoice.modal.data.InvoiceData;
-import com.increff.invoice.modal.form.InvoiceGenerateForm;
+import com.increff.invoice.helper.FopPdfHelper;
+import com.increff.invoice.helper.InvoiceTemplateHelper;
 import com.increff.invoice.util.ValidationUtil;
+import com.increff.pos.model.data.InvoiceData;
+import com.increff.pos.model.exception.ApiException;
+import com.increff.pos.model.form.InvoiceGenerateForm;
 import org.springframework.stereotype.Component;
 
 @Component
 public class InvoiceDto {
-    private final InvoiceApi invoiceApi;
-
-    public InvoiceDto(InvoiceApi invoiceApi) {
-        this.invoiceApi = invoiceApi;
-    }
-
     public InvoiceData generateInvoice(InvoiceGenerateForm form) throws ApiException {
         ValidationUtil.validateInvoiceGenerateForm(form);
-        InvoicePojo invoice = invoiceApi.generateInvoice(form);
-        return InvoiceHelper.convertToData(invoice);
+
+        String xslFo = InvoiceTemplateHelper.createInvoiceXslFo(form);
+        String pdfBase64 = FopPdfHelper.generatePdfBase64(form.getOrderReferenceId(), xslFo);
+
+        InvoiceData data = new InvoiceData();
+        data.setOrderReferenceId(form.getOrderReferenceId());
+        data.setPdfBase64(pdfBase64);
+        data.setPdfPath("invoices/" + form.getOrderReferenceId() + ".pdf");
+
+        return data;
     }
 
     public InvoiceData getByOrderReferenceId(String orderReferenceId) throws ApiException {
         ValidationUtil.validateOrderReferenceId(orderReferenceId);
-        InvoicePojo invoice = invoiceApi.getByOrderReferenceId(orderReferenceId);
-        return InvoiceHelper.convertToData(invoice);
+
+        String pdfPath = "invoices/" + orderReferenceId + ".pdf";
+        try {
+            byte[] pdfBytes = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(pdfPath));
+            String pdfBase64 = java.util.Base64.getEncoder().encodeToString(pdfBytes);
+
+            InvoiceData data = new InvoiceData();
+            data.setOrderReferenceId(orderReferenceId);
+            data.setPdfBase64(pdfBase64);
+            data.setPdfPath(pdfPath);
+            return data;
+        } catch (java.io.IOException e) {
+            throw new ApiException("Invoice not found for order: " + orderReferenceId);
+        }
     }
 }

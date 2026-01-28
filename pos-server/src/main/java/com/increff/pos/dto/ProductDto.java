@@ -5,7 +5,7 @@ import com.increff.pos.api.ProductApi;
 import com.increff.pos.db.InventoryPojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.ProductUpdatePojo;
-import com.increff.pos.exception.ApiException;
+import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.helper.ProductHelper;
 import com.increff.pos.helper.TsvHelper;
 import com.increff.pos.model.data.BulkUploadData;
@@ -32,6 +32,7 @@ public class ProductDto {
         ValidationUtil.validateProductForm(form);
         ProductPojo product = ProductHelper.convertProductFormToEntity(form);
         ProductPojo savedProduct = productApi.addProduct(product);
+        inventoryApi.createInventoryIfAbsent(savedProduct.getId());
         InventoryPojo inventory = inventoryApi.getByProductId(savedProduct.getId());
         return ProductHelper.convertToProductData(savedProduct, inventory);
     }
@@ -77,6 +78,7 @@ public class ProductDto {
                 ProductForm productForm = parseProductRow(row);
                 ProductPojo product = ProductHelper.convertProductFormToEntity(productForm);
                 productApi.addProduct(product);
+                inventoryApi.createInventoryIfAbsent(product.getId());
                 result.add(success(barcode, "Product added"));
             } catch (Exception e) {
                 result.add(failure(barcode, e.getMessage()));

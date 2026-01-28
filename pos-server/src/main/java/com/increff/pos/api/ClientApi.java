@@ -2,7 +2,7 @@ package com.increff.pos.api;
 
 import com.increff.pos.db.ClientPojo;
 import com.increff.pos.db.ClientUpdatePojo;
-import com.increff.pos.exception.ApiException;
+import com.increff.pos.model.exception.ApiException;
 import org.springframework.data.domain.Page;
 
 public interface ClientApi {
