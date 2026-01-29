@@ -70,7 +70,7 @@ public class OrderApiImpl implements OrderApi {
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public void cancelOrder(String ref) throws ApiException {
+    public OrderPojo cancelOrder(String ref) throws ApiException {
 
         OrderPojo order = getByOrderReferenceId(ref);
         validateEditable(order);
@@ -80,7 +80,7 @@ public class OrderApiImpl implements OrderApi {
         }
 
         order.setStatus(OrderStatus.CANCELLED.name());
-        orderDao.save(order);
+        return orderDao.save(order);
     }
 
     // ---------- Invoice ----------

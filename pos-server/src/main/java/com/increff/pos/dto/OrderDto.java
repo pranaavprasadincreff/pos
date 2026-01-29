@@ -55,11 +55,12 @@ public class OrderDto {
 
     // ---------- Cancel ----------
 
-    public void cancelOrder(String orderReferenceId) throws ApiException {
+    public OrderData cancelOrder(String orderReferenceId) throws ApiException {
         if (!StringUtils.hasText(orderReferenceId)) {
             throw new ApiException("Order reference id cannot be empty");
         }
-        orderApi.cancelOrder(orderReferenceId);
+        OrderPojo saved = orderApi.cancelOrder(orderReferenceId);
+        return OrderHelper.convertToData(saved);
     }
 
     // ---------- Read ----------

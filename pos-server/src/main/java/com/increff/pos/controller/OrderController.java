@@ -46,9 +46,9 @@ public class OrderController {
 
     @Operation(summary = "Cancel an order")
     @PutMapping("/cancel/{orderReferenceId}")
-    public void cancel(@PathVariable String orderReferenceId)
+    public OrderData cancel(@PathVariable String orderReferenceId)
             throws ApiException {
-        orderDto.cancelOrder(orderReferenceId);
+        return orderDto.cancelOrder(orderReferenceId);
     }
 
     // ---------- Read ----------

@@ -14,7 +14,7 @@ public interface OrderApi {
 
     OrderPojo updateOrder(String orderReferenceId, OrderPojo updatedOrder) throws ApiException;
 
-    void cancelOrder(String orderReferenceId) throws ApiException;
+    OrderPojo cancelOrder(String orderReferenceId) throws ApiException;
 
     Page<OrderPojo> getAllOrders(int page, int size);
 }
