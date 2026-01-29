@@ -15,14 +15,11 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/order")
 public class OrderController {
-
     private final OrderDto orderDto;
 
     public OrderController(OrderDto orderDto) {
         this.orderDto = orderDto;
     }
-
-    // ---------- Create ----------
 
     @Operation(summary = "Create a new order")
     @PostMapping("/create")
@@ -30,8 +27,6 @@ public class OrderController {
             throws ApiException {
         return orderDto.createOrder(form);
     }
-
-    // ---------- Edit ----------
 
     @Operation(summary = "Edit an existing order (full replace)")
     @PutMapping("/edit/{orderReferenceId}")
@@ -42,16 +37,12 @@ public class OrderController {
         return orderDto.updateOrder(orderReferenceId, form);
     }
 
-    // ---------- Cancel ----------
-
     @Operation(summary = "Cancel an order")
     @PutMapping("/cancel/{orderReferenceId}")
     public OrderData cancel(@PathVariable String orderReferenceId)
             throws ApiException {
         return orderDto.cancelOrder(orderReferenceId);
     }
-
-    // ---------- Read ----------
 
     @Operation(summary = "Get order by reference id")
     @GetMapping("/get/{orderReferenceId}")

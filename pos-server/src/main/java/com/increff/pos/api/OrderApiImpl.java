@@ -14,7 +14,6 @@ import java.time.ZonedDateTime;
 
 @Service
 public class OrderApiImpl implements OrderApi {
-
     private final OrderDao orderDao;
     private final InventoryApi inventoryApi;
 
@@ -23,39 +22,27 @@ public class OrderApiImpl implements OrderApi {
         this.inventoryApi = inventoryApi;
     }
 
-    // ---------- Create Order ----------
-
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public OrderPojo createOrder(OrderPojo order) throws ApiException {
         order.setOrderReferenceId(generateUniqueOrderReferenceId());
-
         order.setOrderTime(ZonedDateTime.now());
-
         boolean fulfillable = inventoryApi.tryDeductInventoryForOrder(order.getOrderItems());
         order.setStatus(
                 fulfillable ? OrderStatus.FULFILLABLE.name() : OrderStatus.UNFULFILLABLE.name()
         );
-
         return orderDao.save(order);
     }
-
-    // ---------- Update Order ----------
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public OrderPojo updateOrder(String ref, OrderPojo updated) throws ApiException {
-
         OrderPojo existing = getByOrderReferenceId(ref);
         validateEditable(existing);
-
         if (isFulfillable(existing)) {
             inventoryApi.restoreInventoryForOrder(existing.getOrderItems());
         }
-
-        boolean fulfillable =
-                inventoryApi.tryDeductInventoryForOrder(updated.getOrderItems());
-
+        boolean fulfillable = inventoryApi.tryDeductInventoryForOrder(updated.getOrderItems());
         existing.setOrderItems(updated.getOrderItems());
         existing.setStatus(
                 fulfillable
@@ -66,43 +53,31 @@ public class OrderApiImpl implements OrderApi {
         return orderDao.save(existing);
     }
 
-    // ---------- Cancel Order ----------
-
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public OrderPojo cancelOrder(String ref) throws ApiException {
-
         OrderPojo order = getByOrderReferenceId(ref);
         validateEditable(order);
-
         if (isFulfillable(order)) {
             inventoryApi.restoreInventoryForOrder(order.getOrderItems());
         }
-
         order.setStatus(OrderStatus.CANCELLED.name());
         return orderDao.save(order);
     }
 
-    // ---------- Invoice ----------
-
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public void markOrderInvoiced(String ref) throws ApiException {
-
         OrderPojo order = getByOrderReferenceId(ref);
-
         if (isInvoiced(order)) {
             throw new ApiException("Order already invoiced");
         }
         if (!isFulfillable(order)) {
             throw new ApiException("Only fulfillable orders can be invoiced");
         }
-
         order.setStatus(OrderStatus.INVOICED.name());
         orderDao.save(order);
     }
-
-    // ---------- Getters ----------
 
     @Override
     public OrderPojo getByOrderReferenceId(String ref) throws ApiException {
@@ -119,8 +94,6 @@ public class OrderApiImpl implements OrderApi {
                 PageRequest.of(page, size, Sort.by("orderTime").descending())
         );
     }
-
-    // ---------- Helpers ----------
 
     private void validateEditable(OrderPojo order) throws ApiException {
         if (isCancelled(order) || isInvoiced(order)) {
@@ -145,14 +118,13 @@ public class OrderApiImpl implements OrderApi {
         int attempts = 0;
         do {
             if (attempts > 2) {
-                // fallback in case of an unlikely collision loop
                 throw new RuntimeException("Unable to generate unique order ID after 10 attempts");
             }
             String part1 = String.format("%04d", (int) (Math.random() * 10000));
             String part2 = String.format("%04d", (int) (Math.random() * 10000));
             ref = "ORD-" + part1 + "-" + part2;
             attempts++;
-        } while (orderDao.findByOrderReferenceId(ref) != null); // check DB for uniqueness
+        } while (orderDao.findByOrderReferenceId(ref) != null);
         return ref;
     }
 }

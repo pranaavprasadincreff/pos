@@ -21,22 +21,17 @@ import java.util.stream.Collectors;
 
 @Component
 public class OrderDto {
-
     private final OrderApi orderApi;
 
     public OrderDto(OrderApi orderApi) {
         this.orderApi = orderApi;
     }
 
-    // ---------- Create ----------
-
     public OrderData createOrder(OrderCreateForm form) throws ApiException {
         validateCreateOrderForm(form);
         OrderPojo order = OrderHelper.convertCreateFormToEntity(form);
         return OrderHelper.convertToData(orderApi.createOrder(order));
     }
-
-    // ---------- Edit ----------
 
     public OrderData updateOrder(String orderReferenceId, OrderCreateForm form)
             throws ApiException {
@@ -45,15 +40,10 @@ public class OrderDto {
             throw new ApiException("Order reference id cannot be empty");
         }
         validateCreateOrderForm(form);
-
         OrderPojo updated = OrderHelper.convertCreateFormToEntity(form);
-        OrderPojo saved =
-                orderApi.updateOrder(orderReferenceId, updated);
-
+        OrderPojo saved = orderApi.updateOrder(orderReferenceId, updated);
         return OrderHelper.convertToData(saved);
     }
-
-    // ---------- Cancel ----------
 
     public OrderData cancelOrder(String orderReferenceId) throws ApiException {
         if (!StringUtils.hasText(orderReferenceId)) {
@@ -63,24 +53,19 @@ public class OrderDto {
         return OrderHelper.convertToData(saved);
     }
 
-    // ---------- Read ----------
-
     public OrderData getByOrderReferenceId(String orderReferenceId)
             throws ApiException {
 
         if (!StringUtils.hasText(orderReferenceId)) {
             throw new ApiException("Order reference id cannot be empty");
         }
-        return OrderHelper.convertToData(
-                orderApi.getByOrderReferenceId(orderReferenceId)
+        return OrderHelper.convertToData(orderApi.getByOrderReferenceId(orderReferenceId)
         );
     }
 
     public Page<OrderData> getAllOrders(PageForm form) throws ApiException {
         ValidationUtil.validatePageForm(form);
-        Page<OrderPojo> page =
-                orderApi.getAllOrders(form.getPage(), form.getSize());
-
+        Page<OrderPojo> page = orderApi.getAllOrders(form.getPage(), form.getSize());
         List<OrderData> data =
                 page.getContent()
                         .stream()
@@ -90,17 +75,13 @@ public class OrderDto {
         return new PageImpl<>(data, page.getPageable(), page.getTotalElements());
     }
 
-    // ---------- Validation ----------
-
     private void validateCreateOrderForm(OrderCreateForm form)
             throws ApiException {
 
         if (form == null || CollectionUtils.isEmpty(form.getItems())) {
             throw new ApiException("Order must contain at least one item");
         }
-
         Set<String> seenBarcodes = new HashSet<>();
-
         form.getItems().forEach(item -> {
             if (!StringUtils.hasText(item.getProductBarcode())) {
                 throw new RuntimeException("Product barcode cannot be empty");
@@ -111,7 +92,6 @@ public class OrderDto {
             if (item.getSellingPrice() == null || item.getSellingPrice() <= 0) {
                 throw new RuntimeException("Invalid selling price");
             }
-
             String barcode = item.getProductBarcode().trim().toUpperCase();
             if (!seenBarcodes.add(barcode)) {
                 throw new RuntimeException(

@@ -55,10 +55,16 @@ export interface OrderItemData {
     sellingPrice: number
 }
 
+export type OrderStatus =
+    | 'FULFILLABLE'
+    | 'UNFULFILLABLE'
+    | 'INVOICED'
+    | 'CANCELLED'
+
 export interface OrderData {
     orderReferenceId: string
     orderTime: string
-    status: 'CREATED' | 'INVOICED'
+    status: OrderStatus
     items: OrderItemData[]
 }
 
