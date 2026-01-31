@@ -4,177 +4,110 @@ import com.increff.pos.dao.ProductDao;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
-import com.increff.pos.util.BarcodeNormalizer;
-import com.increff.pos.util.EmailNormalizer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.increff.pos.model.form.ProductFilterForm;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 public class ProductApiImpl implements ProductApi {
-
-    private static final Logger logger =
-            LoggerFactory.getLogger(ProductApiImpl.class);
-
-    private final ProductDao dao;
-    private final ClientApi clientApi;
-
-    public ProductApiImpl(ProductDao dao, ClientApi clientApi) {
-        this.dao = dao;
-        this.clientApi = clientApi;
-    }
-
-    // ---------- Create ----------
+    @Autowired
+    private ProductDao dao;
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public ProductPojo addProduct(ProductPojo product) throws ApiException {
-        logger.info("Creating product with barcode: {}", product.getBarcode());
-
-        normalizeProduct(product);
         validateNewProduct(product);
-
         return dao.save(product);
     }
 
-    // ---------- Get ----------
-
     @Override
     public ProductPojo getProductById(String id) throws ApiException {
-        return dao.findById(id)
-                .orElseThrow(() ->
-                        new ApiException("Product not found with id: " + id)
-                );
+        return getExistingById(id);
     }
 
     @Override
     public ProductPojo getProductByBarcode(String barcode) throws ApiException {
-        String normalized = BarcodeNormalizer.normalize(barcode);
-        ProductPojo product = dao.findByBarcode(normalized);
-
-        if (product == null) {
-            throw new ApiException(
-                    "Product not found with barcode: " + barcode
-            );
-        }
-        return product;
+        return getExistingByBarcode(barcode);
     }
 
     @Override
     public Page<ProductPojo> getAllProducts(int page, int size) {
-        return dao.findAll(buildPageRequest(page, size));
+        return dao.findAll(
+                PageRequest.of(page, size,
+                        Sort.by("createdAt").descending()));
     }
 
-    // ---------- Update ----------
+    @Override
+    public Page<ProductPojo> filter(ProductFilterForm form, List<String> clientEmails) {
+        return dao.filter(form, clientEmails);
+    }
+
+    @Override
+    public List<ProductPojo> findByBarcodes(List<String> barcodes) {
+        return dao.findByBarcodes(barcodes);
+    }
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public ProductPojo updateProduct(ProductUpdatePojo update) throws ApiException {
 
-        logger.info("Updating product with barcode: {}", update.getOldBarcode());
+        ProductPojo existing = getExistingByBarcode(update.getOldBarcode());
 
-        normalizeUpdate(update);
-
-        ProductPojo existing = getProductByBarcode(update.getOldBarcode());
-        validateUpdate(update, existing);
-
+        validateBarcodeChange(update, existing);
         applyUpdate(existing, update);
+
         return dao.save(existing);
     }
 
-    // ---------- Validation ----------
-
-    private void validateNewProduct(ProductPojo product) throws ApiException {
-        ensureBarcodeDoesNotExist(product.getBarcode());
-        ensureClientExists(product.getClientEmail());
+    @Override
+    public List<ProductPojo> saveAll(List<ProductPojo> list) {
+        return dao.saveAll(list);
     }
 
-    private void validateUpdate(ProductUpdatePojo update, ProductPojo existing)
-            throws ApiException {
-
-        ensureNewBarcodeIsValid(update, existing);
-        ensureClientExists(update.getClientEmail());
+    private ProductPojo getExistingById(String id) throws ApiException {
+        ProductPojo pojo = dao.findById(id).orElse(null);
+        if (pojo == null) throw new ApiException("Product not found");
+        return pojo;
     }
 
-    private void ensureBarcodeDoesNotExist(String barcode) throws ApiException {
-        if (dao.findByBarcode(barcode) != null) {
-            throw new ApiException(
-                    "Product already exists with barcode: " + barcode
-            );
+    private ProductPojo getExistingByBarcode(String barcode) throws ApiException {
+        ProductPojo pojo = dao.findByBarcode(barcode);
+        if (pojo == null) throw new ApiException("Product not found");
+        return pojo;
+    }
+
+    private void validateNewProduct(ProductPojo p) throws ApiException {
+        ensureBarcodeUnique(p.getBarcode(), null);
+    }
+
+    private void validateBarcodeChange(ProductUpdatePojo u,
+                                       ProductPojo existing) throws ApiException {
+        ensureBarcodeUnique(u.getNewBarcode(), existing.getId());
+    }
+
+    private void ensureBarcodeUnique(String barcode,
+                                     String allowedProductId) throws ApiException {
+
+        ProductPojo found = dao.findByBarcode(barcode);
+        if (found == null) return;
+        if (allowedProductId != null &&
+                found.getId().equals(allowedProductId)) {
+            return;
         }
+        throw new ApiException("Duplicate barcode");
     }
 
-    private void ensureNewBarcodeIsValid(
-            ProductUpdatePojo update,
-            ProductPojo existing
-    ) throws ApiException {
-
-        ProductPojo withNewBarcode =
-                dao.findByBarcode(update.getNewBarcode());
-
-        if (withNewBarcode != null
-                && !withNewBarcode.getId().equals(existing.getId())) {
-
-            throw new ApiException(
-                    "Product already exists with barcode: "
-                            + update.getNewBarcode()
-            );
-        }
-    }
-
-    private void ensureClientExists(String clientEmail) throws ApiException {
-        try {
-            clientApi.getClientByEmail(clientEmail);
-        } catch (ApiException e) {
-            throw new ApiException(
-                    "Client does not exist with email: " + clientEmail
-            );
-        }
-    }
-
-    // ---------- Helpers ----------
-
-    private void normalizeProduct(ProductPojo product) {
-        product.setBarcode(
-                BarcodeNormalizer.normalize(product.getBarcode())
-        );
-        product.setClientEmail(
-                EmailNormalizer.normalize(product.getClientEmail())
-        );
-    }
-
-    private void normalizeUpdate(ProductUpdatePojo update) {
-        update.setOldBarcode(
-                BarcodeNormalizer.normalize(update.getOldBarcode())
-        );
-        update.setNewBarcode(
-                BarcodeNormalizer.normalize(update.getNewBarcode())
-        );
-        update.setClientEmail(
-                EmailNormalizer.normalize(update.getClientEmail())
-        );
-    }
-
-    private void applyUpdate(
-            ProductPojo existing,
-            ProductUpdatePojo update
-    ) {
-        existing.setBarcode(update.getNewBarcode());
-        existing.setClientEmail(update.getClientEmail());
-        existing.setName(update.getName());
-        existing.setMrp(update.getMrp());
-        existing.setImageUrl(update.getImageUrl());
-    }
-
-    private PageRequest buildPageRequest(int page, int size) {
-        return PageRequest.of(
-                page,
-                size,
-                Sort.by(Sort.Direction.DESC, "createdAt")
-        );
+    private void applyUpdate(ProductPojo e, ProductUpdatePojo u) {
+        e.setBarcode(u.getNewBarcode());
+        e.setClientEmail(u.getClientEmail());
+        e.setName(u.getName());
+        e.setMrp(u.getMrp());
+        e.setImageUrl(u.getImageUrl());
     }
 }

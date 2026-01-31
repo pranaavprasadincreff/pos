@@ -1,140 +1,244 @@
 package com.increff.pos.dto;
 
-import com.increff.pos.api.InventoryApi;
-import com.increff.pos.api.ProductApi;
 import com.increff.pos.db.InventoryPojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.ProductUpdatePojo;
-import com.increff.pos.model.exception.ApiException;
+import com.increff.pos.flow.ProductFlow;
 import com.increff.pos.helper.ProductHelper;
 import com.increff.pos.helper.TsvHelper;
 import com.increff.pos.model.data.BulkUploadData;
 import com.increff.pos.model.data.ProductData;
+import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.*;
+import com.increff.pos.util.NormalizationUtil;
 import com.increff.pos.util.ValidationUtil;
+import org.apache.commons.lang3.tuple.Pair;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 @Component
 public class ProductDto {
-    private final ProductApi productApi;
-    private final InventoryApi inventoryApi;
-
-    public ProductDto(ProductApi productApi, InventoryApi inventoryApi) {
-        this.productApi = productApi;
-        this.inventoryApi = inventoryApi;
-    }
+    @Autowired
+    private ProductFlow productFlow;
 
     public ProductData addProduct(ProductForm form) throws ApiException {
         ValidationUtil.validateProductForm(form);
-        ProductPojo product = ProductHelper.convertProductFormToEntity(form);
-        ProductPojo savedProduct = productApi.addProduct(product);
-        inventoryApi.createInventoryIfAbsent(savedProduct.getId());
-        InventoryPojo inventory = inventoryApi.getByProductId(savedProduct.getId());
-        return ProductHelper.convertToProductData(savedProduct, inventory);
+        NormalizationUtil.normalizeProductForm(form);
+        ProductPojo pojo = ProductHelper.convertProductFormToEntity(form);
+        return toData(productFlow.addProduct(pojo));
     }
 
     public ProductData getByBarcode(String barcode) throws ApiException {
-        ProductPojo product = productApi.getProductByBarcode(barcode);
-        InventoryPojo inventory = inventoryApi.getByProductId(product.getId());
-        return ProductHelper.convertToProductData(product, inventory);
+        return toData(
+                productFlow.getByBarcode(
+                        NormalizationUtil.normalizeBarcode(barcode)
+                )
+        );
     }
 
     public Page<ProductData> getAll(PageForm form) throws ApiException {
         ValidationUtil.validatePageForm(form);
-        return productApi
-                .getAllProducts(form.getPage(), form.getSize())
-                .map(this::attachInventory);
+        return toDataPage(productFlow.getAll(form));
+    }
+
+    public Page<ProductData> filter(ProductFilterForm form) throws ApiException {
+        ValidationUtil.validateProductFilterForm(form);
+        NormalizationUtil.normalizeProductFilterForm(form);
+        return toDataPage(productFlow.filter(form));
     }
 
     public ProductData updateProduct(ProductUpdateForm form) throws ApiException {
         ValidationUtil.validateProductUpdateForm(form);
-        ProductUpdatePojo updatePojo = ProductHelper.convertProductUpdateFormToEntity(form);
-        ProductPojo updatedProduct = productApi.updateProduct(updatePojo);
-        InventoryPojo inventory = inventoryApi.getByProductId(updatedProduct.getId());
-        return ProductHelper.convertToProductData(updatedProduct, inventory);
+        NormalizationUtil.normalizeProductUpdateForm(form);
+        ProductUpdatePojo pojo = ProductHelper.convertProductUpdateFormToEntity(form);
+        return toData(productFlow.updateProduct(pojo));
     }
 
     public ProductData updateInventory(InventoryUpdateForm form) throws ApiException {
         ValidationUtil.validateInventoryUpdateForm(form);
-        InventoryPojo inventory = ProductHelper.convertInventoryUpdateFormToEntity(form);
-        InventoryPojo updatedInventory = inventoryApi.updateInventory(inventory);
-        ProductPojo product = productApi.getProductById(form.getProductId());
-        return ProductHelper.convertToProductData(product, updatedInventory);
+        InventoryPojo pojo = ProductHelper.convertInventoryUpdateFormToEntity(form);
+        return toData(productFlow.updateInventory(pojo));
     }
 
     public BulkUploadData bulkAddProducts(BulkUploadForm form) throws ApiException {
-        List<String[]> rows = TsvHelper.decode(form.getFile());
-        List<String[]> result = new ArrayList<>();
-
-        for (String[] row : rows) {
-            if (isHeader(row)) continue;
-            String barcode = row[0];
-            try {
-                ValidationUtil.validateBulkProductRow(row);
-                ProductForm productForm = parseProductRow(row);
-                ProductPojo product = ProductHelper.convertProductFormToEntity(productForm);
-                productApi.addProduct(product);
-                inventoryApi.createInventoryIfAbsent(product.getId());
-                result.add(success(barcode, "Product added"));
-            } catch (Exception e) {
-                result.add(failure(barcode, e.getMessage()));
-            }
-        }
-        return new BulkUploadData(TsvHelper.encodeResult(result));
+        ParsedBulkData parsed = parseAndValidateHeadersForProducts(form);
+        RowProcessingResult<ProductPojo> processed =
+                validateNormalizeAndConvertProducts(parsed);
+        applyFlowResultsToRows(
+                processed,
+                productFlow.bulkAddProducts(processed.validPojos())
+        );
+        return encodeResult(processed.resultRows());
     }
 
     public BulkUploadData bulkUpdateInventory(BulkUploadForm form) throws ApiException {
-        List<String[]> rows = TsvHelper.decode(form.getFile());
-        List<String[]> result = new ArrayList<>();
+        ParsedBulkData parsed = parseAndValidateHeadersForInventory(form);
+        RowProcessingResult<InventoryPojo> processed =
+                validateNormalizeAndConvertInventory(parsed);
+        applyFlowResultsToRows(
+                processed,
+                productFlow.bulkUpdateInventory(processed.validPojos())
+        );
+        return encodeResult(processed.resultRows());
+    }
 
-        for (String[] row : rows) {
-            String barcode = row[0];
-            try {
-                int delta = ValidationUtil.validateBulkInventoryRow(row);
-                ProductPojo product = productApi.getProductByBarcode(barcode);
-                InventoryPojo inventory = inventoryApi.getByProductId(product.getId());
-                inventoryApi.incrementInventory(inventory, delta);
-                result.add(success(barcode, "Inventory updated"));
-            } catch (ApiException e) {
-                result.add(failure(barcode, e.getMessage()));
-            }
-        }
-        return new BulkUploadData(TsvHelper.encodeResult(result)
+    private ProductData toData(Pair<ProductPojo, InventoryPojo> pair) {
+        return ProductHelper.convertToProductData(
+                pair.getLeft(), pair.getRight());
+    }
+
+    private Page<ProductData> toDataPage(Page<Pair<ProductPojo, InventoryPojo>> page) {
+        List<ProductData> data = page.getContent()
+                .stream()
+                .map(this::toData)
+                .toList();
+        return new PageImpl<>(
+                data,
+                page.getPageable(),
+                page.getTotalElements()
         );
     }
 
-    private ProductData attachInventory(ProductPojo product) {
-        try {
-            InventoryPojo inventory = inventoryApi.getByProductId(product.getId());
-            return ProductHelper.convertToProductData(product, inventory);
-        } catch (ApiException e) {
-            throw new RuntimeException(e);
+    private ParsedBulkData parseAndValidateHeadersForProducts(BulkUploadForm form)
+            throws ApiException {
+        Pair<Map<String, Integer>, List<String[]>> data = TsvHelper.parse(form.getFile());
+        ValidationUtil.validateBulkProductData(data.getLeft(), data.getRight());
+        return new ParsedBulkData(data.getLeft(), data.getRight());
+    }
+
+    private ParsedBulkData parseAndValidateHeadersForInventory(BulkUploadForm form)
+            throws ApiException {
+        Pair<Map<String, Integer>, List<String[]>> data = TsvHelper.parse(form.getFile());
+        ValidationUtil.validateBulkInventoryData(data.getLeft(), data.getRight());
+        return new ParsedBulkData(data.getLeft(), data.getRight());
+    }
+
+    private RowProcessingResult<ProductPojo> validateNormalizeAndConvertProducts(ParsedBulkData parsed) {
+        List<String[]> resultRows = new ArrayList<>();
+        List<ProductPojo> validPojos = new ArrayList<>();
+        Map<String, Integer> firstRowIndexByBarcode = new HashMap<>();
+        Set<String> seenBarcodes = new HashSet<>();
+
+        for (String[] rawRow : parsed.rows()) {
+
+            String barcodeForOutput = cell(rawRow, parsed.headers(), "barcode");
+            String[] out = errorResult(barcodeForOutput);
+            int rowIndex = resultRows.size();
+            resultRows.add(out);
+            try {
+                String[] canonical = toCanonicalProductRow(rawRow, parsed.headers());
+                NormalizationUtil.normalizeBulkProductRows(Collections.singletonList(canonical));
+                ValidationUtil.validateBulkProductRow(canonical);
+                String normalizedBarcode = canonical[0];
+                if (seenBarcodes.contains(normalizedBarcode)) {
+                    throw new ApiException("Duplicate barcode in file");
+                }
+                seenBarcodes.add(normalizedBarcode);
+                ProductPojo pojo = ProductHelper.toBulkProductPojo(canonical);
+                validPojos.add(pojo);
+                firstRowIndexByBarcode.put(pojo.getBarcode(), rowIndex);
+                resultRows.get(rowIndex)[0] = pojo.getBarcode();
+            } catch (ApiException e) {
+                resultRows.get(rowIndex)[2] = e.getMessage();
+            }
+        }
+        return new RowProcessingResult<>(validPojos, resultRows, firstRowIndexByBarcode);
+    }
+
+    private RowProcessingResult<InventoryPojo> validateNormalizeAndConvertInventory(ParsedBulkData parsed) {
+        List<String[]> resultRows = new ArrayList<>();
+        List<InventoryPojo> validPojos = new ArrayList<>();
+        Map<String, Integer> firstRowIndexByBarcode = new HashMap<>();
+        Set<String> seenBarcodes = new HashSet<>();
+
+        for (String[] rawRow : parsed.rows()) {
+            String barcodeForOutput = cell(rawRow, parsed.headers(), "barcode");
+            String[] out = errorResult(barcodeForOutput);
+            int rowIndex = resultRows.size();
+            resultRows.add(out);
+            try {
+                String[] canonical = toCanonicalInventoryRow(rawRow, parsed.headers());
+                NormalizationUtil.normalizeBulkInventoryRows(Collections.singletonList(canonical));
+                ValidationUtil.validateBulkInventoryRow(canonical);
+                String normalizedBarcode = canonical[0];
+                if (seenBarcodes.contains(normalizedBarcode)) {
+                    throw new ApiException("Duplicate barcode in file");
+                }
+                seenBarcodes.add(normalizedBarcode);
+                InventoryPojo pojo = ProductHelper.toBulkInventoryPojo(canonical);
+                validPojos.add(pojo);
+                firstRowIndexByBarcode.put(pojo.getProductId(), rowIndex);
+                resultRows.get(rowIndex)[0] = pojo.getProductId();
+            } catch (ApiException e) {
+                resultRows.get(rowIndex)[2] = e.getMessage();
+            }
+        }
+        return new RowProcessingResult<>(validPojos, resultRows, firstRowIndexByBarcode);
+    }
+
+    private void applyFlowResultsToRows(
+            RowProcessingResult<?> processed,
+            List<String[]> flowResults
+    ) {
+        if (flowResults == null || flowResults.isEmpty()) return;
+        for (String[] r : flowResults) {
+            if (r == null || r.length < 3) continue;
+            Integer idx = processed.firstRowIndexByBarcode().get(r[0]);
+            if (idx == null) continue;
+            processed.resultRows().set(idx, r);
         }
     }
 
-    private ProductForm parseProductRow(String[] row) {
-        ProductForm form = new ProductForm();
-        form.setBarcode(row[0]);
-        form.setClientEmail(row[1]);
-        form.setName(row[2]);
-        form.setMrp(Double.parseDouble(row[3]));
-        form.setImageUrl(row[4]);
-        return form;
+    private String[] toCanonicalProductRow(String[] rawRow, Map<String, Integer> headers) {
+        boolean hasImage = headers.containsKey("imageurl");
+        String barcode = cell(rawRow, headers, "barcode");
+        String clientEmail = cell(rawRow, headers, "clientemail");
+        String name = cell(rawRow, headers, "name");
+        String mrp = cell(rawRow, headers, "mrp");
+        if (!hasImage) {
+            return new String[]{barcode, clientEmail, name, mrp};
+        }
+        String imageUrl = cell(rawRow, headers, "imageurl");
+        return new String[]{barcode, clientEmail, name, mrp, imageUrl};
     }
 
-    private boolean isHeader(String[] row) {
-        return "barcode".equalsIgnoreCase(row[0]);
+    private String[] toCanonicalInventoryRow(String[] rawRow, Map<String, Integer> headers) {
+        String barcode = cell(rawRow, headers, "barcode");
+        String inventory = cell(rawRow, headers, "inventory");
+        return new String[]{barcode, inventory};
     }
 
-    private String[] success(String barcode, String message) {
-        return new String[]{barcode, "SUCCESS", message};
+    private String cell(String[] row, Map<String, Integer> headers, String col) {
+        Integer idx = headers.get(col);
+        if (idx == null) return "";
+        if (row == null) return "";
+        if (idx < 0 || idx >= row.length) return "";
+        String v = row[idx];
+        return v == null ? "" : v;
     }
 
-    private String[] failure(String barcode, String message) {
-        return new String[]{barcode, "FAILURE", message};
+    private BulkUploadData encodeResult(List<String[]> resultRows) {
+        return new BulkUploadData(TsvHelper.encodeResult(resultRows));
+    }
+
+    private String[] errorResult(String barcode) {
+        return new String[]{barcode == null ? "" : barcode, "ERROR", ""};
+    }
+
+    private record ParsedBulkData(
+            Map<String, Integer> headers,
+            List<String[]> rows
+    ) {
+    }
+
+    private record RowProcessingResult<T>(
+            List<T> validPojos,
+            List<String[]> resultRows,
+            Map<String, Integer> firstRowIndexByBarcode
+    ) {
     }
 }

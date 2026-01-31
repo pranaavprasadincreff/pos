@@ -8,6 +8,8 @@ import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.data.mongodb.repository.support.MongoRepositoryFactory;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public class InventoryDao extends AbstractDao<InventoryPojo> {
     public InventoryDao(MongoOperations mongoOperations) {
@@ -35,5 +37,10 @@ public class InventoryDao extends AbstractDao<InventoryPojo> {
                 InventoryPojo.class
         );
         return updated != null;
+    }
+
+    public List<InventoryPojo> findByProductIds(List<String> ids) {
+        Query q = Query.query(Criteria.where("productId").in(ids));
+        return mongoOperations.find(q, InventoryPojo.class);
     }
 }

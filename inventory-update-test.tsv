@@ -1,6 +1,9 @@
-barcode	quantity
-P1001	100
-P1002	500
-P2001	50
-P2002	200
-P3001	10
+barcode	inventory
+B100	5
+b101	10
+B999	5
+B100	7
+B102	abc
+B103	-1
+	5
+B106	3

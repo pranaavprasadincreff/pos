@@ -32,7 +32,6 @@ public class ClientHelper {
 
     public static ClientData convertFormToDto(ClientPojo clientPojo) {
         ClientData clientData = new ClientData();
-        clientData.setId(clientPojo.getId());
         clientData.setName(clientPojo.getName());
         clientData.setEmail(clientPojo.getEmail());
         return clientData;

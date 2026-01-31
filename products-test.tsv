@@ -1,6 +1,10 @@
 barcode	clientEmail	name	mrp	imageUrl
-P1001	pranaav@increff.com	Notebook	100	https://solo.in/cdn/shop/files/5-subjects-notebook-pack-of-4-pcs-a5-na553-436198.webp?v=1742021571&width=1080
-P1002	pranaav@increff.com	Pen	20	https://www.onlinemantra.in/cdn/shop/products/WR_Hemisphere_MT_BLK_GT_FPF_9d4d14aa-8cd0-4d55-afac-08612b61e7c0_1024x1024.jpg?v=1747049799
-P2001	user@gmail.com	Stapler	250	https://m.media-amazon.com/images/I/51oYKG7XoUL.jpg
-P2002	user@gmail.com	Marker	50	https://rukminim2.flixcart.com/image/480/640/xif0q/marker-highlighter/a/o/e/-original-imagr82z36v4b9yk.jpeg?q=90
-P3001	pranaav@increff.com	Calculator	500	https://m.media-amazon.com/images/I/61w1PMHiZoL._AC_UF1000,1000_QL80_.jpg
+B100	pranaav@increff.com	shirt	499	http://img/100
+b101	user@gmail.com	pants	799
+B102	pranaav@increff.com	socks	abc
+	pranaav@increff.com	invalid	199
+B103	ghost@increff.com	item	299
+B100	pranaav@increff.com	duplicate-in-file	399
+B104	pranaav@increff.com	negative	-10
+B105	pranaav@increff.com	empty-name	499
+B106	pranaav@increff.com	valid2	599

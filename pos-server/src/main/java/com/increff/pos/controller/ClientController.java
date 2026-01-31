@@ -1,6 +1,7 @@
 package com.increff.pos.controller;
 
 import com.increff.pos.model.data.ClientData;
+import com.increff.pos.model.form.ClientFilterForm;
 import com.increff.pos.model.form.ClientForm;
 import com.increff.pos.model.form.PageForm;
 import com.increff.pos.dto.ClientDto;
@@ -10,21 +11,20 @@ import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.data.domain.Page;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Tag(name = "Client Management", description = "APIs for managing clients")
 @CrossOrigin(origins = "http://localhost:3000")
 @RestController
 @RequestMapping("/api/client")
 public class ClientController {
-    private final ClientDto clientDto;
-    public ClientController(ClientDto clientDto) {
-        this.clientDto = clientDto;
-    }
+    @Autowired
+    private ClientDto clientDto;
 
     @Operation(summary = "Create a new client")
     @RequestMapping(path = "/add", method = RequestMethod.POST)
-    public ClientData createClient(@RequestBody ClientForm clientForm) throws ApiException {
-        return clientDto.createClient(clientForm);
+    public ClientData create(@RequestBody ClientForm clientForm) throws ApiException {
+        return clientDto.create(clientForm);
     }
 
     @Operation(summary = "Get all clients with pagination")
@@ -41,7 +41,13 @@ public class ClientController {
 
     @Operation(summary = "Update existing client")
     @RequestMapping(path = "/update", method = RequestMethod.PUT)
-    public ClientData updateClient(@RequestBody ClientUpdateForm clientUpdateForm) throws ApiException {
-        return clientDto.updateClient(clientUpdateForm);
+    public ClientData updateClient(@RequestBody ClientUpdateForm form) throws ApiException {
+        return clientDto.update(form);
+    }
+
+    @Operation(summary = "Filter clients")
+    @RequestMapping(path = "/filter", method = RequestMethod.POST)
+    public Page<ClientData> filter(@RequestBody ClientFilterForm form) throws ApiException {
+        return clientDto.filter(form);
     }
 }

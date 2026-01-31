@@ -32,27 +32,20 @@ public class InvoiceDto {
         this.productApi = productApi;
     }
 
-    // ---------- Generate Invoice ----------
-
     public InvoiceData generateInvoice(String orderReferenceId) throws ApiException {
 
         OrderPojo order = orderApi.getByOrderReferenceId(orderReferenceId);
         validateInvoiceAllowed(order);
 
-        // Lock order state first (prevents double invoicing)
         orderApi.markOrderInvoiced(orderReferenceId);
 
         InvoiceGenerateForm form = buildInvoiceForm(order);
         return invoiceClient.generateInvoice(form);
     }
 
-    // ---------- Get Invoice ----------
-
     public InvoiceData getInvoice(String orderReferenceId) throws ApiException {
         return invoiceClient.getInvoice(orderReferenceId);
     }
-
-    // ---------- Helpers ----------
 
     private void validateInvoiceAllowed(OrderPojo order) throws ApiException {
         if (OrderStatus.INVOICED.name().equals(order.getStatus())) {
