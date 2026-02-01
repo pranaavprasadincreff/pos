@@ -5,6 +5,7 @@ import com.increff.pos.model.form.ProductFilterForm;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -49,8 +50,13 @@ public class ProductDao extends AbstractDao<ProductPojo> {
             q.addCriteria(new Criteria().andOperator(list));
         }
 
-        Pageable p = PageRequest.of(form.getPage(), form.getSize());
+        // ✅ Ensure same ordering as getAllProducts(): latest first
+        Pageable p = PageRequest.of(
+                form.getPage(),
+                form.getSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
         return pageableQuery(q, p);
     }
 }
-
