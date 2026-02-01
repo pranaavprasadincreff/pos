@@ -253,4 +253,16 @@ public class ValidationUtil {
         }
     }
 
+    public static void validateOrderFilterForm(OrderFilterForm form) throws ApiException {
+        if (form == null) throw new ApiException("Order filter form required");
+        validatePageBounds(form.getPage(), form.getSize());
+        if (StringUtils.hasText(form.getOrderReferenceId()) && form.getOrderReferenceId().length() > 50) {
+            throw new ApiException("Order reference id filter too long");
+        }
+        if (StringUtils.hasText(form.getStatus()) && form.getStatus().length() > 30) {
+            throw new ApiException("Status filter too long");
+        }
+    }
+
+
 }

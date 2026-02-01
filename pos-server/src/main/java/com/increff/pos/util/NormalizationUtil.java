@@ -73,4 +73,19 @@ public class NormalizationUtil {
             r[0] = normalizeBarcode(r[0]); // barcode
         }
     }
+
+    public static void normalizeOrderCreateForm(OrderCreateForm form) {
+        if (form == null || form.getItems() == null) return;
+        form.getItems().forEach(i -> i.setProductBarcode(normalizeBarcode(i.getProductBarcode())));
+    }
+
+    public static void normalizeOrderFilterForm(OrderFilterForm form) {
+        if (form == null) return;
+        if (StringUtils.hasText(form.getOrderReferenceId())) {
+            form.setOrderReferenceId(form.getOrderReferenceId().trim().toUpperCase());
+        }
+        if (StringUtils.hasText(form.getStatus())) {
+            form.setStatus(form.getStatus().trim().toUpperCase());
+        }
+    }
 }

@@ -20,9 +20,12 @@ import java.util.stream.Collectors;
 
 @Component
 public class ProductFlow {
-    @Autowired private ProductApi productApi;
-    @Autowired private InventoryApi inventoryApi;
-    @Autowired private ClientApi clientApi;
+    @Autowired
+    private ProductApi productApi;
+    @Autowired
+    private InventoryApi inventoryApi;
+    @Autowired
+    private ClientApi clientApi;
 
     public Pair<ProductPojo, InventoryPojo> addProduct(ProductPojo pojo) throws ApiException {
         clientApi.getClientByEmail(pojo.getClientEmail());
