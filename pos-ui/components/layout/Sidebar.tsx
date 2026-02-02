@@ -1,42 +1,44 @@
-'use client'
+"use client"
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import {Home, Package, ShoppingCart, Users} from 'lucide-react'
-import { cn } from '@/lib/utils'
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { Home, Package, ShoppingCart, Users, BarChart3 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 const navItems = [
     {
-        label: 'Home',
-        href: '/',
+        label: "Home",
+        href: "/",
         icon: Home,
     },
     {
-        label: 'Clients',
-        href: '/clients',
+        label: "Clients",
+        href: "/clients",
         icon: Users,
     },
     {
-        label: 'Products',
-        href: '/products',
+        label: "Products",
+        href: "/products",
         icon: Package,
     },
     {
-        label: 'Orders',
-        href: '/orders',
+        label: "Orders",
+        href: "/orders",
         icon: ShoppingCart,
-    }
+    },
+    {
+        label: "Sales Reports",
+        href: "/reports",
+        icon: BarChart3,
+    },
 ]
 
 export default function Sidebar() {
     const pathname = usePathname()
 
     return (
-        <aside className="w-64 h-screen shrink-0 border-r bg-background
-                          sticky top-0">
-            <div className="p-6 text-lg font-semibold">
-                POS Admin
-            </div>
+        <aside className="w-64 h-screen shrink-0 border-r bg-background sticky top-0">
+            <div className="p-6 text-lg font-semibold">POS Admin</div>
 
             <nav className="space-y-1 px-2">
                 {navItems.map((item) => {
@@ -48,10 +50,8 @@ export default function Sidebar() {
                             key={item.href}
                             href={item.href}
                             className={cn(
-                                'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                                isActive
-                                    ? 'bg-muted font-medium'
-                                    : 'text-muted-foreground hover:bg-muted'
+                                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                                isActive ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted"
                             )}
                         >
                             <Icon className="h-4 w-4" />
@@ -63,4 +63,3 @@ export default function Sidebar() {
         </aside>
     )
 }
-

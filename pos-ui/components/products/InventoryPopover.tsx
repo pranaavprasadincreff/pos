@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { updateInventory } from "@/services/productService"
 import { cn } from "@/lib/utils"
+import { Hint } from "@/components/shared/Hint"
 
 interface Props {
     product: ProductData
@@ -71,10 +72,13 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
             }}
         >
             <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-between">
-                    Inventory
-                    <span className="font-semibold">{product.inventory}</span>
-                </Button>
+                {/* Hint MUST wrap the actual trigger element */}
+                <Hint text="Update inventory">
+                    <Button variant="outline" className="w-full justify-between">
+                        Inventory
+                        <span className="font-semibold">{product.inventory}</span>
+                    </Button>
+                </Hint>
             </PopoverTrigger>
 
             <PopoverContent

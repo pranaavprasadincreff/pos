@@ -1,7 +1,7 @@
-'use client'
+"use client"
 
-import { useEffect, useMemo, useState } from 'react'
-import { OrderItemData } from '@/services/types'
+import { useEffect, useMemo, useState } from "react"
+import { OrderItemData } from "@/services/types"
 import {
     Table,
     TableBody,
@@ -9,8 +9,10 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from '@/components/ui/table'
-import { getProductByBarcode } from '@/services/productService'
+} from "@/components/ui/table"
+import { getProductByBarcode } from "@/services/productService"
+import { cn } from "@/lib/utils"
+import {formatINR} from "@/utils/CurrencyFormat";
 
 interface OrderItemsTableProps {
     items: OrderItemData[]
@@ -22,17 +24,13 @@ type ProductLite = {
 }
 
 export default function OrderItemsTable({ items }: OrderItemsTableProps) {
-    const [productByBarcode, setProductByBarcode] = useState<
-        Record<string, ProductLite | null>
-    >({})
-    const [loadingByBarcode, setLoadingByBarcode] = useState<Record<string, boolean>>(
-        {}
-    )
+    const [productByBarcode, setProductByBarcode] = useState<Record<string, ProductLite | null>>({})
+    const [loadingByBarcode, setLoadingByBarcode] = useState<Record<string, boolean>>({})
 
     const barcodes = useMemo(() => {
         const uniq = new Set<string>()
         for (const it of items) {
-            const b = (it.productBarcode || '').trim()
+            const b = (it.productBarcode || "").trim()
             if (b) uniq.add(b)
         }
         return Array.from(uniq)
@@ -87,32 +85,48 @@ export default function OrderItemsTable({ items }: OrderItemsTableProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [barcodes])
 
+    if (!items || items.length === 0) {
+        return (
+            <div className="rounded-md border p-8 text-center text-muted-foreground">
+                No order items
+            </div>
+        )
+    }
+
     return (
-        <div className="rounded-md border bg-background">
+        <div className="rounded-md border bg-background overflow-hidden">
             <Table>
                 <TableHeader>
-                    <TableRow>
+                    <TableRow
+                        className={cn(
+                            // same “distinct header + separation” style used in the expanded table
+                            "bg-muted/60",
+                            "border-b",
+                            "[&>th]:py-3 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-foreground",
+                            "shadow-[inset_0_-1px_0_0_rgba(99,102,241,0.12)]"
+                        )}
+                    >
                         <TableHead>Barcode</TableHead>
                         <TableHead>Product</TableHead>
-                        <TableHead>MRP</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Selling Price</TableHead>
+                        <TableHead className="text-right">MRP</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
+                        <TableHead className="text-right">Selling Price</TableHead>
                     </TableRow>
                 </TableHeader>
 
                 <TableBody>
                     {items.map((item, index) => {
-                        const barcode = (item.productBarcode || '').trim()
+                        const barcode = (item.productBarcode || "").trim()
                         const product = barcode ? productByBarcode[barcode] : undefined
                         const loading = barcode ? loadingByBarcode[barcode] : false
 
-                        // ✅ backend has per-unit sellingPrice, but UI wants "actual user-entered total"
+                        // backend has per-unit sellingPrice, UI wants total
                         const qty = Number(item.quantity || 0)
                         const perUnit = Number(item.sellingPrice || 0)
                         const sellingTotal = qty > 0 ? perUnit * qty : 0
 
                         return (
-                            <TableRow key={`${item.productBarcode}-${index}`}>
+                            <TableRow key={`${item.productBarcode}-${index}`} className="hover:bg-muted/30">
                                 {/* Barcode */}
                                 <TableCell className="font-medium">{item.productBarcode}</TableCell>
 
@@ -128,21 +142,23 @@ export default function OrderItemsTable({ items }: OrderItemsTableProps) {
                                 </TableCell>
 
                                 {/* MRP (per unit, NOT scaled) */}
-                                <TableCell>
+                                <TableCell className="text-right tabular-nums">
                                     {loading ? (
                                         <span className="text-muted-foreground">—</span>
                                     ) : product ? (
-                                        <>₹ {product.mrp.toFixed(2)}</>
+                                        <>₹{formatINR(product.mrp)}</>
                                     ) : (
                                         <span className="text-muted-foreground">—</span>
                                     )}
                                 </TableCell>
 
                                 {/* Quantity */}
-                                <TableCell>{item.quantity}</TableCell>
+                                <TableCell className="text-right tabular-nums">{qty}</TableCell>
 
-                                {/* ✅ Selling Price shown as total for the row */}
-                                <TableCell>₹ {sellingTotal.toFixed(2)}</TableCell>
+                                {/* Selling Price shown as total for the row */}
+                                <TableCell className="text-right font-medium tabular-nums">
+                                    ₹ {sellingTotal.toFixed(2)}
+                                </TableCell>
                             </TableRow>
                         )
                     })}

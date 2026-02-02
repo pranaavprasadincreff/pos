@@ -6,6 +6,8 @@ import { ProductData } from "@/services/types"
 import { Button } from "@/components/ui/button"
 import { Pencil, ImageOff } from "lucide-react"
 import InventoryPopover from "./InventoryPopover"
+import {formatINR} from "@/utils/CurrencyFormat";
+import {Hint} from "@/components/shared/Hint";
 
 type ProductUI = ProductData & { clientName?: string }
 
@@ -51,21 +53,22 @@ export default function ProductCard({ product, onEdit, onInventoryUpdated }: Pro
                         <span className="text-xs">No image available</span>
                     </div>
                 )}
-
-                <Button
-                    size="icon"
-                    variant="secondary"
-                    onClick={() => onEdit(product)}
-                    className="
-            absolute top-2 right-2
-            h-8 w-8 rounded-full
-            opacity-0 group-hover:opacity-100
-            transition
-            shadow-sm
-          "
-                >
-                    <Pencil className="h-4 w-4" />
-                </Button>
+                <Hint text="Edit">
+                    <Button
+                        size="icon"
+                        variant="secondary"
+                        onClick={() => onEdit(product)}
+                        className="
+                absolute top-2 right-2
+                h-8 w-8 rounded-full
+                opacity-0 group-hover:opacity-100
+                transition
+                shadow-sm
+              "
+                    >
+                        <Pencil className="h-4 w-4" />
+                    </Button>
+                </Hint>
             </div>
 
             <div className="p-4 space-y-3">
@@ -76,10 +79,10 @@ export default function ProductCard({ product, onEdit, onInventoryUpdated }: Pro
                 </div>
 
                 <div className="flex items-center justify-between">
-                    <p className="font-semibold">₹{product.mrp.toLocaleString()}</p>
+                    <p className="font-semibold">₹{formatINR(product.mrp)}</p>
                 </div>
 
-                <InventoryPopover product={product} onUpdated={onInventoryUpdated} />
+                    <InventoryPopover product={product} onUpdated={onInventoryUpdated} />
             </div>
         </div>
     )

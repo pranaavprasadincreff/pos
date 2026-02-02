@@ -15,12 +15,7 @@ import ClientTable from "@/components/clients/ClientTable"
 import ClientModal from "@/components/clients/ClientModal"
 import Pagination from "@/components/shared/Pagination"
 
-import {
-    addClient,
-    filterClients,
-    getClients,
-    updateClient,
-} from "@/services/clientService"
+import { addClient, filterClients, getClients, updateClient } from "@/services/clientService"
 import { Client, ClientForm, ClientUpdateForm } from "@/services/types"
 import { toast } from "sonner"
 
@@ -30,6 +25,16 @@ import { Hint } from "@/components/shared/Hint"
 // backend mirrors (search validation: length only)
 const EMAIL_MAX = 40
 const NAME_MAX = 30
+
+// tiny debounce hook (no extra deps)
+function useDebouncedValue<T>(value: T, delayMs: number) {
+    const [debounced, setDebounced] = useState(value)
+    useEffect(() => {
+        const t = setTimeout(() => setDebounced(value), delayMs)
+        return () => clearTimeout(t)
+    }, [value, delayMs])
+    return debounced
+}
 
 export default function ClientsPage() {
     const [clients, setClients] = useState<Client[]>([])
@@ -49,6 +54,9 @@ export default function ClientsPage() {
     const placeholder = useMemo(() => {
         return CLIENT_FILTERS[searchBy]?.placeholder ?? "Search…"
     }, [searchBy])
+
+    // ✅ Debounced search input (500ms)
+    const debouncedSearchTerm = useDebouncedValue(searchTerm, 500)
 
     // ✅ length-only validation for search (no regex for email while typing)
     function validateSearch(term: string, by: ClientFilterKey) {
@@ -71,13 +79,13 @@ export default function ClientsPage() {
         try {
             setLoading(true)
 
-            const err = validateSearch(searchTerm, searchBy)
+            const err = validateSearch(debouncedSearchTerm, searchBy)
             setSearchError(err)
             if (err) return
 
             toastId = toast.loading("Loading clients...")
 
-            const trimmed = searchTerm.trim()
+            const trimmed = debouncedSearchTerm.trim()
 
             // No search => normal paginated
             if (trimmed.length === 0) {
@@ -103,10 +111,13 @@ export default function ClientsPage() {
         }
     }
 
+    // Fetch:
+    // - immediately on page or filter type change
+    // - only after 500ms pause on typing (debouncedSearchTerm)
     useEffect(() => {
         fetchClientsPage()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, searchBy, searchTerm])
+    }, [page, searchBy, debouncedSearchTerm])
 
     async function handleSubmit(form: ClientForm | ClientUpdateForm) {
         if (editingClient) {
@@ -143,9 +154,7 @@ export default function ClientsPage() {
                     <div className="flex justify-between items-center">
                         <div>
                             <h1 className="text-2xl font-semibold">Clients</h1>
-                            <p className="text-sm text-muted-foreground">
-                                Manage registered clients
-                            </p>
+                            <p className="text-sm text-muted-foreground">Manage registered clients</p>
                         </div>
 
                         <Hint text="Add a new client">
@@ -215,7 +224,7 @@ export default function ClientsPage() {
                                     const v = e.target.value
                                     setSearchTerm(v)
                                     setPage(0)
-                                    setSearchError(validateSearch(v, searchBy))
+                                    setSearchError(validateSearch(v, searchBy)) // immediate validation feedback
                                 }}
                                 className="focus-visible:ring-2 focus-visible:ring-indigo-500 transition"
                             />
@@ -237,9 +246,7 @@ export default function ClientsPage() {
                             )}
                         </div>
 
-                        {searchError && (
-                            <p className="text-sm text-red-500">{searchError}</p>
-                        )}
+                        {searchError && <p className="text-sm text-red-500">{searchError}</p>}
                     </div>
                 </div>
             </div>

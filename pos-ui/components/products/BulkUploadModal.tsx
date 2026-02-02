@@ -35,14 +35,9 @@ function downloadTextFile(filename: string, contents: string) {
 }
 
 const SAMPLE_PRODUCT_TSV =
-    "barcode\tclientEmail\tname\tmrp\timageUrl\n" +
-    "SKU-001\tclient@example.com\tSample Product\t1999\thttps://example.com/image.jpg\n" +
-    "SKU-002\tclient@example.com\tNo Image Product\t499\t\n"
+    "barcode\tclientEmail\tname\tmrp\timageUrl\n"
 
-const SAMPLE_INVENTORY_TSV =
-    "barcode\tinventory\n" +
-    "SKU-001\t10\n" +
-    "SKU-002\t0\n"
+const SAMPLE_INVENTORY_TSV = "barcode\tinventory\n"
 
 export default function BulkUploadModal({
                                             isOpen,
@@ -125,18 +120,14 @@ export default function BulkUploadModal({
 
         try {
             const res =
-                mode === "product"
-                    ? await bulkAddProducts(inputBase64)
-                    : await bulkUpdateInventory(inputBase64)
+                mode === "product" ? await bulkAddProducts(inputBase64) : await bulkUpdateInventory(inputBase64)
 
             setOutputBase64(res.file)
 
             const outText = decodeBase64ToText(res.file)
             const lines = outText.trim().split("\n")
             const rows = lines.slice(1)
-            const errorCount = rows.filter((r) =>
-                r.toLowerCase().includes("error")
-            ).length
+            const errorCount = rows.filter((r) => r.toLowerCase().includes("error")).length
 
             if (rows.length === 0) {
                 setSummary("success")
@@ -146,14 +137,10 @@ export default function BulkUploadModal({
                 setSummaryText("Upload successful. No errors.")
             } else if (errorCount === rows.length) {
                 setSummary("all_errors")
-                setSummaryText(
-                    "Upload completed, but all rows have errors. Download output to see details."
-                )
+                setSummaryText("Upload completed, but all rows have errors. Download output to see details.")
             } else {
                 setSummary("few_errors")
-                setSummaryText(
-                    `Upload completed with some errors (${errorCount}/${rows.length}). Download output to see details.`
-                )
+                setSummaryText(`Upload completed with some errors (${errorCount}/${rows.length}). Download output to see details.`)
             }
 
             onSuccess()
@@ -177,8 +164,7 @@ export default function BulkUploadModal({
     }
 
     function downloadSample() {
-        if (mode === "product")
-            downloadTextFile("sample-products.tsv", SAMPLE_PRODUCT_TSV)
+        if (mode === "product") downloadTextFile("sample-products.tsv", SAMPLE_PRODUCT_TSV)
         else downloadTextFile("sample-inventory.tsv", SAMPLE_INVENTORY_TSV)
     }
 
@@ -257,15 +243,10 @@ export default function BulkUploadModal({
                                 <span className="mx-1 text-muted-foreground/60">•</span>
 
                                 <span>
-                  Limit: up to{" "}
-                                    <span className="font-medium text-muted-foreground">
-                    5,000
-                  </span>{" "}
-                                    rows per file
+                  Limit: up to <span className="font-medium text-muted-foreground">5,000</span> rows per file
                 </span>
                             </div>
 
-                            {/* extra spacing added here */}
                             <div className="mt-2">
                                 <Hint text="Download a sample TSV to see the expected format">
                                     <button
@@ -305,28 +286,31 @@ export default function BulkUploadModal({
                     </p>
                 )}
 
-                {outputBase64 && (
-                    <div className="mt-3">
-                        <Hint text="Download output file (includes error details if any)">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
-                                onClick={downloadOutput}
-                            >
-                                <Download className="h-4 w-4 mr-2" />
-                                Output TSV
-                            </Button>
-                        </Hint>
-                    </div>
-                )}
+                {/* Summary + Output download (output below message, bottom-left) */}
+                {(summary !== "idle" || summaryText) ? (
+                    <div className="mt-4 space-y-3">
+                        <div className={cn("rounded-lg border px-3 py-2 text-sm", summaryStyle)}>
+                            {summaryText || "Upload finished."}
+                        </div>
 
-                {(summary !== "idle" || summaryText) && (
-                    <div className={cn("mt-4 rounded-lg border px-3 py-2 text-sm", summaryStyle)}>
-                        {summaryText || "Upload finished."}
+                        {outputBase64 ? (
+                            <div className="flex justify-start">
+                                <Hint text="Download output file (includes error details if any)">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
+                                        onClick={downloadOutput}
+                                    >
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Download output TSV
+                                    </Button>
+                                </Hint>
+                            </div>
+                        ) : null}
                     </div>
-                )}
+                ) : null}
 
                 <DialogFooter className="mt-4">
                     <Button type="button" variant="outline" onClick={handleClose}>

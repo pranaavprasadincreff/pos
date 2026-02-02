@@ -42,6 +42,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import {formatINR} from "@/utils/CurrencyFormat";
 
 interface OrderTableProps {
     orders: OrderData[]
@@ -242,7 +243,7 @@ export default function OrderTable({
                                             </TableCell>
 
                                             <TableCell className="text-right font-medium">
-                                                ₹{total.toFixed(2)}
+                                                ₹{formatINR(total)}
                                             </TableCell>
 
                                             <TableCell className="text-right">
