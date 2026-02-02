@@ -11,7 +11,6 @@ import java.time.ZoneId;
 
 @Component
 public class SalesReportScheduler {
-
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
     @Autowired

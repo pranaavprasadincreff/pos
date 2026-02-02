@@ -324,6 +324,7 @@ public class ValidationUtil {
         int count = 0;
         for (String[] row : rows) {
             if (row == null || row.length == 0) continue;
+            // TODO: rows won't have header and don't iterate -> use rows.length
             if ("barcode".equalsIgnoreCase(row[0])) continue; // header
             count++;
         }

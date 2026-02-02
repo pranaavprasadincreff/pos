@@ -29,6 +29,7 @@ public class ClientApiImpl implements ClientApi {
 
     @Override
     public ClientPojo getClientByEmail(String email) throws ApiException {
+        // TODO change name getByEmailOrThrow -> getCheckByEmail
         return getByEmailOrThrow(email);
     }
 
@@ -43,6 +44,7 @@ public class ClientApiImpl implements ClientApi {
     public ClientPojo update(ClientUpdatePojo update) throws ApiException {
         ClientPojo existing = getByEmailOrThrow(update.getOldEmail());
         ensureEmailUniqueForUpdate(update);
+        // TODO change applyUpdate name
         applyUpdate(existing, update);
         return dao.save(existing);
     }

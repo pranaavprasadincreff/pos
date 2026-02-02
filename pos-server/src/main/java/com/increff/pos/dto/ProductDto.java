@@ -30,12 +30,12 @@ public class ProductDto {
         ValidationUtil.validateProductForm(form);
 
         ProductPojo pojo = ProductHelper.convertProductFormToEntity(form);
+        // TODO: don't next function calls while returning
         return toData(productFlow.addProduct(pojo));
     }
 
     public ProductData getByBarcode(String barcode) throws ApiException {
         String normalized = NormalizationUtil.normalizeBarcode(barcode);
-        // optional: validate barcode non-empty/length (enterprise). Currently not present.
         return toData(productFlow.getByBarcode(normalized));
     }
 
@@ -84,6 +84,7 @@ public class ProductDto {
 
     // -------------------- Private helpers --------------------
 
+    // TODO: Shift to helper
     private ProductData toData(Pair<ProductPojo, InventoryPojo> pair) {
         return ProductHelper.convertToProductData(pair.getLeft(), pair.getRight());
     }
@@ -129,7 +130,7 @@ public class ProductDto {
 
                 ProductPojo pojo = ProductHelper.toBulkProductPojo(canonical);
                 validPojos.add(pojo);
-
+                //TODO: change name firstrowindexbybarcode
                 firstRowIndexByBarcode.put(pojo.getBarcode(), rowIndex);
                 resultRows.get(rowIndex)[0] = pojo.getBarcode();
             } catch (ApiException e) {
@@ -177,6 +178,7 @@ public class ProductDto {
         if (flowResults == null || flowResults.isEmpty()) return;
 
         for (String[] r : flowResults) {
+            // TODO: no use of this if
             if (r == null || r.length < 3) continue;
             Integer idx = processed.firstRowIndexByBarcode().get(r[0]);
             if (idx == null) continue;
@@ -221,6 +223,7 @@ public class ProductDto {
     }
 
     private record ParsedBulkData(Map<String, Integer> headers, List<String[]> rows) {}
+
     private record RowProcessingResult<T>(
             List<T> validPojos,
             List<String[]> resultRows,

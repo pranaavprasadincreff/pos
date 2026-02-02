@@ -72,11 +72,13 @@ public class ProductFlow {
         if (pojos == null || pojos.isEmpty()) return results;
 
         Set<String> validClients = validateClients(extractClientEmails(pojos));
+        // TODO: existingByBarcode - existingProducts
         Map<String, ProductPojo> existingByBarcode = getExistingProductsByBarcode(pojos);
 
         BulkProductSavePlan plan = planBulkProductSaves(pojos, results, validClients, existingByBarcode);
         if (plan.toSave().isEmpty()) return results;
 
+        // TODO: change name
         Map<String, ProductPojo> savedByBarcode = saveProductsAndCreateInventories(plan.toSave());
         markSuccessfulProductRows(results, pojos, plan.indicesToSave(), savedByBarcode);
         return results;
@@ -178,6 +180,7 @@ public class ProductFlow {
 
     private Map<String, ProductPojo> saveProductsAndCreateInventories(List<ProductPojo> toSave) {
         List<ProductPojo> saved = productApi.saveAll(toSave);
+        // TODO: savedByBarcode -> barcodeProductMap
         Map<String, ProductPojo> savedByBarcode = saved.stream()
                 .collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
 
@@ -271,6 +274,7 @@ public class ProductFlow {
         Set<String> validClients = new HashSet<>();
         if (emails == null || emails.isEmpty()) return validClients;
 
+        // TODO: Return the client list and implement mapping, no need to validate clients one by one
         try {
             clientApi.validateClientsExist(emails);
             validClients.addAll(emails);
