@@ -9,14 +9,12 @@ public class NormalizationUtil {
     public static void normalizeClientForm(ClientForm form) {
         if (form == null) return;
         form.setEmail(normalizeEmail(form.getEmail()));
-        form.setName(normalizeName(form.getName()));
     }
 
     public static void normalizeClientUpdateForm(ClientUpdateForm form) {
         if (form == null) return;
         form.setOldEmail(normalizeEmail(form.getOldEmail()));
         form.setNewEmail(normalizeEmail(form.getNewEmail()));
-        form.setName(normalizeName(form.getName()));
     }
 
     public static void normalizeClientFilterForm(ClientFilterForm form) {
@@ -49,14 +47,12 @@ public class NormalizationUtil {
     public static void normalizeProductForm(ProductForm form) {
         form.setBarcode(NormalizationUtil.normalizeBarcode(form.getBarcode()));
         form.setClientEmail(NormalizationUtil.normalizeEmail(form.getClientEmail()));
-        form.setName(NormalizationUtil.normalizeName(form.getName()));
     }
 
     public static void normalizeProductUpdateForm(ProductUpdateForm form) {
         form.setOldBarcode(NormalizationUtil.normalizeBarcode(form.getOldBarcode()));
         form.setNewBarcode(NormalizationUtil.normalizeBarcode(form.getNewBarcode()));
         form.setClientEmail(NormalizationUtil.normalizeEmail(form.getClientEmail()));
-        form.setName(NormalizationUtil.normalizeName(form.getName()));
     }
 
     public static void normalizeBulkProductRows(List<String[]> rows) {

@@ -3,7 +3,12 @@
 import { Fragment, useState } from 'react'
 import { OrderData } from '@/services/types'
 import {
-    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,6 +33,7 @@ import { downloadBase64Pdf } from '@/utils/downloadPdf'
 import { ORDER_STATUS_META } from '@/utils/orderStatus'
 import { formatDate } from '@/utils/date'
 import { cancel, retryOrder } from '@/services/orderService'
+import { cn } from '@/lib/utils'
 
 interface OrderTableProps {
     orders: OrderData[]
@@ -37,7 +43,10 @@ interface OrderTableProps {
 }
 
 export default function OrderTable({
-                                       orders, loading, onInvoiceGenerated, onEdit,
+                                       orders,
+                                       loading,
+                                       onInvoiceGenerated,
+                                       onEdit,
                                    }: OrderTableProps) {
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -51,8 +60,19 @@ export default function OrderTable({
 
     const ICON_BTN = 'h-9 w-9 p-0 rounded-md'
 
-    if (loading) return <div className="rounded-md border p-8 text-center text-muted-foreground">Loading orders…</div>
-    if (orders.length === 0) return <div className="rounded-md border p-8 text-center text-muted-foreground">No orders match current filters</div>
+    if (loading)
+        return (
+            <div className="rounded-md border p-8 text-center text-muted-foreground">
+                Loading orders…
+            </div>
+        )
+
+    if (orders.length === 0)
+        return (
+            <div className="rounded-md border p-8 text-center text-muted-foreground">
+                No orders match current filters
+            </div>
+        )
 
     return (
         <TooltipProvider delayDuration={150}>
@@ -72,21 +92,33 @@ export default function OrderTable({
                     <TableBody>
                         {orders.map(order => {
                             const isOpen = expanded.has(order.orderReferenceId)
-                            const total = order.items.reduce((sum, item) => sum + item.quantity * item.sellingPrice, 0)
+                            const total = order.items.reduce(
+                                (sum, item) => sum + item.quantity * item.sellingPrice,
+                                0
+                            )
                             const statusMeta = ORDER_STATUS_META[order.status]
 
                             return (
                                 <Fragment key={order.orderReferenceId}>
-                                    <TableRow className="hover:bg-muted/40">
+                                    {/* MAIN ROW */}
+                                    <TableRow
+                                        className={cn(
+                                            'hover:bg-muted/40',
+                                            isOpen &&
+                                            'bg-indigo-50/40 border border-indigo-200 border-b-0'
+                                        )}
+                                    >
                                         <TableCell className="w-8">
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => toggle(order.orderReferenceId)}
                                             >
-                                                {isOpen
-                                                    ? <ChevronDown className="h-4 w-4" />
-                                                    : <ChevronRight className="h-4 w-4" />}
+                                                {isOpen ? (
+                                                    <ChevronDown className="h-4 w-4" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4" />
+                                                )}
                                             </Button>
                                         </TableCell>
 
@@ -111,12 +143,11 @@ export default function OrderTable({
                                             ₹{total.toFixed(2)}
                                         </TableCell>
 
-                                        {/* ACTION ICONS */}
                                         <TableCell className="text-right">
                                             <div className="flex gap-2 justify-end flex-wrap">
-
-                                                {/* EDIT */}
-                                                {['FULFILLABLE', 'UNFULFILLABLE'].includes(order.status) && (
+                                                {['FULFILLABLE', 'UNFULFILLABLE'].includes(
+                                                    order.status
+                                                ) && (
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
                                                             <Button
@@ -130,19 +161,26 @@ export default function OrderTable({
                                                     </Tooltip>
                                                 )}
 
-                                                {/* CANCEL */}
-                                                {['FULFILLABLE', 'UNFULFILLABLE'].includes(order.status) && (
+                                                {['FULFILLABLE', 'UNFULFILLABLE'].includes(
+                                                    order.status
+                                                ) && (
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
                                                             <Button
                                                                 className={`bg-red-600 hover:bg-red-700 text-white ${ICON_BTN}`}
                                                                 onClick={async () => {
                                                                     try {
-                                                                        await cancel(order.orderReferenceId)
-                                                                        toast.success('Order cancelled')
+                                                                        await cancel(
+                                                                            order.orderReferenceId
+                                                                        )
+                                                                        toast.success(
+                                                                            'Order cancelled'
+                                                                        )
                                                                         onInvoiceGenerated()
                                                                     } catch {
-                                                                        toast.error('Failed to cancel')
+                                                                        toast.error(
+                                                                            'Failed to cancel'
+                                                                        )
                                                                     }
                                                                 }}
                                                             >
@@ -153,7 +191,6 @@ export default function OrderTable({
                                                     </Tooltip>
                                                 )}
 
-                                                {/* GENERATE INVOICE — PRIMARY */}
                                                 {order.status === 'FULFILLABLE' && (
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
@@ -161,22 +198,29 @@ export default function OrderTable({
                                                                 className={`bg-emerald-600 hover:bg-emerald-700 text-white ${ICON_BTN}`}
                                                                 onClick={async () => {
                                                                     try {
-                                                                        await invoiceService.generate(order.orderReferenceId)
-                                                                        toast.success('Invoice generated')
+                                                                        await invoiceService.generate(
+                                                                            order.orderReferenceId
+                                                                        )
+                                                                        toast.success(
+                                                                            'Invoice generated'
+                                                                        )
                                                                         onInvoiceGenerated()
                                                                     } catch {
-                                                                        toast.error('Failed to generate invoice')
+                                                                        toast.error(
+                                                                            'Failed to generate invoice'
+                                                                        )
                                                                     }
                                                                 }}
                                                             >
                                                                 <FileText className="h-4 w-4" />
                                                             </Button>
                                                         </TooltipTrigger>
-                                                        <TooltipContent>Generate Invoice</TooltipContent>
+                                                        <TooltipContent>
+                                                            Generate Invoice
+                                                        </TooltipContent>
                                                     </Tooltip>
                                                 )}
 
-                                                {/* RETRY */}
                                                 {order.status === 'UNFULFILLABLE' && (
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
@@ -185,21 +229,26 @@ export default function OrderTable({
                                                                 onClick={async () => {
                                                                     try {
                                                                         await retryOrder(order)
-                                                                        toast.success('Order retried successfully')
+                                                                        toast.success(
+                                                                            'Order retried successfully'
+                                                                        )
                                                                         onInvoiceGenerated()
                                                                     } catch {
-                                                                        toast.error('Failed to retry order')
+                                                                        toast.error(
+                                                                            'Failed to retry order'
+                                                                        )
                                                                     }
                                                                 }}
                                                             >
                                                                 <RotateCcw className="h-4 w-4" />
                                                             </Button>
                                                         </TooltipTrigger>
-                                                        <TooltipContent>Retry Order</TooltipContent>
+                                                        <TooltipContent>
+                                                            Retry Order
+                                                        </TooltipContent>
                                                     </Tooltip>
                                                 )}
 
-                                                {/* DOWNLOAD — DISTINCT, LOW ATTENTION */}
                                                 {order.status === 'INVOICED' && (
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
@@ -208,31 +257,45 @@ export default function OrderTable({
                                                                 className={`border-gray-400 text-gray-700 hover:bg-gray-100 ${ICON_BTN}`}
                                                                 onClick={async () => {
                                                                     try {
-                                                                        const res = await invoiceService.get(order.orderReferenceId)
+                                                                        const res =
+                                                                            await invoiceService.get(
+                                                                                order.orderReferenceId
+                                                                            )
                                                                         downloadBase64Pdf(
                                                                             res.data.pdfBase64,
                                                                             `invoice-${order.orderReferenceId}.pdf`
                                                                         )
                                                                     } catch {
-                                                                        toast.error('Failed to download invoice')
+                                                                        toast.error(
+                                                                            'Failed to download invoice'
+                                                                        )
                                                                     }
                                                                 }}
                                                             >
                                                                 <Download className="h-4 w-4" />
                                                             </Button>
                                                         </TooltipTrigger>
-                                                        <TooltipContent>Download Invoice</TooltipContent>
+                                                        <TooltipContent>
+                                                            Download Invoice
+                                                        </TooltipContent>
                                                     </Tooltip>
                                                 )}
-
                                             </div>
                                         </TableCell>
                                     </TableRow>
 
-                                    {/* EXPANDED ITEMS ROW — grouped with parent */}
+                                    {/* EXPANDED ROW */}
                                     {isOpen && (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="bg-muted/30">
+                                            <TableCell
+                                                colSpan={6}
+                                                className="
+                          border border-t-0 border-indigo-200
+                          bg-indigo-50/40
+                          rounded-b-md
+                          px-4 py-4
+                        "
+                                            >
                                                 <OrderItemsTable items={order.items} />
                                             </TableCell>
                                         </TableRow>

@@ -1,28 +1,45 @@
-'use client'
+"use client"
 
-import Image from 'next/image'
-import { useState } from 'react'
-import { ProductData } from '@/services/types'
-import { Button } from '@/components/ui/button'
-import { Pencil, ImageOff } from 'lucide-react'
-import InventoryPopover from './InventoryPopover'
+import Image from "next/image"
+import { useState } from "react"
+import { ProductData } from "@/services/types"
+import { Button } from "@/components/ui/button"
+import { Pencil, ImageOff } from "lucide-react"
+import InventoryPopover from "./InventoryPopover"
+
+type ProductUI = ProductData & { clientName?: string }
 
 interface Props {
-    product: ProductData
+    product: ProductUI
     onEdit: (p: ProductData) => void
-    onInventoryUpdated: () => void
+    onInventoryUpdated: (updated: ProductData) => void
+}
+
+function isValidImageUrl(url?: string): boolean {
+    if (!url) return false
+    try {
+        const u = new URL(url)
+        return u.protocol === "http:" || u.protocol === "https:"
+    } catch {
+        return false
+    }
 }
 
 export default function ProductCard({ product, onEdit, onInventoryUpdated }: Props) {
     const [imageError, setImageError] = useState(false)
 
+    const canRenderImage = !imageError && isValidImageUrl(product.imageUrl)
+
+    const clientLine = product.clientName
+        ? `${product.clientName} - ${product.clientEmail}`
+        : product.clientEmail
+
     return (
         <div className="group rounded-xl border bg-white shadow-sm hover:shadow-md transition">
-            {/* Image */}
             <div className="relative h-40 w-full rounded-t-xl overflow-hidden bg-slate-100">
-                {!imageError && product.imageUrl ? (
+                {canRenderImage ? (
                     <Image
-                        src={product.imageUrl}
+                        src={product.imageUrl!}
                         alt={product.name}
                         fill
                         className="object-cover"
@@ -35,7 +52,6 @@ export default function ProductCard({ product, onEdit, onInventoryUpdated }: Pro
                     </div>
                 )}
 
-                {/* Edit button overlay */}
                 <Button
                     size="icon"
                     variant="secondary"
@@ -46,34 +62,24 @@ export default function ProductCard({ product, onEdit, onInventoryUpdated }: Pro
             opacity-0 group-hover:opacity-100
             transition
             shadow-sm
-        "
+          "
                 >
                     <Pencil className="h-4 w-4" />
                 </Button>
             </div>
 
-            {/* Content */}
             <div className="p-4 space-y-3">
                 <div>
                     <p className="font-medium truncate">{product.name}</p>
-                    <p className="text-sm text-muted-foreground truncate">
-                        {product.clientEmail}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                        {product.barcode}
-                    </p>
+                    <p className="text-sm text-muted-foreground truncate">{clientLine}</p>
+                    <p className="text-xs text-muted-foreground">{product.barcode}</p>
                 </div>
 
                 <div className="flex items-center justify-between">
-                    <p className="font-semibold">
-                        ₹{product.mrp.toLocaleString()}
-                    </p>
+                    <p className="font-semibold">₹{product.mrp.toLocaleString()}</p>
                 </div>
 
-                <InventoryPopover
-                    product={product}
-                    onUpdated={onInventoryUpdated}
-                />
+                <InventoryPopover product={product} onUpdated={onInventoryUpdated} />
             </div>
         </div>
     )

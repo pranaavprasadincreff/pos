@@ -1,21 +1,48 @@
-'use client'
+"use client"
 
-import { useState, useRef, useEffect } from 'react'
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
     DialogFooter,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { toast } from 'sonner'
-import TsvPreviewTable, { ParsedRow } from './TsvPreviewTable'
-import { cn } from '@/lib/utils'
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
+import { Hint } from "@/components/shared/Hint"
+import { CircleHelp, Download, Loader2 } from "lucide-react"
+import { bulkAddProducts, bulkUpdateInventory } from "@/services/productService"
 
-type Mode = 'product' | 'inventory'
-type ViewMode = 'all' | 'error'
+type Mode = "product" | "inventory"
+type UploadSummary = "idle" | "success" | "few_errors" | "all_errors"
+
+function decodeBase64ToText(b64: string) {
+    return decodeURIComponent(escape(atob(b64)))
+}
+function encodeTextToBase64(text: string) {
+    return btoa(unescape(encodeURIComponent(text)))
+}
+function downloadTextFile(filename: string, contents: string) {
+    const blob = new Blob([contents], { type: "text/tab-separated-values" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+}
+
+const SAMPLE_PRODUCT_TSV =
+    "barcode\tclientEmail\tname\tmrp\timageUrl\n" +
+    "SKU-001\tclient@example.com\tSample Product\t1999\thttps://example.com/image.jpg\n" +
+    "SKU-002\tclient@example.com\tNo Image Product\t499\t\n"
+
+const SAMPLE_INVENTORY_TSV =
+    "barcode\tinventory\n" +
+    "SKU-001\t10\n" +
+    "SKU-002\t0\n"
 
 export default function BulkUploadModal({
                                             isOpen,
@@ -26,34 +53,37 @@ export default function BulkUploadModal({
     onClose: () => void
     onSuccess: () => void
 }) {
-    const [mode, setMode] = useState<Mode>('product')
-    const [viewMode, setViewMode] = useState<ViewMode>('all')
+    const [mode, setMode] = useState<Mode>("product")
     const [loading, setLoading] = useState(false)
 
-    const [inputHeaders, setInputHeaders] = useState<string[]>([])
-    const [inputRows, setInputRows] = useState<ParsedRow[]>([])
-
-    const [previewHeaders, setPreviewHeaders] = useState<string[]>([])
-    const [previewRows, setPreviewRows] = useState<ParsedRow[]>([])
+    const [fileName, setFileName] = useState<string>("")
+    const [inputBase64, setInputBase64] = useState<string | null>(null)
 
     const [outputBase64, setOutputBase64] = useState<string | null>(null)
+    const [summary, setSummary] = useState<UploadSummary>("idle")
+    const [summaryText, setSummaryText] = useState<string>("")
 
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     function reset() {
-        setInputHeaders([])
-        setInputRows([])
-        setPreviewHeaders([])
-        setPreviewRows([])
+        setFileName("")
+        setInputBase64(null)
         setOutputBase64(null)
-        setViewMode('all')
+        setSummary("idle")
+        setSummaryText("")
         setLoading(false)
-        if (fileInputRef.current) fileInputRef.current.value = ''
+        if (fileInputRef.current) fileInputRef.current.value = ""
     }
 
     useEffect(() => {
         if (!isOpen) reset()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen])
+
+    function handleClose() {
+        reset()
+        onClose()
+    }
 
     function switchMode(newMode: Mode) {
         if (newMode === mode) return
@@ -61,210 +91,226 @@ export default function BulkUploadModal({
         reset()
     }
 
-    async function parseFile(file: File) {
+    async function onPickFile(file: File) {
+        setFileName(file.name)
+        setOutputBase64(null)
+        setSummary("idle")
+        setSummaryText("")
+
         const text = await file.text()
-        const lines = text.trim().split('\n').map(l => l.split('\t'))
-        if (!lines.length) return
+        const trimmed = text.trim()
+        if (!trimmed) {
+            setInputBase64(null)
+            setSummary("idle")
+            setSummaryText("Selected file is empty.")
+            return
+        }
 
-        const headers = lines[0]
-        const rows: ParsedRow[] = lines.slice(1).map(values => ({
-            values,
-            isError:
-                values.length !== headers.length ||
-                values.some(v => v.trim() === ''),
-        }))
-
-        setInputHeaders(headers)
-        setInputRows(rows)
-        setPreviewHeaders(headers)
-        setPreviewRows(rows)
+        setInputBase64(encodeTextToBase64(trimmed))
     }
 
+    const requirementsText = useMemo(() => {
+        if (mode === "product") {
+            return "Required columns: barcode, clientEmail, name, mrp. Optional: imageUrl."
+        }
+        return "Required columns: barcode, inventory."
+    }, [mode])
+
     async function upload() {
-        if (!inputHeaders.length || !inputRows.length) return
+        if (!inputBase64 || loading) return
 
         setLoading(true)
-        const toastId = toast.loading('Uploading TSV...')
+        setSummary("idle")
+        setSummaryText("")
 
         try {
-            const tsv = [inputHeaders, ...inputRows.map(r => r.values)]
-                .map(r => r.join('\t'))
-                .join('\n')
+            const res =
+                mode === "product"
+                    ? await bulkAddProducts(inputBase64)
+                    : await bulkUpdateInventory(inputBase64)
 
-            const base64 = window.btoa(unescape(encodeURIComponent(tsv)))
+            setOutputBase64(res.file)
 
-            const endpoint =
-                mode === 'product'
-                    ? '/api/product/bulk-add-products'
-                    : '/api/inventory/bulk-inventory-update'
+            const outText = decodeBase64ToText(res.file)
+            const lines = outText.trim().split("\n")
+            const rows = lines.slice(1)
+            const errorCount = rows.filter((r) => r.toLowerCase().includes("error")).length
 
-            const res = await fetch(`http://localhost:8080${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ file: base64 }),
-            })
-
-            if (!res.ok) {
-                const text = await res.text()
-                console.error('Bulk upload failed:', text)
-                throw new Error('Upload failed')
+            if (rows.length === 0) {
+                setSummary("success")
+                setSummaryText("Upload completed.")
+            } else if (errorCount === 0) {
+                setSummary("success")
+                setSummaryText("Upload successful. No errors.")
+            } else if (errorCount === rows.length) {
+                setSummary("all_errors")
+                setSummaryText("Upload completed, but all rows have errors. Download output to see details.")
+            } else {
+                setSummary("few_errors")
+                setSummaryText(
+                    `Upload completed with some errors (${errorCount}/${rows.length}). Download output to see details.`
+                )
             }
 
-            const data = await res.json()
-            setOutputBase64(data.file)
-
-            const outText = decodeURIComponent(escape(atob(data.file)))
-            const outLines = outText.trim().split('\n').map(l => l.split('\t'))
-
-            setPreviewHeaders(outLines[0])
-            setPreviewRows(
-                outLines.slice(1).map(values => ({
-                    values,
-                    isError: values.some(v =>
-                        v.toLowerCase().includes('error')
-                    ),
-                }))
-            )
-
-            // 🔑 CRITICAL: Refresh product list in parent
             onSuccess()
 
-            // Force re-upload if user wants again
-            setInputHeaders([])
-            setInputRows([])
-            if (fileInputRef.current) fileInputRef.current.value = ''
-
-            toast.success('Upload completed')
-        } catch {
-            toast.error('Upload failed')
+            // allow re-upload without reopening modal
+            setInputBase64(null)
+            setFileName("")
+            if (fileInputRef.current) fileInputRef.current.value = ""
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : "Upload failed"
+            setSummary("all_errors")
+            setSummaryText(msg)
         } finally {
             setLoading(false)
-            toast.dismiss(toastId)
         }
     }
 
     function downloadOutput() {
         if (!outputBase64) return
-        const tsv = decodeURIComponent(escape(atob(outputBase64)))
-        const blob = new Blob([tsv], { type: 'text/tab-separated-values' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = 'bulk-output.tsv'
-        a.click()
-        URL.revokeObjectURL(url)
+        const tsv = decodeBase64ToText(outputBase64)
+        downloadTextFile("bulk-output.tsv", tsv)
     }
 
-    const filteredRows =
-        viewMode === 'all'
-            ? previewRows
-            : previewRows.filter(r => r.isError)
+    function downloadSample() {
+        if (mode === "product") downloadTextFile("sample-products.tsv", SAMPLE_PRODUCT_TSV)
+        else downloadTextFile("sample-inventory.tsv", SAMPLE_INVENTORY_TSV)
+    }
+
+    const summaryStyle =
+        summary === "success"
+            ? "border-emerald-200 bg-emerald-50/40 text-emerald-800"
+            : summary === "few_errors"
+                ? "border-amber-200 bg-amber-50/40 text-amber-800"
+                : summary === "all_errors"
+                    ? "border-red-200 bg-red-50/40 text-red-800"
+                    : "border-border bg-muted/30 text-muted-foreground"
 
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-7xl w-full">
+        <Dialog open={isOpen} onOpenChange={(open) => (!open ? handleClose() : undefined)}>
+            <DialogContent
+                className="max-w-2xl w-full"
+                onInteractOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => e.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle>Bulk Upload</DialogTitle>
                 </DialogHeader>
 
-                {/* Mode Toggle */}
-                <div className="relative inline-flex bg-muted rounded-full p-1 mb-4 max-w-md w-full">
+                <div className="relative inline-flex bg-muted rounded-full p-1 mb-3 w-full max-w-md">
                     <div
                         className={cn(
-                            'absolute top-0 left-0 h-full w-1/2 bg-primary rounded-full transition-transform',
-                            mode === 'inventory' && 'translate-x-full'
+                            "absolute top-0 left-0 h-full w-1/2 bg-indigo-600 rounded-full transition-transform",
+                            mode === "inventory" && "translate-x-full"
                         )}
                     />
                     <button
+                        type="button"
                         className={cn(
-                            'relative z-10 flex-1 py-2 font-medium',
-                            mode === 'product'
-                                ? 'text-white'
-                                : 'text-muted-foreground'
+                            "relative z-10 flex-1 py-2 font-medium text-sm",
+                            mode === "product" ? "text-white" : "text-muted-foreground"
                         )}
-                        onClick={() => switchMode('product')}
+                        onClick={() => switchMode("product")}
                     >
                         Add Products
                     </button>
                     <button
+                        type="button"
                         className={cn(
-                            'relative z-10 flex-1 py-2 font-medium',
-                            mode === 'inventory'
-                                ? 'text-white'
-                                : 'text-muted-foreground'
+                            "relative z-10 flex-1 py-2 font-medium text-sm",
+                            mode === "inventory" ? "text-white" : "text-muted-foreground"
                         )}
-                        onClick={() => switchMode('inventory')}
+                        onClick={() => switchMode("inventory")}
                     >
                         Update Inventory
                     </button>
                 </div>
 
-                {/* File Input */}
-                <div className="flex gap-3 mb-4">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Hint text={requirementsText}>
+              <span className="inline-flex items-center gap-1 cursor-default">
+                <CircleHelp className="h-4 w-4" />
+                Required fields
+              </span>
+                        </Hint>
+
+                        <Hint text="Download a sample TSV to see the expected format">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
+                                onClick={downloadSample}
+                            >
+                                <Download className="h-4 w-4 mr-2" />
+                                Sample TSV
+                            </Button>
+                        </Hint>
+                    </div>
+
+                    {outputBase64 && (
+                        <Hint text="Download output file (includes error details if any)">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
+                                onClick={downloadOutput}
+                            >
+                                <Download className="h-4 w-4 mr-2" />
+                                Output TSV
+                            </Button>
+                        </Hint>
+                    )}
+                </div>
+
+                <div className="mt-3 flex gap-3">
                     <Input
                         ref={fileInputRef}
                         type="file"
                         accept=".tsv"
-                        onChange={e => {
+                        onChange={(e) => {
                             const file = e.target.files?.[0]
                             if (!file) return
-                            setPreviewHeaders([])
-                            setPreviewRows([])
-                            setOutputBase64(null)
-                            setViewMode('all')
-                            parseFile(file)
+                            onPickFile(file)
                         }}
                     />
-                    <Button
-                        onClick={upload}
-                        disabled={!inputRows.length || loading}
-                    >
-                        {loading ? 'Uploading...' : 'Upload'}
-                    </Button>
+
+                    <Hint text={inputBase64 ? "Upload selected file" : "Choose a TSV file first"}>
+                        <Button
+                            type="button"
+                            onClick={upload}
+                            disabled={!inputBase64 || loading}
+                            className="bg-indigo-600 hover:bg-indigo-700"
+                        >
+                            {loading ? (
+                                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Uploading…
+                </span>
+                            ) : (
+                                "Upload"
+                            )}
+                        </Button>
+                    </Hint>
                 </div>
 
-                {previewRows.length > 0 && (
-                    <>
-                        <div className="flex justify-between mb-2">
-                            <div className="flex gap-2">
-                                <Button
-                                    size="sm"
-                                    variant={viewMode === 'all' ? 'default' : 'outline'}
-                                    onClick={() => setViewMode('all')}
-                                >
-                                    View All
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant={viewMode === 'error' ? 'default' : 'outline'}
-                                    onClick={() => setViewMode('error')}
-                                >
-                                    View Errors
-                                </Button>
-                            </div>
-
-                            {outputBase64 && (
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={downloadOutput}
-                                >
-                                    Download Output TSV
-                                </Button>
-                            )}
-                        </div>
-
-                        <div className="max-h-[700px] overflow-auto border rounded-md">
-                            <TsvPreviewTable
-                                headers={previewHeaders}
-                                rows={filteredRows}
-                            />
-                        </div>
-                    </>
+                {fileName && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                        Selected: <span className="font-medium">{fileName}</span>
+                    </p>
                 )}
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>
+                {(summary !== "idle" || summaryText) && (
+                    <div className={cn("mt-4 rounded-lg border px-3 py-2 text-sm", summaryStyle)}>
+                        {summaryText || "Upload finished."}
+                    </div>
+                )}
+
+                <DialogFooter className="mt-4">
+                    <Button type="button" variant="outline" onClick={handleClose}>
                         Exit
                     </Button>
                 </DialogFooter>

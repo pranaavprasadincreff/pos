@@ -4,6 +4,7 @@ import com.increff.pos.db.OrderPojo;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -57,7 +58,7 @@ public class OrderDao extends AbstractDao<OrderPojo> {
         if (!list.isEmpty()) {
             q.addCriteria(new Criteria().andOperator(list));
         }
-        Pageable p = PageRequest.of(page, size);
+        Pageable p = PageRequest.of(page, size, Sort.by("orderTime").descending());
         return pageableQuery(q, p);
     }
 }
