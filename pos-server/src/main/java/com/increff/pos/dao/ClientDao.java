@@ -16,8 +16,6 @@ import java.util.regex.Pattern;
 
 @Repository
 public class ClientDao extends AbstractDao<ClientPojo> {
-
-    @Autowired
     public ClientDao(MongoOperations mongoOperations) {
         super(
                 new MongoRepositoryFactory(mongoOperations)

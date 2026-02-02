@@ -1,10 +1,15 @@
 barcode	clientEmail	name	mrp	imageUrl
-B100	pranaav@increff.com	shirt	499	http://img/100
-b101	user@gmail.com	pants	799
-B102	pranaav@increff.com	socks	abc
-	pranaav@increff.com	invalid	199
-B103	ghost@increff.com	item	299
-B100	pranaav@increff.com	duplicate-in-file	399
-B104	pranaav@increff.com	negative	-10
-B105	pranaav@increff.com	empty-name	499
-B106	pranaav@increff.com	valid2	599
+P1001	pranaav@increff.com	iphone 17 pro	159999	https://www.myimaginestore.com/media/catalog/product/cache/88160a44f062342c33c0de95969b1545/i/p/iphone_17_pro_cosmic_orange_pdp_image_position_1__en-in_1.jpg
+P1002	supervisor@company.com	darling dress	2499	https://darlingretail.com/cdn/shop/files/1_2_be316c5f-5d44-4f33-a540-80cedf642b71_800x.jpg?v=1753531706
+P1003	pranaav@increff.com	amazon gadget	999	https://m.media-amazon.com/images/I/41CV2313l5L._AC_UF1000,1000_QL80_.jpg
+P1004	supervisor@company.com	supreme phone	79999	https://suprememobiles.in/cdn/shop/files/2_8bb41c8e-a1eb-4846-9887-72ffcee31fbc.png?v=1702532851
+P1005	pranaav@increff.com	lenovo laptop	129999	https://p1-ofp.static.pub/medias/bWFzdGVyfHJvb3R8MzM4MDg3fGltYWdlL3BuZ3xoMGYvaGY3LzE0MDcwNjc0NzE4NzUwLnBuZ3xiMDUwZmMyMGMxODkxY2JkNTdhMjZmMWM1YWY1NWZmYTllMTg4Y2E1NGFjMjMzMjRkZjQ1YjA1ZjA3YTFjMThi/lenovo-laptop-thinkpad-x1-carbon-gen-9-14-subseries-hero.png
+P1006	supervisor@company.com	random image	4999	https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQzehHNbCnYCOymyPvqGpIhPWvwRewAw8Np3A&s
+P1007	pranaav@increff.com	no image product	1999
+P1008	invalid-email-format	product bad email	999
+P1009	ghost@company.com	non existent client	999
+P1010	pranaav@increff.com	bad mrp text	abc
+P1011	pranaav@increff.com	bad mrp negative	-10
+P1012	pranaav@increff.com		1000
+	pranaav@increff.com	empty barcode	1000
+P1001	pranaav@increff.com	duplicate in file	888

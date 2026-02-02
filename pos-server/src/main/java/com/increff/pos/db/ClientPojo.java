@@ -6,7 +6,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import lombok.Data;
 
 @Data
-@Document(collection = "users")
+@Document(collection = "clients")
 public class ClientPojo extends AbstractPojo {
     @Indexed(unique = true)
     private String email;

@@ -11,7 +11,6 @@ import java.util.List;
 
 @Service
 public class InventoryApiImpl implements InventoryApi {
-
     private static final int INVENTORY_MAX = 1000;
 
     @Autowired

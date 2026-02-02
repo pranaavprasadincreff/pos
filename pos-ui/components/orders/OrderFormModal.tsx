@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { X } from "lucide-react"
 import { useOrderForm } from "@/hooks/useOrderForm"
 import type { OrderData } from "@/services/types"
+import { cn } from "@/lib/utils"
 
 interface OrderFormModalProps {
     open: boolean
@@ -36,7 +37,6 @@ export default function OrderFormModal({
         resetForm,
     } = useOrderForm({ onSuccess, orderToEdit })
 
-    // ✅ reset whenever modal opens (fresh create OR load edit)
     useEffect(() => {
         if (open) resetForm()
     }, [open, resetForm])
@@ -57,7 +57,11 @@ export default function OrderFormModal({
             ? "Save Changes"
             : "Create Order"
 
-    const grandTotal = rows.reduce((acc, row) => acc + Number(row.sellingPrice || 0), 0)
+    // ✅ Grand total (based on FINAL selling price per row)
+    const grandTotal = rows.reduce((acc, row) => {
+        const total = Number(row.sellingPrice || 0)
+        return acc + (Number.isFinite(total) ? total : 0)
+    }, 0)
 
     const submitAndClose = async () => {
         const ok = await handleSubmit()
@@ -65,7 +69,6 @@ export default function OrderFormModal({
     }
 
     function handleClose() {
-        // ✅ close from Cancel or X only
         onClose()
     }
 
@@ -73,8 +76,8 @@ export default function OrderFormModal({
         <Dialog open={open} onOpenChange={(v) => (!v ? handleClose() : undefined)}>
             <DialogContent
                 className="max-w-5xl w-full animate-in fade-in zoom-in-95 duration-200"
-                onInteractOutside={(e) => e.preventDefault()} // ✅ no close on backdrop click
-                onEscapeKeyDown={(e) => e.preventDefault()} // ✅ no close on ESC
+                onInteractOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => e.preventDefault()}
             >
                 <DialogHeader>
                     <DialogTitle>{title}</DialogTitle>
@@ -89,13 +92,13 @@ export default function OrderFormModal({
                 {/* Headers */}
                 <div className="grid grid-cols-12 gap-3 font-semibold text-sm text-muted-foreground mb-2 sticky top-0 bg-background z-10 pt-2">
                     <div className="col-span-3">Barcode</div>
-                    <div className="col-span-3">Product Name</div>
+                    <div className="col-span-3">Product</div>
                     <div className="col-span-2">Quantity</div>
-                    <div className="col-span-3">Price</div>
+                    <div className="col-span-3">Final Selling Price</div>
                     <div className="col-span-1" />
                 </div>
 
-                {/* Items container */}
+                {/* Items */}
                 <div className="rounded-xl border bg-muted/30 p-3 w-full overflow-x-hidden">
                     <div
                         ref={scrollRef}
@@ -106,60 +109,97 @@ export default function OrderFormModal({
                         }}
                     >
                         <div className="space-y-3">
-                            {rows.map((row, index) => (
-                                <div key={index} className="grid grid-cols-12 gap-3 items-center w-full">
-                                    <Input
-                                        className="col-span-3 bg-background w-full"
-                                        placeholder="Barcode"
-                                        value={row.productBarcode}
-                                        onChange={(e) =>
-                                            handleBarcodeChange(index, e.target.value.toUpperCase())
-                                        }
-                                    />
+                            {rows.map((row, index) => {
+                                const qty = Number(row.quantity || 0)
+                                const sellingTotal = Number(row.sellingPrice || 0)
 
-                                    <Input
-                                        className="col-span-3 bg-background w-full"
-                                        value={row.productName}
-                                        disabled
-                                    />
+                                const isOverMrp =
+                                    row.unitMrp != null &&
+                                    qty > 0 &&
+                                    !Number.isNaN(sellingTotal) &&
+                                    sellingTotal > row.unitMrp * qty
 
-                                    <Input
-                                        className="col-span-2 bg-background w-full"
-                                        inputMode="numeric"
-                                        value={row.quantity}
-                                        onChange={(e) => handleQuantityChange(index, e.target.value)}
-                                    />
+                                return (
+                                    <div key={index} className="grid grid-cols-12 gap-3 items-start w-full">
+                                        {/* Barcode */}
+                                        <Input
+                                            className="col-span-3 bg-background w-full"
+                                            placeholder="Barcode"
+                                            maxLength={40}
+                                            value={row.productBarcode}
+                                            onChange={(e) =>
+                                                handleBarcodeChange(index, e.target.value.toUpperCase())
+                                            }
+                                        />
 
-                                    <Input
-                                        className="col-span-3 bg-background w-full"
-                                        value={row.sellingPrice}
-                                        onChange={(e) => handlePriceChange(index, e.target.value)}
-                                    />
+                                        {/* Product name + unit MRP */}
+                                        <div className="col-span-3 space-y-1">
+                                            <Input className="bg-background w-full" value={row.productName} disabled />
+                                            <div className="text-[11px] text-muted-foreground">
+                                                MRP{" "}
+                                                {row.unitMrp != null ? (
+                                                    <span className="font-medium text-foreground">
+                            ₹{row.unitMrp.toFixed(2)}
+                          </span>
+                                                ) : (
+                                                    <span className="italic">—</span>
+                                                )}
+                                            </div>
+                                        </div>
 
-                                    <div className="col-span-1 flex items-center justify-end">
-                                        {rows.length > 1 && (
-                                            <Button
-                                                type="button"
-                                                size="icon"
-                                                variant="ghost"
-                                                onClick={() => removeRow(index)}
-                                                aria-label="Remove item"
-                                                className="h-9 w-9 rounded-md"
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
+                                        {/* Quantity */}
+                                        <Input
+                                            className="col-span-2 bg-background w-full"
+                                            inputMode="numeric"
+                                            value={row.quantity}
+                                            onChange={(e) => handleQuantityChange(index, e.target.value)}
+                                        />
+
+                                        {/* Final selling price */}
+                                        <div className="col-span-3 space-y-1">
+                                            <Input
+                                                className={cn(
+                                                    "bg-background w-full",
+                                                    isOverMrp && "border-red-300 focus-visible:ring-red-400"
+                                                )}
+                                                placeholder="Final amount"
+                                                value={row.sellingPrice}
+                                                onChange={(e) => handlePriceChange(index, e.target.value)}
+                                            />
+                                            {isOverMrp && (
+                                                <div className="text-[11px] text-red-600 font-medium">
+                                                    Exceeds MRP for selected quantity
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Remove */}
+                                        <div className="col-span-1 flex items-center justify-end pt-1">
+                                            {rows.length > 1 && (
+                                                <Button
+                                                    type="button"
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    onClick={() => removeRow(index)}
+                                                    aria-label="Remove item"
+                                                    className="h-9 w-9 rounded-md"
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {row.error && (
+                                            <div className="col-span-12 text-xs text-red-600">{row.error}</div>
                                         )}
                                     </div>
-
-                                    {row.error && (
-                                        <div className="col-span-12 text-xs text-red-600">{row.error}</div>
-                                    )}
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
                 </div>
 
+                {/* Bottom bar: Add item (left) + hint (right) */}
                 <div className="flex items-center justify-between pt-1">
                     <Button
                         type="button"
@@ -170,22 +210,31 @@ export default function OrderFormModal({
                         + Add Item
                     </Button>
 
-                    <div className="font-semibold">Grand Total: ₹{grandTotal.toFixed(2)}</div>
+                    <div className="text-xs text-muted-foreground">
+                        Selling price is the <span className="font-medium">final total</span> for the line item
+                    </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2">
-                    <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
-                        Cancel
-                    </Button>
+                {/* ✅ Footer row: Grand total (bottom-left) + actions (right) */}
+                <div className="flex items-center justify-between pt-2">
+                    <div className="font-semibold">
+                        Grand Total: ₹{grandTotal.toFixed(2)}
+                    </div>
 
-                    <Button
-                        type="button"
-                        disabled={loading}
-                        onClick={submitAndClose}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                    >
-                        {submitText}
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                        <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
+                            Cancel
+                        </Button>
+
+                        <Button
+                            type="button"
+                            disabled={loading}
+                            onClick={submitAndClose}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                        >
+                            {submitText}
+                        </Button>
+                    </div>
                 </div>
             </DialogContent>
         </Dialog>

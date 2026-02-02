@@ -62,15 +62,6 @@ public class ClientApiImpl implements ClientApi {
         }
     }
 
-
-    private ClientPojo getByIdOrThrow(String id) throws ApiException {
-        ClientPojo pojo = dao.findById(id).orElse(null);
-        if (pojo != null) {
-            return pojo;
-        }
-        throw new ApiException("Client not found with id: " + id);
-    }
-
     private ClientPojo getByEmailOrThrow(String email) throws ApiException {
         ClientPojo pojo = dao.findByEmail(email);
         if (pojo != null) {

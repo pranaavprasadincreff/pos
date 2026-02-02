@@ -134,7 +134,9 @@ export default function BulkUploadModal({
             const outText = decodeBase64ToText(res.file)
             const lines = outText.trim().split("\n")
             const rows = lines.slice(1)
-            const errorCount = rows.filter((r) => r.toLowerCase().includes("error")).length
+            const errorCount = rows.filter((r) =>
+                r.toLowerCase().includes("error")
+            ).length
 
             if (rows.length === 0) {
                 setSummary("success")
@@ -144,7 +146,9 @@ export default function BulkUploadModal({
                 setSummaryText("Upload successful. No errors.")
             } else if (errorCount === rows.length) {
                 setSummary("all_errors")
-                setSummaryText("Upload completed, but all rows have errors. Download output to see details.")
+                setSummaryText(
+                    "Upload completed, but all rows have errors. Download output to see details."
+                )
             } else {
                 setSummary("few_errors")
                 setSummaryText(
@@ -154,7 +158,6 @@ export default function BulkUploadModal({
 
             onSuccess()
 
-            // allow re-upload without reopening modal
             setInputBase64(null)
             setFileName("")
             if (fileInputRef.current) fileInputRef.current.value = ""
@@ -174,7 +177,8 @@ export default function BulkUploadModal({
     }
 
     function downloadSample() {
-        if (mode === "product") downloadTextFile("sample-products.tsv", SAMPLE_PRODUCT_TSV)
+        if (mode === "product")
+            downloadTextFile("sample-products.tsv", SAMPLE_PRODUCT_TSV)
         else downloadTextFile("sample-inventory.tsv", SAMPLE_INVENTORY_TSV)
     }
 
@@ -227,56 +231,54 @@ export default function BulkUploadModal({
                     </button>
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Hint text={requirementsText}>
-              <span className="inline-flex items-center gap-1 cursor-default">
-                <CircleHelp className="h-4 w-4" />
-                Required fields
-              </span>
-                        </Hint>
+                {/* File pick + helpers */}
+                <div className="mt-3 flex items-start gap-3">
+                    <div className="flex-1">
+                        <Input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".tsv"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (!file) return
+                                onPickFile(file)
+                            }}
+                        />
 
-                        <Hint text="Download a sample TSV to see the expected format">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
-                                onClick={downloadSample}
-                            >
-                                <Download className="h-4 w-4 mr-2" />
-                                Sample TSV
-                            </Button>
-                        </Hint>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                                <Hint text={requirementsText}>
+                  <span className="inline-flex items-center gap-1 cursor-default">
+                    <CircleHelp className="h-3.5 w-3.5" />
+                    Required columns
+                  </span>
+                                </Hint>
+
+                                <span className="mx-1 text-muted-foreground/60">•</span>
+
+                                <span>
+                  Limit: up to{" "}
+                                    <span className="font-medium text-muted-foreground">
+                    5,000
+                  </span>{" "}
+                                    rows per file
+                </span>
+                            </div>
+
+                            {/* extra spacing added here */}
+                            <div className="mt-2">
+                                <Hint text="Download a sample TSV to see the expected format">
+                                    <button
+                                        type="button"
+                                        onClick={downloadSample}
+                                        className="text-indigo-700 hover:text-indigo-800 underline underline-offset-4"
+                                    >
+                                        Download sample TSV
+                                    </button>
+                                </Hint>
+                            </div>
+                        </div>
                     </div>
-
-                    {outputBase64 && (
-                        <Hint text="Download output file (includes error details if any)">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
-                                onClick={downloadOutput}
-                            >
-                                <Download className="h-4 w-4 mr-2" />
-                                Output TSV
-                            </Button>
-                        </Hint>
-                    )}
-                </div>
-
-                <div className="mt-3 flex gap-3">
-                    <Input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".tsv"
-                        onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-                            onPickFile(file)
-                        }}
-                    />
 
                     <Hint text={inputBase64 ? "Upload selected file" : "Choose a TSV file first"}>
                         <Button
@@ -301,6 +303,23 @@ export default function BulkUploadModal({
                     <p className="text-xs text-muted-foreground mt-2">
                         Selected: <span className="font-medium">{fileName}</span>
                     </p>
+                )}
+
+                {outputBase64 && (
+                    <div className="mt-3">
+                        <Hint text="Download output file (includes error details if any)">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
+                                onClick={downloadOutput}
+                            >
+                                <Download className="h-4 w-4 mr-2" />
+                                Output TSV
+                            </Button>
+                        </Hint>
+                    </div>
                 )}
 
                 {(summary !== "idle" || summaryText) && (

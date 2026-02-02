@@ -42,6 +42,19 @@ const TIMEFRAME_MAP: Record<DateRange, "LAST_DAY" | "LAST_WEEK" | "LAST_MONTH"> 
 
 const PAGE_SIZE = 9
 
+// Caps aligned with backend ValidationUtil
+const ORDER_REFERENCE_ID_MAX = 50
+
+// tiny debounce hook (no extra deps)
+function useDebouncedValue<T>(value: T, delayMs: number) {
+    const [debounced, setDebounced] = useState(value)
+    useEffect(() => {
+        const t = setTimeout(() => setDebounced(value), delayMs)
+        return () => clearTimeout(t)
+    }, [value, delayMs])
+    return debounced
+}
+
 export default function OrdersPage() {
     const [orders, setOrders] = useState<OrderData[]>([])
     const [page, setPage] = useState(0)
@@ -56,9 +69,12 @@ export default function OrdersPage() {
 
     const [loading, setLoading] = useState(true)
 
+    // debounce only the orderId input (status/range changes should be instant)
+    const debouncedOrderId = useDebouncedValue(orderId, 350)
+
     const hasAnyFilter = useMemo(() => {
-        return Boolean(orderId.trim()) || status !== "ALL" || range !== "1m"
-    }, [orderId, status, range])
+        return Boolean(debouncedOrderId.trim()) || status !== "ALL" || range !== "1m"
+    }, [debouncedOrderId, status, range])
 
     const fetchOrders = useCallback(
         async (pageToLoad: number) => {
@@ -67,7 +83,7 @@ export default function OrdersPage() {
                 setLoading(true)
                 toastId = toast.loading("Loading orders...")
 
-                const trimmedRef = orderId.trim()
+                const trimmedRef = debouncedOrderId.trim()
                 const timeframe = TIMEFRAME_MAP[range]
 
                 const res = hasAnyFilter
@@ -87,21 +103,19 @@ export default function OrdersPage() {
                 if (toastId) toast.dismiss(toastId)
             }
         },
-        [orderId, status, range, hasAnyFilter]
+        [debouncedOrderId, status, range, hasAnyFilter]
     )
 
-    // fetch when page changes
     useEffect(() => {
         fetchOrders(page)
     }, [page, fetchOrders])
 
-    // reset to first page when filters change
     useEffect(() => {
         setPage(0)
-    }, [orderId, status, range])
+    }, [debouncedOrderId, status, range])
 
     const refreshCurrentPage = useCallback(async () => {
-        await fetchOrders(page) // ✅ stays on same page for cancel/invoice/etc
+        await fetchOrders(page)
     }, [fetchOrders, page])
 
     const handleEdit = (order: OrderData) => {
@@ -111,7 +125,6 @@ export default function OrdersPage() {
 
     return (
         <div className="space-y-6">
-            {/* Sticky Header */}
             <div className="sticky top-0 z-30 -mt-6 bg-background border-b">
                 <div className="max-w-6xl mx-auto px-6 py-5 space-y-4">
                     <div className="flex justify-between items-center">
@@ -135,14 +148,24 @@ export default function OrdersPage() {
                         </Hint>
                     </div>
 
-                    {/* Filters (same layout as before) */}
                     <div className="flex flex-wrap items-center gap-2">
-                        <Hint text="Filter by Order ID (contains)">
+                        <Hint text={`Filter by Order ID (contains). Max ${ORDER_REFERENCE_ID_MAX} characters.`}>
                             <Input
                                 className="w-60 transition focus-visible:ring-2 focus-visible:ring-indigo-500"
                                 placeholder="Search Order ID"
                                 value={orderId}
-                                onChange={(e) => setOrderId(e.target.value)}
+                                maxLength={ORDER_REFERENCE_ID_MAX}
+                                onChange={(e) => {
+                                    const v = e.target.value
+                                    // trim only leading whitespace (keeps normal typing feel)
+                                    const next = v.replace(/^\s+/, "")
+                                    if (next.length > ORDER_REFERENCE_ID_MAX) {
+                                        toast.error(`Order ID cannot exceed ${ORDER_REFERENCE_ID_MAX} characters`)
+                                        setOrderId(next.slice(0, ORDER_REFERENCE_ID_MAX))
+                                        return
+                                    }
+                                    setOrderId(next)
+                                }}
                             />
                         </Hint>
 
@@ -159,7 +182,6 @@ export default function OrdersPage() {
                                         <SelectValue />
                                     </SelectTrigger>
 
-                                    {/* ✅ make dropdown behave like ClientsPage */}
                                     <SelectContent
                                         side="bottom"
                                         align="start"
@@ -190,7 +212,6 @@ export default function OrdersPage() {
                                         <SelectValue />
                                     </SelectTrigger>
 
-                                    {/* ✅ make dropdown behave like ClientsPage */}
                                     <SelectContent
                                         side="bottom"
                                         align="start"
@@ -224,7 +245,6 @@ export default function OrdersPage() {
                 </div>
             </div>
 
-            {/* Orders Table */}
             <div className="max-w-6xl mx-auto px-6 pt-6 space-y-6">
                 <OrderTable
                     orders={orders}
@@ -236,7 +256,6 @@ export default function OrdersPage() {
                 <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </div>
 
-            {/* Create / Edit Modal */}
             <CreateOrderModal
                 open={modalOpen}
                 onClose={() => {

@@ -33,17 +33,14 @@ public class OrderDto {
     public OrderData createOrder(OrderCreateForm form) throws ApiException {
         normalizeOrderCreate(form);
         validateOrderCreate(form);
-
         OrderPojo order = OrderHelper.convertCreateFormToEntity(form);
         return OrderHelper.convertToData(orderFlow.create(order));
     }
 
     public OrderData updateOrder(String orderReferenceId, OrderCreateForm form) throws ApiException {
         String ref = normalizeAndValidateRef(orderReferenceId);
-
         normalizeOrderCreate(form);
         validateOrderCreate(form);
-
         OrderPojo updated = OrderHelper.convertCreateFormToEntity(form);
         return OrderHelper.convertToData(orderFlow.update(ref, updated));
     }
@@ -66,13 +63,12 @@ public class OrderDto {
     }
 
     public Page<OrderData> filterOrders(OrderFilterForm form) throws ApiException {
+        String rawStatus = form != null ? form.getStatus() : null;
+        validateStatusFilterRaw(rawStatus);
         normalizeOrderFilter(form);
         ValidationUtil.validateOrderFilterForm(form);
-        validateStatusFilter(form.getStatus());
-
         TimeRange range = computeTimeRange(form.getTimeframe());
         Page<OrderPojo> page = searchOrders(form, range);
-
         return toDataPage(page);
     }
 
@@ -116,8 +112,14 @@ public class OrderDto {
             if (!StringUtils.hasText(item.getProductBarcode())) {
                 throw new ApiException("Product barcode cannot be empty");
             }
+            if (item.getProductBarcode().length() > 40) {
+                throw new ApiException("Barcode too long");
+            }
             if (item.getQuantity() == null || item.getQuantity() <= 0) {
                 throw new ApiException("Invalid quantity");
+            }
+            if (item.getQuantity() > 1000) {
+                throw new ApiException("Quantity cannot exceed 1000");
             }
             if (item.getSellingPrice() == null || item.getSellingPrice() <= 0) {
                 throw new ApiException("Invalid selling price");
@@ -129,17 +131,22 @@ public class OrderDto {
             }
         }
     }
-
-    private void validateStatusFilter(String status) throws ApiException {
+    private void validateStatusFilterRaw(String status) throws ApiException {
         if (!StringUtils.hasText(status)) return;
+
+        String s = status.trim().toUpperCase();
+
+        // treat ALL as invalid for API filter
+        if ("ALL".equals(s)) {
+            throw new ApiException("Invalid order status filter: " + status);
+        }
+
         try {
-            OrderStatus.valueOf(status);
+            OrderStatus.valueOf(s);
         } catch (IllegalArgumentException e) {
             throw new ApiException("Invalid order status filter: " + status);
         }
     }
-
-    // -------------------- Filter helpers --------------------
 
     private record TimeRange(ZonedDateTime from, ZonedDateTime to) {}
 

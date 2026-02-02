@@ -45,11 +45,20 @@ function validateName(name: string): string | null {
     return null
 }
 
-function validateEmailRequired(email: string): string | null {
+// ✅ lightweight validation while user is typing
+function validateEmailWhileTyping(email: string): string | null {
     const v = email.trim()
     if (!v) return "Email required"
     if (v.length > EMAIL_MAX) return "Email too long"
-    // keep this strict for client modal (client creation/update needs valid email)
+    return null
+}
+
+// ✅ strict validation only when user "finishes" (blur / submit)
+function validateEmailStrict(email: string): string | null {
+    const basic = validateEmailWhileTyping(email)
+    if (basic) return basic
+
+    const v = email.trim()
     if (!EMAIL_REGEX.test(v)) return "Invalid email format"
     return null
 }
@@ -65,6 +74,9 @@ export default function ClientModal({ isOpen, onClose, onSubmit, initialData }: 
     // touched flags (show errors only after interaction)
     const [nameTouched, setNameTouched] = useState(false)
     const [emailTouched, setEmailTouched] = useState(false)
+
+    // ✅ new: we only show strict email format error after blur OR submit
+    const [emailBlurred, setEmailBlurred] = useState(false)
     const [submitAttempted, setSubmitAttempted] = useState(false)
 
     const nameRef = useRef<HTMLInputElement>(null)
@@ -82,6 +94,7 @@ export default function ClientModal({ isOpen, onClose, onSubmit, initialData }: 
 
         setNameTouched(false)
         setEmailTouched(false)
+        setEmailBlurred(false)
         setSubmitAttempted(false)
 
         setServerNameError(null)
@@ -104,6 +117,7 @@ export default function ClientModal({ isOpen, onClose, onSubmit, initialData }: 
         setSubmitting(false)
         setNameTouched(false)
         setEmailTouched(false)
+        setEmailBlurred(false)
         setSubmitAttempted(false)
         setServerNameError(null)
         setServerEmailError(null)
@@ -120,20 +134,39 @@ export default function ClientModal({ isOpen, onClose, onSubmit, initialData }: 
         if (serverEmailError) return serverEmailError
         if (!isOpen) return null
         if (!emailTouched && !submitAttempted) return null
-        return validateEmailRequired(email)
-    }, [email, emailTouched, submitAttempted, serverEmailError, isOpen])
+
+        // ✅ while typing, don’t show “Invalid email format”
+        if (!emailBlurred && !submitAttempted) {
+            return validateEmailWhileTyping(email)
+        }
+
+        // ✅ after blur/submit: strict check
+        return validateEmailStrict(email)
+    }, [email, emailTouched, emailBlurred, submitAttempted, serverEmailError, isOpen])
 
     const isFormValid = useMemo(() => {
-        return !validateName(name) && !validateEmailRequired(email)
-    }, [name, email])
+        // ✅ form enablement can be strict only after email blurred/submit,
+        // but still allow typing without disabling.
+        const nameOk = !validateName(name)
+
+        // While user is typing (not blurred, not submitted), only require + length.
+        // After blur/submit, require strict format.
+        const emailOk =
+            !emailBlurred && !submitAttempted
+                ? !validateEmailWhileTyping(email)
+                : !validateEmailStrict(email)
+
+        return nameOk && emailOk
+    }, [name, email, emailBlurred, submitAttempted])
 
     async function handleSubmit() {
         setSubmitAttempted(true)
+        setEmailBlurred(true) // ✅ force strict validation on submit
         setServerNameError(null)
         setServerEmailError(null)
 
         const nErr = validateName(name)
-        const eErr = validateEmailRequired(email)
+        const eErr = validateEmailStrict(email)
 
         if (nErr) {
             setNameTouched(true)
@@ -233,9 +266,14 @@ export default function ClientModal({ isOpen, onClose, onSubmit, initialData }: 
                             onChange={(e) => {
                                 setEmail(e.target.value)
                                 if (!emailTouched) setEmailTouched(true)
+                                // ✅ user is still typing; don’t treat as “finished”
+                                if (emailBlurred) setEmailBlurred(false)
                                 if (serverEmailError) setServerEmailError(null)
                             }}
-                            onBlur={() => setEmailTouched(true)}
+                            onBlur={() => {
+                                setEmailTouched(true)
+                                setEmailBlurred(true) // ✅ now consider input "finished"
+                            }}
                             placeholder="client@email.com"
                             type="email"
                             className={cn(

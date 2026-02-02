@@ -11,7 +11,6 @@ import org.springframework.data.mongodb.repository.query.MongoEntityInformation;
 import java.util.List;
 
 public abstract class AbstractDao<T> extends SimpleMongoRepository<T, String> {
-
     protected final MongoOperations mongoOperations;
     private final Class<T> entityClass;
 

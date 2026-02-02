@@ -21,7 +21,6 @@ import java.util.stream.Collectors;
 
 @Service
 public class OrderFlow {
-
     @Autowired
     private OrderApi orderApi;
     @Autowired
@@ -32,8 +31,9 @@ public class OrderFlow {
     @Transactional(rollbackFor = ApiException.class)
     public OrderPojo create(OrderPojo order) throws ApiException {
         populateNewOrderFields(order);
-        validateSellingPriceWithinMrp(order.getOrderItems());
-        boolean fulfillable = tryDeductInventory(order.getOrderItems());
+        Map<String, ProductPojo> productByBarcode = getProductsByBarcode(order.getOrderItems());
+        validateSellingPriceWithinMrp(order.getOrderItems(), productByBarcode);
+        boolean fulfillable = tryDeductInventory(order.getOrderItems(), productByBarcode);
         setStatusByFulfillability(order, fulfillable);
         return orderApi.createOrder(order);
     }
@@ -43,8 +43,9 @@ public class OrderFlow {
         OrderPojo existing = orderApi.getByOrderReferenceId(ref);
         validateEditable(existing);
         restoreInventoryIfNeeded(existing);
-        validateSellingPriceWithinMrp(existing.getOrderItems());
-        boolean fulfillable = tryDeductInventory(updated.getOrderItems());
+        Map<String, ProductPojo> productByBarcode = getProductsByBarcode(updated.getOrderItems());
+        validateSellingPriceWithinMrp(updated.getOrderItems(), productByBarcode);
+        boolean fulfillable = tryDeductInventory(updated.getOrderItems(), productByBarcode);
         applyUpdate(existing, updated, fulfillable);
         return orderApi.updateOrder(existing);
     }
@@ -81,18 +82,14 @@ public class OrderFlow {
         return orderApi.search(refContains, status, fromTime, toTime, page, size);
     }
 
-    // ---------------- private helpers ----------------
-
     private void populateNewOrderFields(OrderPojo order) {
         order.setOrderReferenceId(generateUniqueOrderReferenceId());
         order.setOrderTime(ZonedDateTime.now());
     }
 
-    private boolean tryDeductInventory(List<OrderItemPojo> items) throws ApiException {
-        InventoryContext ctx = buildInventoryContext(items);
-
+    private boolean tryDeductInventory(List<OrderItemPojo> items, Map<String, ProductPojo> productByBarcode) throws ApiException {
+        InventoryContext ctx = buildInventoryContext(items, productByBarcode);
         if (!hasSufficientInventory(items, ctx)) return false;
-
         deductInventory(items, ctx);
         return true;
     }
@@ -100,27 +97,24 @@ public class OrderFlow {
     private void restoreInventoryIfNeeded(OrderPojo order) throws ApiException {
         if (isUnfulfillable(order)) return;
 
-        InventoryContext ctx = buildInventoryContext(order.getOrderItems());
+        Map<String, ProductPojo> productByBarcode = getProductsByBarcode(order.getOrderItems());
+        InventoryContext ctx = buildInventoryContext(order.getOrderItems(), productByBarcode);
         incrementInventory(order.getOrderItems(), ctx);
     }
 
-    private InventoryContext buildInventoryContext(List<OrderItemPojo> items) throws ApiException {
-        Map<String, String> productIdByBarcode = getProductIdByBarcode(items);
+    private InventoryContext buildInventoryContext(List<OrderItemPojo> items, Map<String, ProductPojo> productByBarcode) throws ApiException {
+        Map<String, String> productIdByBarcode = mapProductIdByBarcode(items, productByBarcode);
         Map<String, InventoryPojo> inventoryByProductId =
                 getInventoryByProductId(productIdByBarcode.values());
 
         return new InventoryContext(productIdByBarcode, inventoryByProductId);
     }
 
-    private Map<String, String> getProductIdByBarcode(List<OrderItemPojo> items) throws ApiException {
+    private Map<String, String> mapProductIdByBarcode(List<OrderItemPojo> items, Map<String, ProductPojo> productByBarcode) throws ApiException {
         List<String> barcodes = items.stream()
                 .map(OrderItemPojo::getProductBarcode)
                 .distinct()
                 .toList();
-
-        List<ProductPojo> products = productApi.findByBarcodes(barcodes);
-        Map<String, ProductPojo> productByBarcode = products.stream()
-                .collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
 
         Set<String> missing = barcodes.stream()
                 .filter(b -> !productByBarcode.containsKey(b))
@@ -151,7 +145,6 @@ public class OrderFlow {
             int available = inv == null || inv.getQuantity() == null ? 0 : inv.getQuantity();
             if (available < e.getValue()) return false;
         }
-
         return true;
     }
 
@@ -223,7 +216,6 @@ public class OrderFlow {
             validateRefGenerationAttempts(attempts);
             ref = randomRef();
         } while (orderApi.orderReferenceIdExists(ref));
-
         return ref;
     }
 
@@ -244,8 +236,7 @@ public class OrderFlow {
             Map<String, InventoryPojo> inventoryByProductId
     ) {}
 
-    private void validateSellingPriceWithinMrp(List<OrderItemPojo> items) throws ApiException {
-        Map<String, ProductPojo> productByBarcode = getProductsByBarcode(items);
+    private void validateSellingPriceWithinMrp(List<OrderItemPojo> items, Map<String, ProductPojo> productByBarcode) throws ApiException {
         for (OrderItemPojo item : items) {
             String barcode = item.getProductBarcode();
             ProductPojo p = productByBarcode.get(barcode);
@@ -253,9 +244,7 @@ public class OrderFlow {
                 throw new ApiException("Product not found for barcode: " + barcode);
             }
             if (item.getSellingPrice() > p.getMrp()) {
-                throw new ApiException(
-                        "Selling price cannot exceed MRP for barcode: " + barcode
-                );
+                throw new ApiException("Selling price cannot exceed MRP for barcode: " + barcode);
             }
         }
     }
@@ -265,16 +254,18 @@ public class OrderFlow {
                 .map(OrderItemPojo::getProductBarcode)
                 .distinct()
                 .toList();
+
         List<ProductPojo> products = productApi.findByBarcodes(barcodes);
         Map<String, ProductPojo> map = products.stream()
                 .collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
+
         Set<String> missing = barcodes.stream()
                 .filter(b -> !map.containsKey(b))
                 .collect(Collectors.toSet());
+
         if (!missing.isEmpty()) {
             throw new ApiException("Products not found for barcodes: " + String.join(", ", missing));
         }
         return map;
     }
-
 }

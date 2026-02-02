@@ -14,8 +14,6 @@ import java.util.*;
 
 public class ProductHelper {
 
-    /* ================= SINGLE CONVERSIONS ================= */
-
     public static ProductPojo convertProductFormToEntity(ProductForm form) {
         ProductPojo pojo = new ProductPojo();
         pojo.setBarcode(form.getBarcode());
@@ -81,21 +79,5 @@ public class ProductHelper {
                         Collections.singletonList(row)
                 )
                 .getFirst();
-    }
-
-
-    /* ================= OPTIONAL UTILS ================= */
-
-    public static Map<String, Integer> toInventoryDelta(
-            List<String[]> rows,
-            Map<String, Integer> headers) {
-
-        Map<String, Integer> map = new HashMap<>();
-        for (String[] r : rows) {
-            String barcode = r[headers.get("barcode")];
-            int qty = Integer.parseInt(r[headers.get("inventory")]);
-            map.put(barcode, qty);
-        }
-        return map;
     }
 }

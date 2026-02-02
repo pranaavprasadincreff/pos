@@ -38,7 +38,6 @@ public class InvoiceDto {
         if (!StringUtils.hasText(value)) {
             throw new ApiException("Order reference id cannot be empty");
         }
-        // optional enterprise: length guard
         if (value.length() > 50) {
             throw new ApiException("Order reference id too long");
         }

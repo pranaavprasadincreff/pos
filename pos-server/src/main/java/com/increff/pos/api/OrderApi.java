@@ -9,11 +9,8 @@ import java.time.ZonedDateTime;
 public interface OrderApi {
     OrderPojo createOrder(OrderPojo order) throws ApiException;
     OrderPojo getByOrderReferenceId(String orderReferenceId) throws ApiException;
-
     OrderPojo updateOrder(OrderPojo order) throws ApiException;
-
     boolean orderReferenceIdExists(String orderReferenceId);
-
     Page<OrderPojo> search(
             String refContains,
             String status,

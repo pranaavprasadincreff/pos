@@ -8,6 +8,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ValidationUtil {
 
@@ -15,6 +16,20 @@ public class ValidationUtil {
     private static final int NAME_MAX = 30;
     private static final int BULK_MAX_ROWS = 5000;
     private static final int INVENTORY_MAX = 1000;
+
+    private static final int BARCODE_MAX = 40;
+
+    private static final int ORDER_REFERENCE_ID_MAX = 50;
+    private static final int STATUS_MAX = 30;
+
+    private static final Set<String> ORDER_STATUS_ALLOWED = Set.of(
+            "FULFILLABLE",
+            "UNFULFILLABLE",
+            "INVOICED",
+            "CANCELLED"
+    );
+
+    // ---------------- CLIENT ----------------
 
     public static void validateClientForm(ClientForm form) throws ApiException {
         if (form == null) throw new ApiException("Client form required");
@@ -35,6 +50,8 @@ public class ValidationUtil {
         validateOptionalEmail(form.getEmail());
         validatePageBounds(form.getPage(), form.getSize());
     }
+
+    // ---------------- PRODUCT ----------------
 
     public static void validateProductForm(ProductForm form) throws ApiException {
         if (form == null) throw new ApiException("Product form required");
@@ -72,7 +89,7 @@ public class ValidationUtil {
     ) throws ApiException {
 
         if (!StringUtils.hasText(barcode)) throw new ApiException("Barcode cannot be empty");
-        if (barcode.length() > 40) throw new ApiException("Barcode too long");
+        if (barcode.length() > BARCODE_MAX) throw new ApiException("Barcode too long");
 
         if (!StringUtils.hasText(clientEmail)) throw new ApiException("Client is required");
         if (clientEmail.length() > EMAIL_MAX) throw new ApiException("Email too long");
@@ -85,13 +102,15 @@ public class ValidationUtil {
         validateOptionalImageUrl(imageUrl);
     }
 
+    // ---------------- INVENTORY ----------------
+
     public static void validateInventoryUpdateForm(InventoryUpdateForm form) throws ApiException {
         if (form == null) throw new ApiException("Inventory update form required");
 
         if (!StringUtils.hasText(form.getProductId())) {
             throw new ApiException("Product id cannot be empty");
         }
-        if (form.getProductId().length() > 40) {
+        if (form.getProductId().length() > BARCODE_MAX) {
             throw new ApiException("Product id too long");
         }
         if (form.getQuantity() == null || form.getQuantity() < 0) {
@@ -102,6 +121,8 @@ public class ValidationUtil {
         }
     }
 
+    // ---------------- PAGE ----------------
+
     public static void validatePageForm(PageForm form) throws ApiException {
         if (form == null) throw new ApiException("Page form required");
 
@@ -109,6 +130,8 @@ public class ValidationUtil {
         if (form.getSize() <= 0 || form.getSize() > 100)
             throw new ApiException("Invalid page size");
     }
+
+    // ---------------- BULK ----------------
 
     public static void validateBulkProductRow(String[] row) throws ApiException {
         if (row == null || row.length < 4 || row.length > 5) {
@@ -131,7 +154,7 @@ public class ValidationUtil {
 
         String barcode = row[0];
         if (!StringUtils.hasText(barcode)) throw new ApiException("Barcode cannot be empty");
-        if (barcode.length() > 40) throw new ApiException("Barcode too long");
+        if (barcode.length() > BARCODE_MAX) throw new ApiException("Barcode too long");
 
         try {
             int qty = Integer.parseInt(row[1]);
@@ -145,7 +168,7 @@ public class ValidationUtil {
     public static void validateProductFilterForm(ProductFilterForm form) throws ApiException {
         if (form == null) throw new ApiException("Filter form required");
 
-        if (form.getBarcode() != null && form.getBarcode().length() > 40)
+        if (form.getBarcode() != null && form.getBarcode().length() > BARCODE_MAX)
             throw new ApiException("Barcode filter too long");
 
         if (form.getName() != null && form.getName().length() > NAME_MAX)
@@ -156,6 +179,56 @@ public class ValidationUtil {
 
         validatePageBounds(form.getPage(), form.getSize());
     }
+
+    // ---------------- ORDER CREATE (items validation; price<=MRP must be in service) ----------------
+
+    public static void validateOrderCreateForm(OrderCreateForm form) throws ApiException {
+        if (form == null) throw new ApiException("Order form required");
+        if (form.getItems() == null || form.getItems().isEmpty()) {
+            throw new ApiException("At least one order item required");
+        }
+
+        for (OrderCreateItemForm item : form.getItems()) {
+            validateOrderItem(item);
+        }
+    }
+
+    private static void validateOrderItem(OrderCreateItemForm item) throws ApiException {
+        if (item == null) throw new ApiException("Order item required");
+
+        if (!StringUtils.hasText(item.getProductBarcode())) throw new ApiException("Barcode required");
+        if (item.getProductBarcode().length() > BARCODE_MAX) throw new ApiException("Barcode too long");
+
+        if (item.getQuantity() == null || item.getQuantity() <= 0)
+            throw new ApiException("Quantity must be > 0");
+        if (item.getQuantity() > INVENTORY_MAX)
+            throw new ApiException("Quantity cannot exceed " + INVENTORY_MAX);
+
+        if (item.getSellingPrice() == null || item.getSellingPrice() <= 0)
+            throw new ApiException("Selling price must be > 0");
+    }
+
+    // ---------------- ORDER FILTER ----------------
+
+    public static void validateOrderFilterForm(OrderFilterForm form) throws ApiException {
+        if (form == null) throw new ApiException("Order filter form required");
+        validatePageBounds(form.getPage(), form.getSize());
+
+        if (StringUtils.hasText(form.getOrderReferenceId()) && form.getOrderReferenceId().length() > ORDER_REFERENCE_ID_MAX) {
+            throw new ApiException("Order reference id filter too long");
+        }
+
+        if (StringUtils.hasText(form.getStatus())) {
+            if (form.getStatus().length() > STATUS_MAX) {
+                throw new ApiException("Status filter too long");
+            }
+            if (!ORDER_STATUS_ALLOWED.contains(form.getStatus().toUpperCase())) {
+                throw new ApiException("Invalid status filter");
+            }
+        }
+    }
+
+    // ---------------- COMMON ----------------
 
     public static void validateEmail(String email) throws ApiException {
         if (!StringUtils.hasText(email)) throw new ApiException("Email required");
@@ -235,18 +308,6 @@ public class ValidationUtil {
 
         if (!headers.containsKey("barcode") || !headers.containsKey("inventory")) {
             throw new ApiException("Required columns: barcode, inventory");
-        }
-    }
-
-    public static void validateOrderFilterForm(OrderFilterForm form) throws ApiException {
-        if (form == null) throw new ApiException("Order filter form required");
-        validatePageBounds(form.getPage(), form.getSize());
-
-        if (StringUtils.hasText(form.getOrderReferenceId()) && form.getOrderReferenceId().length() > 50) {
-            throw new ApiException("Order reference id filter too long");
-        }
-        if (StringUtils.hasText(form.getStatus()) && form.getStatus().length() > 30) {
-            throw new ApiException("Status filter too long");
         }
     }
 
