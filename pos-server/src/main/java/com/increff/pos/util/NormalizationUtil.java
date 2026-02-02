@@ -6,18 +6,22 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 
 public class NormalizationUtil {
+
     public static void normalizeClientForm(ClientForm form) {
         if (form == null) return;
         form.setEmail(normalizeEmail(form.getEmail()));
+        form.setName(normalizeName(form.getName()));
     }
 
     public static void normalizeClientUpdateForm(ClientUpdateForm form) {
         if (form == null) return;
         form.setOldEmail(normalizeEmail(form.getOldEmail()));
         form.setNewEmail(normalizeEmail(form.getNewEmail()));
+        form.setName(normalizeName(form.getName()));
     }
 
     public static void normalizeClientFilterForm(ClientFilterForm form) {
+        if (form == null) return;
         form.setName(normalizeName(form.getName()));
         form.setEmail(normalizeEmail(form.getEmail()));
     }
@@ -45,27 +49,35 @@ public class NormalizationUtil {
     }
 
     public static void normalizeProductForm(ProductForm form) {
-        form.setBarcode(NormalizationUtil.normalizeBarcode(form.getBarcode()));
-        form.setClientEmail(NormalizationUtil.normalizeEmail(form.getClientEmail()));
+        if (form == null) return;
+        form.setBarcode(normalizeBarcode(form.getBarcode()));
+        form.setClientEmail(normalizeEmail(form.getClientEmail()));
+        form.setName(normalizeName(form.getName()));
     }
 
     public static void normalizeProductUpdateForm(ProductUpdateForm form) {
-        form.setOldBarcode(NormalizationUtil.normalizeBarcode(form.getOldBarcode()));
-        form.setNewBarcode(NormalizationUtil.normalizeBarcode(form.getNewBarcode()));
-        form.setClientEmail(NormalizationUtil.normalizeEmail(form.getClientEmail()));
+        if (form == null) return;
+        form.setOldBarcode(normalizeBarcode(form.getOldBarcode()));
+        form.setNewBarcode(normalizeBarcode(form.getNewBarcode()));
+        form.setClientEmail(normalizeEmail(form.getClientEmail()));
+        form.setName(normalizeName(form.getName()));
     }
 
     public static void normalizeBulkProductRows(List<String[]> rows) {
+        if (rows == null) return;
         for (String[] r : rows) {
+            if (r == null || r.length < 4) continue;
             r[0] = normalizeBarcode(r[0]);   // barcode
             r[1] = normalizeEmail(r[1]);     // clientEmail
             r[2] = normalizeName(r[2]);      // name
-            if (r.length == 5) r[4] = r[4].trim(); // imageUrl
+            if (r.length == 5 && r[4] != null) r[4] = r[4].trim(); // imageUrl
         }
     }
 
     public static void normalizeBulkInventoryRows(List<String[]> rows) {
+        if (rows == null) return;
         for (String[] r : rows) {
+            if (r == null || r.length < 1) continue;
             r[0] = normalizeBarcode(r[0]); // barcode
         }
     }
@@ -83,5 +95,10 @@ public class NormalizationUtil {
         if (StringUtils.hasText(form.getStatus())) {
             form.setStatus(form.getStatus().trim().toUpperCase());
         }
+    }
+
+    public static void normalizeInventoryUpdateForm(InventoryUpdateForm form) {
+        if (form == null) return;
+        form.setProductId(normalizeBarcode(form.getProductId())); // barcode comes in here
     }
 }

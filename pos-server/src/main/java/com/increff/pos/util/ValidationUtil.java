@@ -13,6 +13,8 @@ public class ValidationUtil {
 
     private static final int EMAIL_MAX = 40;
     private static final int NAME_MAX = 30;
+    private static final int BULK_MAX_ROWS = 5000;
+    private static final int INVENTORY_MAX = 1000;
 
     public static void validateClientForm(ClientForm form) throws ApiException {
         if (form == null) throw new ApiException("Client form required");
@@ -36,7 +38,6 @@ public class ValidationUtil {
 
     public static void validateProductForm(ProductForm form) throws ApiException {
         if (form == null) throw new ApiException("Product form required");
-
         validateProductCommon(
                 form.getBarcode(),
                 form.getClientEmail(),
@@ -70,18 +71,16 @@ public class ValidationUtil {
             String imageUrl
     ) throws ApiException {
 
-        if (!StringUtils.hasText(barcode)) {
-            throw new ApiException("Barcode cannot be empty");
-        }
-        if (!StringUtils.hasText(clientEmail)) {
-            throw new ApiException("Client is required");
-        }
-        if (!StringUtils.hasText(name)) {
-            throw new ApiException("Product name cannot be empty");
-        }
-        if (mrp == null || mrp <= 0) {
-            throw new ApiException("Invalid MRP");
-        }
+        if (!StringUtils.hasText(barcode)) throw new ApiException("Barcode cannot be empty");
+        if (barcode.length() > 40) throw new ApiException("Barcode too long");
+
+        if (!StringUtils.hasText(clientEmail)) throw new ApiException("Client is required");
+        if (clientEmail.length() > EMAIL_MAX) throw new ApiException("Email too long");
+
+        if (!StringUtils.hasText(name)) throw new ApiException("Product name cannot be empty");
+        if (name.length() > NAME_MAX) throw new ApiException("Name too long");
+
+        if (mrp == null || mrp <= 0) throw new ApiException("Invalid MRP");
 
         validateOptionalImageUrl(imageUrl);
     }
@@ -92,8 +91,14 @@ public class ValidationUtil {
         if (!StringUtils.hasText(form.getProductId())) {
             throw new ApiException("Product id cannot be empty");
         }
+        if (form.getProductId().length() > 40) {
+            throw new ApiException("Product id too long");
+        }
         if (form.getQuantity() == null || form.getQuantity() < 0) {
             throw new ApiException("Invalid inventory quantity");
+        }
+        if (form.getQuantity() > INVENTORY_MAX) {
+            throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
         }
     }
 
@@ -103,26 +108,6 @@ public class ValidationUtil {
         if (form.getPage() < 0) throw new ApiException("Page number cannot be negative");
         if (form.getSize() <= 0 || form.getSize() > 100)
             throw new ApiException("Invalid page size");
-    }
-
-    public static void validateBulkProductForm(List<String[]> rows) throws ApiException {
-        if (rows == null || rows.isEmpty()) throw new ApiException("File is empty");
-
-        for (String[] row : rows) {
-            if (row.length == 0) continue;
-            if ("barcode".equalsIgnoreCase(row[0])) continue;
-            validateBulkProductRow(row);
-        }
-    }
-
-    public static void validateBulkInventoryForm(List<String[]> rows) throws ApiException {
-        if (rows == null || rows.isEmpty()) throw new ApiException("File is empty");
-
-        for (String[] row : rows) {
-            if (row.length == 0) continue;
-            if ("barcode".equalsIgnoreCase(row[0])) continue;
-            validateBulkInventoryRow(row);
-        }
     }
 
     public static void validateBulkProductRow(String[] row) throws ApiException {
@@ -144,9 +129,14 @@ public class ValidationUtil {
             throw new ApiException("Expected columns: barcode and quantity");
         }
 
+        String barcode = row[0];
+        if (!StringUtils.hasText(barcode)) throw new ApiException("Barcode cannot be empty");
+        if (barcode.length() > 40) throw new ApiException("Barcode too long");
+
         try {
             int qty = Integer.parseInt(row[1]);
             if (qty < 0) throw new ApiException("Quantity cannot be negative");
+            if (qty > INVENTORY_MAX) throw new ApiException("Quantity cannot exceed " + INVENTORY_MAX);
         } catch (NumberFormatException e) {
             throw new ApiException("Quantity must be a valid integer");
         }
@@ -167,23 +157,12 @@ public class ValidationUtil {
         validatePageBounds(form.getPage(), form.getSize());
     }
 
-    private static Double parseMrp(String v) throws ApiException {
-        try {
-            return Double.parseDouble(v);
-        } catch (Exception e) {
-            throw new ApiException("MRP must be a number");
-        }
-    }
-
     public static void validateEmail(String email) throws ApiException {
         if (!StringUtils.hasText(email)) throw new ApiException("Email required");
         if (email.length() > EMAIL_MAX) throw new ApiException("Email too long");
 
-        // Simple regex to validate email format
         String emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
-        if (!email.matches(emailRegex)) {
-            throw new ApiException("Invalid email format");
-        }
+        if (!email.matches(emailRegex)) throw new ApiException("Invalid email format");
     }
 
     private static void validateName(String name) throws ApiException {
@@ -211,9 +190,15 @@ public class ValidationUtil {
         if (size <= 0 || size > 100) throw new ApiException("Invalid page size");
     }
 
-    public static List<ProductPojo> convertBulkProductRowsToPojos(List<String[]> rows)
-            throws ApiException {
+    private static Double parseMrp(String v) throws ApiException {
+        try {
+            return Double.parseDouble(v);
+        } catch (Exception e) {
+            throw new ApiException("MRP must be a number");
+        }
+    }
 
+    public static List<ProductPojo> convertBulkProductRowsToPojos(List<String[]> rows) throws ApiException {
         return rows.stream().map(r -> {
             ProductPojo p = new ProductPojo();
             p.setBarcode(r[0]);
@@ -225,12 +210,10 @@ public class ValidationUtil {
         }).toList();
     }
 
-    public static List<InventoryPojo> convertBulkInventoryRowsToPojos(List<String[]> rows)
-            throws ApiException {
-
+    public static List<InventoryPojo> convertBulkInventoryRowsToPojos(List<String[]> rows) throws ApiException {
         return rows.stream().map(r -> {
             InventoryPojo i = new InventoryPojo();
-            i.setProductId(r[0]); // barcode for now
+            i.setProductId(r[0]); // barcode carrier
             i.setQuantity(Integer.parseInt(r[1]));
             return i;
         }).toList();
@@ -239,15 +222,17 @@ public class ValidationUtil {
     // ---------------- BULK VALIDATION ----------------
 
     public static void validateBulkProductData(Map<String, Integer> headers, List<String[]> rows) throws ApiException {
+        validateBulkRowLimit(rows);
+
         List<String> requiredCols = List.of("barcode", "clientemail", "name", "mrp");
         for (String col : requiredCols) {
-            if (!headers.containsKey(col)) {
-                throw new ApiException("Missing required column: " + col);
-            }
+            if (!headers.containsKey(col)) throw new ApiException("Missing required column: " + col);
         }
     }
 
     public static void validateBulkInventoryData(Map<String, Integer> headers, List<String[]> rows) throws ApiException {
+        validateBulkRowLimit(rows);
+
         if (!headers.containsKey("barcode") || !headers.containsKey("inventory")) {
             throw new ApiException("Required columns: barcode, inventory");
         }
@@ -256,6 +241,7 @@ public class ValidationUtil {
     public static void validateOrderFilterForm(OrderFilterForm form) throws ApiException {
         if (form == null) throw new ApiException("Order filter form required");
         validatePageBounds(form.getPage(), form.getSize());
+
         if (StringUtils.hasText(form.getOrderReferenceId()) && form.getOrderReferenceId().length() > 50) {
             throw new ApiException("Order reference id filter too long");
         }
@@ -264,5 +250,22 @@ public class ValidationUtil {
         }
     }
 
+    private static void validateBulkRowLimit(List<String[]> rows) throws ApiException {
+        if (rows == null) throw new ApiException("File is empty");
 
+        int dataRows = countDataRows(rows);
+        if (dataRows > BULK_MAX_ROWS) {
+            throw new ApiException("Bulk upload supports at most " + BULK_MAX_ROWS + " rows");
+        }
+    }
+
+    private static int countDataRows(List<String[]> rows) {
+        int count = 0;
+        for (String[] row : rows) {
+            if (row == null || row.length == 0) continue;
+            if ("barcode".equalsIgnoreCase(row[0])) continue; // header
+            count++;
+        }
+        return count;
+    }
 }

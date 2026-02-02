@@ -26,18 +26,17 @@ public class ProductDto {
     private ProductFlow productFlow;
 
     public ProductData addProduct(ProductForm form) throws ApiException {
-        ValidationUtil.validateProductForm(form);
         NormalizationUtil.normalizeProductForm(form);
+        ValidationUtil.validateProductForm(form);
+
         ProductPojo pojo = ProductHelper.convertProductFormToEntity(form);
         return toData(productFlow.addProduct(pojo));
     }
 
     public ProductData getByBarcode(String barcode) throws ApiException {
-        return toData(
-                productFlow.getByBarcode(
-                        NormalizationUtil.normalizeBarcode(barcode)
-                )
-        );
+        String normalized = NormalizationUtil.normalizeBarcode(barcode);
+        // optional: validate barcode non-empty/length (enterprise). Currently not present.
+        return toData(productFlow.getByBarcode(normalized));
     }
 
     public Page<ProductData> getAll(PageForm form) throws ApiException {
@@ -46,72 +45,61 @@ public class ProductDto {
     }
 
     public Page<ProductData> filter(ProductFilterForm form) throws ApiException {
-        ValidationUtil.validateProductFilterForm(form);
         NormalizationUtil.normalizeProductFilterForm(form);
+        ValidationUtil.validateProductFilterForm(form);
         return toDataPage(productFlow.filter(form));
     }
 
     public ProductData updateProduct(ProductUpdateForm form) throws ApiException {
-        ValidationUtil.validateProductUpdateForm(form);
         NormalizationUtil.normalizeProductUpdateForm(form);
+        ValidationUtil.validateProductUpdateForm(form);
+
         ProductUpdatePojo pojo = ProductHelper.convertProductUpdateFormToEntity(form);
         return toData(productFlow.updateProduct(pojo));
     }
 
     public ProductData updateInventory(InventoryUpdateForm form) throws ApiException {
+        NormalizationUtil.normalizeInventoryUpdateForm(form);
         ValidationUtil.validateInventoryUpdateForm(form);
+
         InventoryPojo pojo = ProductHelper.convertInventoryUpdateFormToEntity(form);
         return toData(productFlow.updateInventory(pojo));
     }
 
     public BulkUploadData bulkAddProducts(BulkUploadForm form) throws ApiException {
         ParsedBulkData parsed = parseAndValidateHeadersForProducts(form);
-        RowProcessingResult<ProductPojo> processed =
-                validateNormalizeAndConvertProducts(parsed);
-        applyFlowResultsToRows(
-                processed,
-                productFlow.bulkAddProducts(processed.validPojos())
-        );
+        RowProcessingResult<ProductPojo> processed = validateNormalizeAndConvertProducts(parsed);
+
+        applyFlowResultsToRows(processed, productFlow.bulkAddProducts(processed.validPojos()));
         return encodeResult(processed.resultRows());
     }
 
     public BulkUploadData bulkUpdateInventory(BulkUploadForm form) throws ApiException {
         ParsedBulkData parsed = parseAndValidateHeadersForInventory(form);
-        RowProcessingResult<InventoryPojo> processed =
-                validateNormalizeAndConvertInventory(parsed);
-        applyFlowResultsToRows(
-                processed,
-                productFlow.bulkUpdateInventory(processed.validPojos())
-        );
+        RowProcessingResult<InventoryPojo> processed = validateNormalizeAndConvertInventory(parsed);
+
+        applyFlowResultsToRows(processed, productFlow.bulkUpdateInventory(processed.validPojos()));
         return encodeResult(processed.resultRows());
     }
 
+    // -------------------- Private helpers --------------------
+
     private ProductData toData(Pair<ProductPojo, InventoryPojo> pair) {
-        return ProductHelper.convertToProductData(
-                pair.getLeft(), pair.getRight());
+        return ProductHelper.convertToProductData(pair.getLeft(), pair.getRight());
     }
 
     private Page<ProductData> toDataPage(Page<Pair<ProductPojo, InventoryPojo>> page) {
-        List<ProductData> data = page.getContent()
-                .stream()
-                .map(this::toData)
-                .toList();
-        return new PageImpl<>(
-                data,
-                page.getPageable(),
-                page.getTotalElements()
-        );
+        List<ProductData> data = page.getContent().stream().map(this::toData).toList();
+        return new PageImpl<>(data, page.getPageable(), page.getTotalElements());
     }
 
-    private ParsedBulkData parseAndValidateHeadersForProducts(BulkUploadForm form)
-            throws ApiException {
+    private ParsedBulkData parseAndValidateHeadersForProducts(BulkUploadForm form) throws ApiException {
         Pair<Map<String, Integer>, List<String[]>> data = TsvHelper.parse(form.getFile());
         ValidationUtil.validateBulkProductData(data.getLeft(), data.getRight());
         return new ParsedBulkData(data.getLeft(), data.getRight());
     }
 
-    private ParsedBulkData parseAndValidateHeadersForInventory(BulkUploadForm form)
-            throws ApiException {
+    private ParsedBulkData parseAndValidateHeadersForInventory(BulkUploadForm form) throws ApiException {
         Pair<Map<String, Integer>, List<String[]>> data = TsvHelper.parse(form.getFile());
         ValidationUtil.validateBulkInventoryData(data.getLeft(), data.getRight());
         return new ParsedBulkData(data.getLeft(), data.getRight());
@@ -124,22 +112,24 @@ public class ProductDto {
         Set<String> seenBarcodes = new HashSet<>();
 
         for (String[] rawRow : parsed.rows()) {
-
             String barcodeForOutput = cell(rawRow, parsed.headers(), "barcode");
             String[] out = errorResult(barcodeForOutput);
             int rowIndex = resultRows.size();
             resultRows.add(out);
+
             try {
                 String[] canonical = toCanonicalProductRow(rawRow, parsed.headers());
                 NormalizationUtil.normalizeBulkProductRows(Collections.singletonList(canonical));
                 ValidationUtil.validateBulkProductRow(canonical);
+
                 String normalizedBarcode = canonical[0];
-                if (seenBarcodes.contains(normalizedBarcode)) {
+                if (!seenBarcodes.add(normalizedBarcode)) {
                     throw new ApiException("Duplicate barcode in file");
                 }
-                seenBarcodes.add(normalizedBarcode);
+
                 ProductPojo pojo = ProductHelper.toBulkProductPojo(canonical);
                 validPojos.add(pojo);
+
                 firstRowIndexByBarcode.put(pojo.getBarcode(), rowIndex);
                 resultRows.get(rowIndex)[0] = pojo.getBarcode();
             } catch (ApiException e) {
@@ -160,17 +150,20 @@ public class ProductDto {
             String[] out = errorResult(barcodeForOutput);
             int rowIndex = resultRows.size();
             resultRows.add(out);
+
             try {
                 String[] canonical = toCanonicalInventoryRow(rawRow, parsed.headers());
                 NormalizationUtil.normalizeBulkInventoryRows(Collections.singletonList(canonical));
                 ValidationUtil.validateBulkInventoryRow(canonical);
+
                 String normalizedBarcode = canonical[0];
-                if (seenBarcodes.contains(normalizedBarcode)) {
+                if (!seenBarcodes.add(normalizedBarcode)) {
                     throw new ApiException("Duplicate barcode in file");
                 }
-                seenBarcodes.add(normalizedBarcode);
+
                 InventoryPojo pojo = ProductHelper.toBulkInventoryPojo(canonical);
                 validPojos.add(pojo);
+
                 firstRowIndexByBarcode.put(pojo.getProductId(), rowIndex);
                 resultRows.get(rowIndex)[0] = pojo.getProductId();
             } catch (ApiException e) {
@@ -180,11 +173,9 @@ public class ProductDto {
         return new RowProcessingResult<>(validPojos, resultRows, firstRowIndexByBarcode);
     }
 
-    private void applyFlowResultsToRows(
-            RowProcessingResult<?> processed,
-            List<String[]> flowResults
-    ) {
+    private void applyFlowResultsToRows(RowProcessingResult<?> processed, List<String[]> flowResults) {
         if (flowResults == null || flowResults.isEmpty()) return;
+
         for (String[] r : flowResults) {
             if (r == null || r.length < 3) continue;
             Integer idx = processed.firstRowIndexByBarcode().get(r[0]);
@@ -199,9 +190,9 @@ public class ProductDto {
         String clientEmail = cell(rawRow, headers, "clientemail");
         String name = cell(rawRow, headers, "name");
         String mrp = cell(rawRow, headers, "mrp");
-        if (!hasImage) {
-            return new String[]{barcode, clientEmail, name, mrp};
-        }
+
+        if (!hasImage) return new String[]{barcode, clientEmail, name, mrp};
+
         String imageUrl = cell(rawRow, headers, "imageurl");
         return new String[]{barcode, clientEmail, name, mrp, imageUrl};
     }
@@ -229,16 +220,10 @@ public class ProductDto {
         return new String[]{barcode == null ? "" : barcode, "ERROR", ""};
     }
 
-    private record ParsedBulkData(
-            Map<String, Integer> headers,
-            List<String[]> rows
-    ) {
-    }
-
+    private record ParsedBulkData(Map<String, Integer> headers, List<String[]> rows) {}
     private record RowProcessingResult<T>(
             List<T> validPojos,
             List<String[]> resultRows,
             Map<String, Integer> firstRowIndexByBarcode
-    ) {
-    }
+    ) {}
 }

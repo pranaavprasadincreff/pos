@@ -1,7 +1,6 @@
 package com.increff.pos.api;
 
 import com.increff.pos.db.InventoryPojo;
-import com.increff.pos.db.OrderItemPojo;
 import com.increff.pos.model.exception.ApiException;
 
 import java.util.List;
@@ -14,6 +13,4 @@ public interface InventoryApi {
     void deductInventory(String productId, int quantity) throws ApiException;
     List<InventoryPojo> getByProductIds(List<String> ids);
     List<InventoryPojo> saveAll(List<InventoryPojo> list);
-    boolean tryDeductInventoryForOrder(List<OrderItemPojo> items) throws ApiException;
-    void restoreInventoryForOrder(List<OrderItemPojo> items) throws ApiException;
 }

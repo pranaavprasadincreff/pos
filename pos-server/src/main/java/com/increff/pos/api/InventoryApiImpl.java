@@ -2,7 +2,6 @@ package com.increff.pos.api;
 
 import com.increff.pos.dao.InventoryDao;
 import com.increff.pos.db.InventoryPojo;
-import com.increff.pos.db.OrderItemPojo;
 import com.increff.pos.model.exception.ApiException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -12,6 +11,9 @@ import java.util.List;
 
 @Service
 public class InventoryApiImpl implements InventoryApi {
+
+    private static final int INVENTORY_MAX = 1000;
+
     @Autowired
     private InventoryDao dao;
 
@@ -38,24 +40,28 @@ public class InventoryApiImpl implements InventoryApi {
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public InventoryPojo updateInventory(InventoryPojo input) throws ApiException {
-
-        if (input == null || input.getProductId() == null) {
-            throw new ApiException("Invalid inventory input");
-        }
-        if (input.getQuantity() < 0) {
-            throw new ApiException("Inventory cannot be negative");
-        }
+        validateUpdateInput(input);
 
         InventoryPojo existing = getByProductId(input.getProductId());
         existing.setQuantity(input.getQuantity());
+
         return dao.save(existing);
     }
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public void incrementInventory(String productId, int delta) throws ApiException {
+        if (delta < 0) throw new ApiException("Delta cannot be negative");
+
         InventoryPojo inv = getByProductId(productId);
-        inv.setQuantity(inv.getQuantity() + delta);
+        int current = inv.getQuantity() == null ? 0 : inv.getQuantity();
+        int next = current + delta;
+
+        if (next > INVENTORY_MAX) {
+            throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
+        }
+
+        inv.setQuantity(next);
         dao.save(inv);
     }
 
@@ -74,34 +80,32 @@ public class InventoryApiImpl implements InventoryApi {
     }
 
     @Override
+    @Transactional(rollbackFor = ApiException.class)
     public List<InventoryPojo> saveAll(List<InventoryPojo> list) {
+        if (list == null || list.isEmpty()) return List.of();
+        for (InventoryPojo p : list) {
+            if (p == null || p.getProductId() == null) {
+                throw new RuntimeException("Invalid inventory input");
+            }
+            if (p.getQuantity() == null || p.getQuantity() < 0) {
+                throw new RuntimeException("Inventory cannot be negative");
+            }
+            if (p.getQuantity() > INVENTORY_MAX) {
+                throw new RuntimeException("Inventory cannot exceed " + INVENTORY_MAX);
+            }
+        }
         return dao.saveAll(list);
     }
 
-    @Override
-    @Transactional(rollbackFor = ApiException.class)
-    public boolean tryDeductInventoryForOrder(List<OrderItemPojo> items) throws ApiException {
-        // Check if all items have enough inventory
-        for (OrderItemPojo item : items) {
-            InventoryPojo inv = getByProductId(item.getProductBarcode());
-            if (inv.getQuantity() < item.getOrderedQuantity()) {
-                return false; // cannot fulfill
-            }
+    private void validateUpdateInput(InventoryPojo input) throws ApiException {
+        if (input == null || input.getProductId() == null) {
+            throw new ApiException("Invalid inventory input");
         }
-
-        // Deduct inventory
-        for (OrderItemPojo item : items) {
-            deductInventory(item.getProductBarcode(), item.getOrderedQuantity());
+        if (input.getQuantity() == null || input.getQuantity() < 0) {
+            throw new ApiException("Inventory cannot be negative");
         }
-
-        return true;
-    }
-
-    @Override
-    @Transactional(rollbackFor = ApiException.class)
-    public void restoreInventoryForOrder(List<OrderItemPojo> items) throws ApiException {
-        for (OrderItemPojo item : items) {
-            incrementInventory(item.getProductBarcode(), item.getOrderedQuantity());
+        if (input.getQuantity() > INVENTORY_MAX) {
+            throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
         }
     }
 }

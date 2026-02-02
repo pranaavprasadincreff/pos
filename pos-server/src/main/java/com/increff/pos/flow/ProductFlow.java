@@ -20,6 +20,9 @@ import java.util.stream.Collectors;
 
 @Component
 public class ProductFlow {
+
+    private static final int INVENTORY_MAX = 1000;
+
     @Autowired
     private ProductApi productApi;
     @Autowired
@@ -29,9 +32,12 @@ public class ProductFlow {
 
     public Pair<ProductPojo, InventoryPojo> addProduct(ProductPojo pojo) throws ApiException {
         clientApi.getClientByEmail(pojo.getClientEmail());
+
         ProductPojo saved = productApi.addProduct(pojo);
+
         inventoryApi.createInventoryIfAbsent(saved.getId());
         InventoryPojo inv = inventoryApi.getByProductId(saved.getId());
+
         return Pair.of(saved, inv);
     }
 
@@ -48,14 +54,34 @@ public class ProductFlow {
 
     public Pair<ProductPojo, InventoryPojo> updateProduct(ProductUpdatePojo updatePojo) throws ApiException {
         clientApi.getClientByEmail(updatePojo.getClientEmail());
+
         ProductPojo updated = productApi.updateProduct(updatePojo);
         InventoryPojo inv = inventoryApi.getByProductId(updated.getId());
+
         return Pair.of(updated, inv);
     }
 
     public Pair<ProductPojo, InventoryPojo> updateInventory(InventoryPojo invPojo) throws ApiException {
-        InventoryPojo updatedInv = inventoryApi.updateInventory(invPojo);
-        ProductPojo product = productApi.getProductById(updatedInv.getProductId());
+        String id = invPojo.getProductId();
+        Integer qty = invPojo.getQuantity();
+
+        if (qty != null && qty > INVENTORY_MAX) {
+            throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
+        }
+
+        ProductPojo product = productApi.getProductById(id);
+
+        InventoryPojo toUpdate = new InventoryPojo();
+        toUpdate.setProductId(product.getId());
+        toUpdate.setQuantity(qty);
+
+        InventoryPojo updatedInv;
+        try {
+            updatedInv = inventoryApi.updateInventory(toUpdate);
+        } catch (ApiException e) {
+            throw new ApiException("Inventory not found for barcode: " + product.getBarcode());
+        }
+
         return Pair.of(product, updatedInv);
     }
 
@@ -64,6 +90,7 @@ public class ProductFlow {
                 ? null
                 : clientApi.filter(form.getClient(), form.getClient(), 0, 1000)
                 .stream().map(c -> c.getEmail()).toList();
+
         Page<ProductPojo> filtered = productApi.filter(form, emails);
         return attachInventory(filtered);
     }
@@ -71,19 +98,23 @@ public class ProductFlow {
     public List<String[]> bulkAddProducts(List<ProductPojo> pojos) {
         List<String[]> results = initResultsForProducts(pojos);
         if (pojos == null || pojos.isEmpty()) return results;
+
         Set<String> emails = pojos.stream()
                 .map(ProductPojo::getClientEmail)
                 .collect(Collectors.toSet());
 
         Set<String> validClients = validateClients(emails);
+
         Map<String, ProductPojo> existingByBarcode = productApi.findByBarcodes(
                 pojos.stream().map(ProductPojo::getBarcode).toList()
         ).stream().collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
 
         List<ProductPojo> toSave = new ArrayList<>();
         List<Integer> toSaveIndices = new ArrayList<>();
+
         for (int i = 0; i < pojos.size(); i++) {
             ProductPojo p = pojos.get(i);
+
             if (!validClients.contains(p.getClientEmail())) {
                 results.get(i)[2] = "Client does not exist";
                 continue;
@@ -92,9 +123,11 @@ public class ProductFlow {
                 results.get(i)[2] = "Duplicate barcode";
                 continue;
             }
+
             toSave.add(p);
             toSaveIndices.add(i);
         }
+
         if (toSave.isEmpty()) return results;
 
         List<ProductPojo> saved = productApi.saveAll(toSave);
@@ -107,10 +140,13 @@ public class ProductFlow {
             i.setQuantity(0);
             return i;
         }).toList();
+
         inventoryApi.saveAll(inventories);
+
         for (int k = 0; k < toSaveIndices.size(); k++) {
             int originalIndex = toSaveIndices.get(k);
             ProductPojo original = pojos.get(originalIndex);
+
             if (savedByBarcode.containsKey(original.getBarcode())) {
                 results.get(originalIndex)[1] = "SUCCESS";
                 results.get(originalIndex)[2] = "";
@@ -120,9 +156,15 @@ public class ProductFlow {
         return results;
     }
 
+    /**
+     * incoming InventoryPojo.productId is BARCODE carrier.
+     * incoming InventoryPojo.quantity is a DELTA to add.
+     * We must ensure final inventory does not exceed INVENTORY_MAX.
+     */
     public List<String[]> bulkUpdateInventory(List<InventoryPojo> pojos) {
         List<String[]> results = initResultsForInventory(pojos);
         if (pojos == null || pojos.isEmpty()) return results;
+
         List<String> barcodes = pojos.stream()
                 .map(InventoryPojo::getProductId)
                 .toList();
@@ -136,21 +178,35 @@ public class ProductFlow {
         ).stream().collect(Collectors.toMap(InventoryPojo::getProductId, Function.identity()));
 
         List<InventoryPojo> updates = new ArrayList<>();
+
         for (int i = 0; i < pojos.size(); i++) {
             InventoryPojo incoming = pojos.get(i);
             String barcode = incoming.getProductId();
+
             ProductPojo p = productByBarcode.get(barcode);
             if (p == null) {
                 results.get(i)[2] = "Product not found";
                 continue;
             }
+
             InventoryPojo inv = inventoryByProductId.get(p.getId());
             if (inv == null) {
-                results.get(i)[2] = "Inventory not found";
+                results.get(i)[2] = "Inventory not found for barcode: " + barcode;
                 continue;
             }
-            inv.setQuantity(inv.getQuantity() + incoming.getQuantity());
+
+            int current = inv.getQuantity() == null ? 0 : inv.getQuantity();
+            int delta = incoming.getQuantity() == null ? 0 : incoming.getQuantity();
+            int next = current + delta;
+
+            if (next > INVENTORY_MAX) {
+                results.get(i)[2] = "Inventory cannot exceed " + INVENTORY_MAX;
+                continue;
+            }
+
+            inv.setQuantity(next);
             updates.add(inv);
+
             results.get(i)[1] = "SUCCESS";
             results.get(i)[2] = "";
         }
@@ -158,6 +214,8 @@ public class ProductFlow {
         if (!updates.isEmpty()) inventoryApi.saveAll(updates);
         return results;
     }
+
+    // ---------------- private helpers ----------------
 
     private List<String[]> initResultsForProducts(List<ProductPojo> pojos) {
         if (pojos == null) return new ArrayList<>();
@@ -172,7 +230,7 @@ public class ProductFlow {
         if (pojos == null) return new ArrayList<>();
         List<String[]> results = new ArrayList<>(pojos.size());
         for (InventoryPojo p : pojos) {
-            results.add(new String[]{p.getProductId(), "ERROR", ""}); // barcode stored here
+            results.add(new String[]{p.getProductId(), "ERROR", ""});
         }
         return results;
     }
@@ -205,6 +263,7 @@ public class ProductFlow {
         List<Pair<ProductPojo, InventoryPojo>> list = page.getContent().stream()
                 .map(p -> Pair.of(p, invMap.getOrDefault(p.getId(), new InventoryPojo())))
                 .toList();
+
         return new PageImpl<>(list, page.getPageable(), page.getTotalElements());
     }
 }
