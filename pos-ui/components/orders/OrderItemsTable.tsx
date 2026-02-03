@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table"
 import { getProductByBarcode } from "@/services/productService"
 import { cn } from "@/lib/utils"
-import {formatINR} from "@/utils/CurrencyFormat";
+import {formatINR} from "@/utils/currencyFormat";
 
 interface OrderItemsTableProps {
     items: OrderItemData[]

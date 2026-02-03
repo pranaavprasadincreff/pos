@@ -5,21 +5,16 @@ import { AxiosError } from 'axios'
 import { OrderCreateItemForm, ProductData, OrderData } from '@/services/types'
 import { create, edit } from '@/services/orderService'
 import { getProductByBarcode } from '@/services/productService'
+import { toast } from "sonner"
+import { can, getSessionRole } from "@/utils/permissions"
 
 export interface InputRow {
     productBarcode: string
     productName: string
     quantity: string
-
-    // FINAL total selling price for this line item
-    sellingPrice: string
-
-    // per-unit MRP (from product)
+    sellingPrice: string // FINAL total for the line item
     unitMrp?: number
-
-    // per-unit selling (derived from sellingPrice/qty when user edits)
     unitSellingPrice?: number
-
     error?: string
 }
 
@@ -42,12 +37,31 @@ function toNumber(v: string | undefined) {
     return Number(v)
 }
 
+function extractApiMessage(err: unknown): string {
+    const e = err as any
+    const status = e?.response?.status
+    const data = e?.response?.data
+
+    const dataMsg =
+        typeof data === "string"
+            ? data
+            : data?.message || data?.error || (data ? JSON.stringify(data) : "")
+
+    const msg = dataMsg || e?.message || "Request failed"
+    return status ? `${msg} (HTTP ${status})` : msg
+}
+
+
 export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
+    const role = getSessionRole()
+    const isEditMode = Boolean(orderToEdit)
+
+    const allowed = isEditMode ? can(role, "order_edit") : can(role, "order_create")
+
     const [rows, setRows] = useState<InputRow[]>([emptyRow()])
     const [loading, setLoading] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
 
-    // -------------------- Initialize rows --------------------
     const initializeRows = useCallback(async () => {
         if (orderToEdit?.items.length) {
             const initializedRows: InputRow[] = await Promise.all(
@@ -57,9 +71,6 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
                         const qty = item.quantity
                         const unitMrp = product.mrp
 
-                        // NOTE: existing data might be per-unit depending on your backend.
-                        // Here we interpret stored sellingPrice as "per-unit" in existing orders,
-                        // so for UI we convert it to final total = perUnit * qty.
                         const assumedPerUnitSelling = item.sellingPrice
                         const sellingTotal = assumedPerUnitSelling * qty
 
@@ -92,7 +103,6 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
         setFormError(null)
     }, [orderToEdit])
 
-    // -------------------- Reset --------------------
     const resetForm = useCallback(() => {
         if (orderToEdit) initializeRows()
         else {
@@ -101,7 +111,6 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
         }
     }, [orderToEdit, initializeRows])
 
-    // -------------------- Row ops --------------------
     const updateRow = <K extends keyof InputRow>(index: number, field: K, value: InputRow[K]) => {
         setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)))
     }
@@ -109,7 +118,6 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
     const addRow = () => setRows((prev) => [...prev, emptyRow()])
     const removeRow = (index: number) => setRows((prev) => prev.filter((_, i) => i !== index))
 
-    // -------------------- Barcode autofill --------------------
     const handleBarcodeChange = async (index: number, value: string) => {
         updateRow(index, 'productBarcode', value)
 
@@ -140,7 +148,6 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
                 const qty = Number(row.quantity) || 1
                 const unitMrp = product.mrp
 
-                // default: total selling = unitMrp * qty
                 const unitSelling = row.unitSellingPrice ?? unitMrp
                 const sellingTotal = qty > 0 ? unitSelling * qty : ''
 
@@ -174,7 +181,6 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
         }
     }
 
-    // -------------------- Quantity & price --------------------
     const handleQuantityChange = (index: number, value: string) => {
         if (!/^\d*$/.test(value)) return
 
@@ -182,17 +188,14 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
             const row = prev[index]
             const qty = Number(value)
 
-            // scale selling price total using per-unit selling price if possible
             let nextSelling = row.sellingPrice
             if (qty > 0) {
                 const unitSelling =
                     row.unitSellingPrice ??
                     (() => {
-                        // if user hasn't edited price yet, infer per-unit from current total
                         const currentTotal = toNumber(row.sellingPrice)
                         const currentQty = Number(row.quantity) || 0
                         if (currentQty > 0 && !Number.isNaN(currentTotal)) return currentTotal / currentQty
-                        // else default to unit MRP
                         return row.unitMrp
                     })()
 
@@ -220,9 +223,7 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
             const qty = Number(row.quantity) || 0
             const total = Number(value)
 
-            // derive per-unit selling so we can scale on qty change
-            const unitSelling =
-                qty > 0 && !Number.isNaN(total) ? total / qty : row.unitSellingPrice
+            const unitSelling = qty > 0 && !Number.isNaN(total) ? total / qty : row.unitSellingPrice
 
             const next = [...prev]
             next[index] = {
@@ -235,7 +236,6 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
         })
     }
 
-    // -------------------- Validation --------------------
     const validateRows = (): boolean => {
         let valid = true
 
@@ -251,12 +251,9 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
             else if (!row.sellingPrice || Number.isNaN(sellingTotal) || sellingTotal <= 0)
                 error = 'Final selling price required'
 
-            // selling total should not exceed scaled mrp total
             if (!error && row.unitMrp != null && qty > 0) {
                 const mrpTotal = row.unitMrp * qty
-                if (sellingTotal > mrpTotal) {
-                    error = 'Selling price cannot exceed MRP'
-                }
+                if (sellingTotal > mrpTotal) error = 'Selling price cannot exceed MRP'
             }
 
             if (error) valid = false
@@ -267,16 +264,17 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
         return valid
     }
 
-    // -------------------- Submit --------------------
     const handleSubmit = async (): Promise<boolean> => {
         setFormError(null)
 
+        if (!allowed) {
+            setFormError("Not allowed")
+            toast.error("Not allowed")
+            return false
+        }
+
         if (!validateRows()) return false
 
-        // IMPORTANT:
-        // Backend today often expects per-unit sellingPrice.
-        // Since UI is now taking TOTAL selling price, we convert total -> per-unit here.
-        // perUnit = total / qty
         const items: OrderCreateItemForm[] = rows.map((row) => {
             const qty = Number(row.quantity)
             const total = Number(row.sellingPrice)
@@ -285,9 +283,11 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
             return {
                 productBarcode: row.productBarcode,
                 quantity: qty,
-                sellingPrice: perUnit, // send per-unit to backend
+                sellingPrice: perUnit, // send per-unit
             }
         })
+
+        const toastId = toast.loading(isEditMode ? "Saving order..." : "Creating order...")
 
         try {
             setLoading(true)
@@ -295,19 +295,20 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
             if (orderToEdit?.orderReferenceId) await edit(orderToEdit.orderReferenceId, { items })
             else await create({ items })
 
+            toast.success(isEditMode ? "Order updated" : "Order created", { id: toastId })
             onSuccess()
             resetForm()
             return true
-        } catch (err) {
-            const error = err as AxiosError<{ message: string }>
-            setFormError(error.response?.data?.message || 'Failed')
+        } catch (err: unknown) {
+            const msg = extractApiMessage(err)
+            setFormError(msg)
+            toast.error(msg || "Failed", { id: toastId })
             return false
         } finally {
             setLoading(false)
         }
     }
 
-    // -------------------- Auto init --------------------
     useEffect(() => {
         if (orderToEdit) initializeRows()
     }, [orderToEdit, initializeRows])

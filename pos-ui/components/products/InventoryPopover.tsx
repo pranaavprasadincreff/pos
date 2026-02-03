@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { ProductData } from "@/services/types"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { updateInventory } from "@/services/productService"
 import { cn } from "@/lib/utils"
 import { Hint } from "@/components/shared/Hint"
+import { can, getSessionRole } from "@/utils/permissions"
 
 interface Props {
     product: ProductData
@@ -16,12 +17,24 @@ interface Props {
 }
 
 export default function InventoryPopover({ product, onUpdated }: Props) {
-    const previousValue = useRef(product.inventory)
-    const [value, setValue] = useState<number | null>(product.inventory)
+    const role = getSessionRole()
+    const canUpdateInventory = useMemo(() => can(role, "inventory_update"), [role])
+
+    const previousValue = useRef(product.inventory ?? 0)
+    const [value, setValue] = useState<number | null>(product.inventory ?? 0)
     const [error, setError] = useState("")
     const [open, setOpen] = useState(false)
-    const inputRef = useRef<HTMLInputElement>(null)
+
+    const inputRef = useRef<HTMLInputElement | null>(null)
     const [isDirty, setIsDirty] = useState(false)
+
+    // keep local state in sync when product prop changes (after patch-in-place)
+    useEffect(() => {
+        previousValue.current = product.inventory ?? 0
+        setValue(product.inventory ?? 0)
+        setError("")
+        setIsDirty(false)
+    }, [product.barcode, product.inventory])
 
     function validate(val: number | null) {
         if (val === null) return false
@@ -29,11 +42,23 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
             setError("Inventory cannot be negative")
             return false
         }
+        if (val > 1000) {
+            setError("Inventory cannot exceed 1000")
+            return false
+        }
         setError("")
         return true
     }
 
     async function handleUpdate() {
+        if (!canUpdateInventory) return
+
+        const barcode = (product?.barcode ?? "").trim()
+        if (!barcode) {
+            toast.error("Barcode is missing. Please refresh the page.")
+            return
+        }
+
         if (value === null) {
             setError("Inventory is required")
             return
@@ -41,11 +66,13 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
         if (!validate(value)) return
 
         try {
-            const updated = await updateInventory(product.id, value)
-            previousValue.current = updated.inventory
+            const updated = await updateInventory(barcode, value)
+
+            previousValue.current = updated.inventory ?? value
             setIsDirty(false)
             setOpen(false)
-            toast.success("Inventory updated")
+
+            toast.success(`Inventory updated for ${barcode}`)
             onUpdated(updated)
         } catch (e: unknown) {
             toast.error(e instanceof Error ? e.message : "Inventory update failed")
@@ -62,6 +89,15 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
         setIsDirty(value !== previousValue.current)
     }, [value])
 
+    const triggerButton = (
+        <Button variant="outline" className="w-full justify-between" disabled={!canUpdateInventory}>
+            Inventory
+            <span className="font-semibold">{product.inventory ?? 0}</span>
+        </Button>
+    )
+
+    if (!canUpdateInventory) return triggerButton
+
     return (
         <PopoverPrimitive.Root
             open={open}
@@ -71,15 +107,9 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
             }}
         >
             <Hint text="Update inventory">
-                <PopoverPrimitive.Trigger asChild>
-                    <Button variant="outline" className="w-full justify-between">
-                        Inventory
-                        <span className="font-semibold">{product.inventory}</span>
-                    </Button>
-                </PopoverPrimitive.Trigger>
+                <PopoverPrimitive.Trigger asChild>{triggerButton}</PopoverPrimitive.Trigger>
             </Hint>
 
-            {/* ✅ Portal ensures popover never affects card height */}
             <PopoverPrimitive.Portal>
                 <PopoverPrimitive.Content
                     side="bottom"
@@ -93,10 +123,6 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
                     onOpenAutoFocus={(e) => {
                         e.preventDefault()
                         inputRef.current?.focus()
-                    }}
-                    onInteractOutside={(e) => {
-                        // optional: allow clicking outside to close normally
-                        // (Radix default is fine; keeping this here in case you want to tweak)
                     }}
                 >
                     <p className="text-sm font-medium">Update Inventory</p>

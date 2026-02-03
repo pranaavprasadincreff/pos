@@ -105,21 +105,25 @@ public class ValidationUtil {
     // ---------------- INVENTORY ----------------
 
     public static void validateInventoryUpdateForm(InventoryUpdateForm form) throws ApiException {
-        if (form == null) throw new ApiException("Inventory update form required");
+        if (form == null) throw new ApiException("Invalid inventory update input");
 
-        if (!StringUtils.hasText(form.getProductId())) {
-            throw new ApiException("Product id cannot be empty");
+        if (form.getBarcode() == null || form.getBarcode().trim().isEmpty()) {
+            throw new ApiException("Barcode cannot be empty");
         }
-        if (form.getProductId().length() > BARCODE_MAX) {
-            throw new ApiException("Product id too long");
+
+        if (form.getQuantity() == null) {
+            throw new ApiException("Quantity is required");
         }
-        if (form.getQuantity() == null || form.getQuantity() < 0) {
-            throw new ApiException("Invalid inventory quantity");
+
+        if (form.getQuantity() < 0) {
+            throw new ApiException("Inventory cannot be negative");
         }
+
         if (form.getQuantity() > INVENTORY_MAX) {
-            throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
+            throw new ApiException("Inventory cannot exceed 1000");
         }
     }
+
 
     // ---------------- PAGE ----------------
 

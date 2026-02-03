@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SalesReportRowData, ReportRowType } from "@/services/salesReportService"
-import {formatINR} from "@/utils/CurrencyFormat";
+import {formatINR} from "@/utils/currencyFormat";
 
 type ExpandFetch = (clientEmail: string) => Promise<SalesReportRowData[]>
 

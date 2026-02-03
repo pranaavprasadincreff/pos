@@ -1,7 +1,7 @@
 package com.increff.pos.flow;
 
 import com.increff.pos.api.ProductApi;
-import com.increff.pos.client.InvoiceClient;
+import com.increff.pos.wrapper.InvoiceClientWrapper;
 import com.increff.pos.db.OrderItemPojo;
 import com.increff.pos.db.OrderPojo;
 import com.increff.pos.db.ProductPojo;
@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 @Service
 public class InvoiceFlow {
     @Autowired
-    private InvoiceClient invoiceClient;
+    private InvoiceClientWrapper invoiceClientWrapper;
     @Autowired
     private OrderFlow orderFlow;
     @Autowired
@@ -34,18 +34,18 @@ public class InvoiceFlow {
         if (existing != null) return existing;
         validateInvoiceAllowed(order);
         InvoiceGenerateForm form = buildInvoiceForm(order);
-        InvoiceData data = invoiceClient.generateInvoice(form);
+        InvoiceData data = invoiceClientWrapper.generateInvoice(form);
         orderFlow.markInvoiced(orderReferenceId);
         return data;
     }
 
     public InvoiceData getInvoice(String orderReferenceId) throws ApiException {
-        return invoiceClient.getInvoice(orderReferenceId);
+        return invoiceClientWrapper.getInvoice(orderReferenceId);
     }
 
     private InvoiceData tryReturnExistingInvoice(OrderPojo order) throws ApiException {
         if (!isInvoiced(order)) return null;
-        return invoiceClient.getInvoice(order.getOrderReferenceId());
+        return invoiceClientWrapper.getInvoice(order.getOrderReferenceId());
     }
 
     private void validateInvoiceAllowed(OrderPojo order) throws ApiException {

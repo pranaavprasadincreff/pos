@@ -21,6 +21,7 @@ import type { OrderData } from "@/services/types"
 
 import { Hint } from "@/components/shared/Hint"
 import { toast } from "sonner"
+import { can, getSessionRole } from "@/utils/permissions"
 
 const STATUS_OPTIONS = [
     "ALL",
@@ -42,9 +43,7 @@ const TIMEFRAME_MAP: Record<DateRange, "LAST_DAY" | "LAST_WEEK" | "LAST_MONTH"> 
 
 const PAGE_SIZE = 9
 const ORDER_REFERENCE_ID_MAX = 50
-
-// ✅ Keep pagination where it was "last time" (lifted)
-const PAGINATION_LIFT_PX = 40 // bottom-10 => 40px
+const PAGINATION_LIFT_PX = 40
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
     const [debounced, setDebounced] = useState(value)
@@ -55,9 +54,6 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
     return debounced
 }
 
-/**
- * Ensures `el` is fully visible inside `container` by adjusting container.scrollTop.
- */
 function ensureFullyVisible(container: HTMLElement, el: HTMLElement, padding = 12) {
     const cRect = container.getBoundingClientRect()
     const eRect = el.getBoundingClientRect()
@@ -72,6 +68,9 @@ function ensureFullyVisible(container: HTMLElement, el: HTMLElement, padding = 1
 }
 
 export default function OrdersPage() {
+    const role = getSessionRole()
+    const canCreateOrder = useMemo(() => can(role, "order_create"), [role])
+
     const [orders, setOrders] = useState<OrderData[]>([])
     const [page, setPage] = useState(0)
     const [totalPages, setTotalPages] = useState(1)
@@ -85,15 +84,13 @@ export default function OrdersPage() {
 
     const [loading, setLoading] = useState(true)
 
-    // layout refs
     const headerRef = useRef<HTMLDivElement | null>(null)
     const paginationRef = useRef<HTMLDivElement | null>(null)
 
-    // the only scrollable area
     const scrollViewportRef = useRef<HTMLDivElement | null>(null)
     const tableRegionRef = useRef<HTMLDivElement | null>(null)
 
-    const [paginationH, setPaginationH] = useState(64) // sensible default
+    const [paginationH, setPaginationH] = useState(64)
     const [headerH, setHeaderH] = useState(0)
 
     const debouncedOrderId = useDebouncedValue(orderId, 350)
@@ -104,10 +101,9 @@ export default function OrdersPage() {
 
     const fetchOrders = useCallback(
         async (pageToLoad: number) => {
-            let toastId: string | number | undefined
+            const toastId = toast.loading("Loading orders...")
             try {
                 setLoading(true)
-                toastId = toast.loading("Loading orders...")
 
                 const trimmedRef = debouncedOrderId.trim()
                 const timeframe = TIMEFRAME_MAP[range]
@@ -124,9 +120,12 @@ export default function OrdersPage() {
 
                 setOrders(res.content)
                 setTotalPages(res.totalPages || 1)
+            } catch (e: unknown) {
+                toast.error(e instanceof Error ? e.message : "Failed to load orders", { id: toastId })
+                return
             } finally {
                 setLoading(false)
-                if (toastId) toast.dismiss(toastId)
+                toast.dismiss(toastId)
             }
         },
         [debouncedOrderId, status, range, hasAnyFilter]
@@ -136,7 +135,6 @@ export default function OrdersPage() {
         fetchOrders(page)
     }, [page, fetchOrders])
 
-    // reset to first page when filters change
     useEffect(() => {
         setPage(0)
         if (scrollViewportRef.current) scrollViewportRef.current.scrollTop = 0
@@ -151,7 +149,6 @@ export default function OrdersPage() {
         setModalOpen(true)
     }
 
-    // ✅ Measure header + pagination heights so we can size the scroll viewport exactly
     useEffect(() => {
         const headerEl = headerRef.current
         const paginationEl = paginationRef.current
@@ -177,7 +174,6 @@ export default function OrdersPage() {
         }
     }, [])
 
-    // Auto-scroll expanded row into full view WITHOUT affecting pagination
     useEffect(() => {
         const container = scrollViewportRef.current
         const region = tableRegionRef.current
@@ -223,34 +219,34 @@ export default function OrdersPage() {
         }
     }, [orders])
 
-    // ✅ Scroll viewport height = screen - header - (pagination bar + lift space)
     const scrollViewportHeight = `calc(100dvh - ${headerH}px - ${paginationH + PAGINATION_LIFT_PX}px)`
 
     return (
         <div className="h-[100dvh] overflow-hidden bg-background">
             <div className="h-full flex flex-col">
-                {/* Header */}
                 <div ref={headerRef} className="sticky top-0 z-30 bg-background border-b shrink-0">
                     <div className="max-w-6xl mx-auto px-6 py-5 space-y-4">
                         <div className="flex justify-between items-center">
                             <div>
                                 <h1 className="text-2xl font-semibold">Orders</h1>
-                                <p className="text-sm text-muted-foreground">
-                                    Create orders and manage lifecycle
-                                </p>
+                                <p className="text-sm text-muted-foreground">Create orders and manage lifecycle</p>
                             </div>
 
-                            <Hint text="Create a new order">
-                                <Button
-                                    className="bg-indigo-600 hover:bg-indigo-700"
-                                    onClick={() => {
-                                        setEditingOrder(null)
-                                        setModalOpen(true)
-                                    }}
-                                >
-                                    + Create Order
-                                </Button>
-                            </Hint>
+                            {canCreateOrder ? (
+                                <Hint text="Create a new order">
+                                    <Button
+                                        className="bg-indigo-600 hover:bg-indigo-700"
+                                        onClick={() => {
+                                            setEditingOrder(null)
+                                            setModalOpen(true)
+                                        }}
+                                    >
+                                        + Create Order
+                                    </Button>
+                                </Hint>
+                            ) : (
+                                <div className="h-10" />
+                            )}
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
@@ -276,13 +272,7 @@ export default function OrdersPage() {
                             <Hint text="Filter by order status">
                                 <div>
                                     <Select value={status} onValueChange={(v) => setStatus(v as OrderStatus)}>
-                                        <SelectTrigger
-                                            className="
-                        w-44 transition
-                        focus-visible:ring-2 focus-visible:ring-indigo-500
-                        data-[state=open]:ring-2 data-[state=open]:ring-indigo-500
-                      "
-                                        >
+                                        <SelectTrigger className="w-44 transition focus-visible:ring-2 focus-visible:ring-indigo-500 data-[state=open]:ring-2 data-[state=open]:ring-indigo-500">
                                             <SelectValue />
                                         </SelectTrigger>
 
@@ -300,13 +290,7 @@ export default function OrdersPage() {
                             <Hint text="Filter by order creation time">
                                 <div>
                                     <Select value={range} onValueChange={(v) => setRange(v as DateRange)}>
-                                        <SelectTrigger
-                                            className="
-                        w-40 transition
-                        focus-visible:ring-2 focus-visible:ring-indigo-500
-                        data-[state=open]:ring-2 data-[state=open]:ring-indigo-500
-                      "
-                                        >
+                                        <SelectTrigger className="w-40 transition focus-visible:ring-2 focus-visible:ring-indigo-500 data-[state=open]:ring-2 data-[state=open]:ring-indigo-500">
                                             <SelectValue />
                                         </SelectTrigger>
 
@@ -338,9 +322,7 @@ export default function OrdersPage() {
                     </div>
                 </div>
 
-                {/* Body region is relative so we can place pagination overlay precisely */}
                 <div className="flex-1 min-h-0 relative">
-                    {/* Scroll viewport: FULL WIDTH so scrollbar is on screen edge */}
                     <div
                         ref={scrollViewportRef}
                         style={{ height: scrollViewportHeight }}
@@ -362,11 +344,7 @@ export default function OrdersPage() {
                         style={{ bottom: PAGINATION_LIFT_PX }}
                     >
                         <div className="max-w-6xl mx-auto px-6 py-3">
-                            <Pagination
-                                page={page}
-                                totalPages={totalPages}
-                                onPageChange={setPage}
-                            />
+                            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
                         </div>
                     </div>
                 </div>

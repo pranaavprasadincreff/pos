@@ -1,9 +1,9 @@
-package com.increff.pos.model.form;
+package com.increff.pos.db;
 
 import lombok.Data;
 
 @Data
-public class InventoryUpdateForm {
+public class InventoryUpdatePojo {
     private String barcode;
     private Integer quantity;
 }

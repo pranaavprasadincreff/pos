@@ -5,6 +5,7 @@ import com.increff.pos.api.InventoryApi;
 import com.increff.pos.api.ProductApi;
 import com.increff.pos.db.ClientPojo;
 import com.increff.pos.db.InventoryPojo;
+import com.increff.pos.db.InventoryUpdatePojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.PageForm;
@@ -36,7 +37,7 @@ public class ProductFlowTest extends AbstractUnitTest {
     private void createClient(String email, String name) throws ApiException {
         ClientPojo c = new ClientPojo();
         c.setEmail(email.trim().toLowerCase());
-        c.setName(name); // keep as provided; DTO layer normalizes, API/Flow need not
+        c.setName(name);
         clientApi.add(c);
     }
 
@@ -74,8 +75,9 @@ public class ProductFlowTest extends AbstractUnitTest {
         createClient("c1@example.com", "client one");
         Pair<ProductPojo, InventoryPojo> pair = productFlow.addProduct(product("p1", "c1@example.com"));
 
-        InventoryPojo invUpdate = new InventoryPojo();
-        invUpdate.setProductId(pair.getLeft().getId());
+        // ✅ NEW: updateInventory takes InventoryUpdatePojo (barcode + quantity)
+        InventoryUpdatePojo invUpdate = new InventoryUpdatePojo();
+        invUpdate.setBarcode(pair.getLeft().getBarcode());
         invUpdate.setQuantity(1001);
 
         assertThrows(ApiException.class, () -> productFlow.updateInventory(invUpdate));
@@ -99,7 +101,6 @@ public class ProductFlowTest extends AbstractUnitTest {
 
     @Test
     public void testFilterByClientNameResolvesClientEmails() throws ApiException {
-        // Distinct names so filtering can narrow to just alice
         createClient("alice@example.com", "alice");
         createClient("bob@example.com", "bob");
 
@@ -116,7 +117,6 @@ public class ProductFlowTest extends AbstractUnitTest {
         Page<Pair<ProductPojo, InventoryPojo>> page = productFlow.filter(ff);
         assertNotNull(page);
         assertEquals(1, page.getTotalElements());
-        // Flow/API preserves barcode casing as provided (DTO normalizes, Flow doesn't)
         assertEquals("p-alice", page.getContent().get(0).getLeft().getBarcode());
     }
 

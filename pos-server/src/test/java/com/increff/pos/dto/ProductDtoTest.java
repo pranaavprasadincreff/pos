@@ -60,11 +60,6 @@ public class ProductDtoTest extends AbstractUnitTest {
         }
     }
 
-    private String getProductIdByBarcode(String barcode) throws ApiException {
-        // barcode in ProductData is already normalized to upper-case by your flow/normalization
-        return productApi.getProductByBarcode(barcode).getId();
-    }
-
     // ------------------------
     // ADD / GET
     // ------------------------
@@ -83,7 +78,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         ProductData created = productDto.addProduct(f);
 
         assertNotNull(created);
-        assertEquals("P1", created.getBarcode());
+        assertEquals("P1", created.getBarcode()); // normalized
         assertEquals("c1@example.com", created.getClientEmail());
         assertEquals(100.0, created.getMrp());
         assertNotNull(created.getInventory());
@@ -212,8 +207,9 @@ public class ProductDtoTest extends AbstractUnitTest {
 
         ProductData created = productDto.addProduct(validProductForm("p-old", "c1@example.com"));
 
+        // ✅ NEW: inventory update uses BARCODE (not productId)
         InventoryUpdateForm inv = new InventoryUpdateForm();
-        inv.setProductId(getProductIdByBarcode(created.getBarcode()));
+        inv.setBarcode(created.getBarcode()); // already normalized
         inv.setQuantity(10);
         productDto.updateInventory(inv);
 
@@ -242,7 +238,7 @@ public class ProductDtoTest extends AbstractUnitTest {
     @Test
     public void testUpdateInventoryProductNotFound() {
         InventoryUpdateForm inv = new InventoryUpdateForm();
-        inv.setProductId("missing-id");
+        inv.setBarcode("missing-barcode");
         inv.setQuantity(1);
 
         assertThrows(ApiException.class, () -> productDto.updateInventory(inv));
@@ -254,7 +250,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         ProductData created = productDto.addProduct(validProductForm("p1", "c1@example.com"));
 
         InventoryUpdateForm inv = new InventoryUpdateForm();
-        inv.setProductId(getProductIdByBarcode(created.getBarcode()));
+        inv.setBarcode(created.getBarcode());
         inv.setQuantity(1001);
 
         assertThrows(ApiException.class, () -> productDto.updateInventory(inv));
@@ -266,7 +262,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         ProductData created = productDto.addProduct(validProductForm("p1", "c1@example.com"));
 
         InventoryUpdateForm inv = new InventoryUpdateForm();
-        inv.setProductId(getProductIdByBarcode(created.getBarcode()));
+        inv.setBarcode(created.getBarcode());
         inv.setQuantity(25);
 
         ProductData updated = productDto.updateInventory(inv);
@@ -292,7 +288,6 @@ public class ProductDtoTest extends AbstractUnitTest {
         createClientQuietly("c1@example.com", "Client One");
 
         BulkUploadForm f = new BulkUploadForm();
-        // wrong column count (but your impl does NOT throw)
         f.setFile(b64(
                 "barcode\tclientemail\tname\tmrp\n" +
                         "dup\tc1@example.com\tProd 1\n"
@@ -312,7 +307,6 @@ public class ProductDtoTest extends AbstractUnitTest {
         createClientQuietly("c1@example.com", "Client One");
 
         BulkUploadForm f = new BulkUploadForm();
-        // wrong column count (but your impl does NOT throw)
         f.setFile(b64(
                 "barcode\tinventory\n" +
                         "p1\n"

@@ -1,6 +1,7 @@
 package com.increff.pos.helper;
 
 import com.increff.pos.db.InventoryPojo;
+import com.increff.pos.db.InventoryUpdatePojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.model.data.ProductData;
@@ -24,14 +25,13 @@ public class ProductHelper {
         return pojo;
     }
 
-    public static InventoryPojo convertInventoryUpdateFormToEntity(
-            InventoryUpdateForm form) {
-
-        InventoryPojo pojo = new InventoryPojo();
-        pojo.setProductId(form.getProductId());
+    public static InventoryUpdatePojo convertInventoryUpdateFormToEntity(InventoryUpdateForm form) {
+        InventoryUpdatePojo pojo = new InventoryUpdatePojo();
+        pojo.setBarcode(form.getBarcode());
         pojo.setQuantity(form.getQuantity());
         return pojo;
     }
+
 
     public static ProductUpdatePojo convertProductUpdateFormToEntity(
             ProductUpdateForm form) {

@@ -1,12 +1,10 @@
 package com.increff.pos.model.form;
 
-import lombok.Data;
-import lombok.NonNull;
+import lombok.*;
 
-//Todo use getter/setter
-@Data
+@Getter
+@Setter
 public class OrderCreateItemForm {
-    @NonNull
     private String productBarcode;
     private Integer quantity;
     private Double sellingPrice;

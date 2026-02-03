@@ -1,13 +1,14 @@
 "use client"
 
 import Image from "next/image"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { ProductData } from "@/services/types"
 import { Button } from "@/components/ui/button"
 import { Pencil, ImageOff } from "lucide-react"
 import InventoryPopover from "./InventoryPopover"
-import {formatINR} from "@/utils/CurrencyFormat";
-import {Hint} from "@/components/shared/Hint";
+import { formatINR } from "@/utils/currencyFormat"
+import { Hint } from "@/components/shared/Hint"
+import { can, Role } from "@/utils/permissions"
 
 type ProductUI = ProductData & { clientName?: string }
 
@@ -29,6 +30,13 @@ function isValidImageUrl(url?: string): boolean {
 
 export default function ProductCard({ product, onEdit, onInventoryUpdated }: Props) {
     const [imageError, setImageError] = useState(false)
+
+    const role =
+        typeof window !== "undefined"
+            ? (sessionStorage.getItem("auth.role") as Role | null)
+            : null
+
+    const canEdit = useMemo(() => can(role, "product_edit"), [role])
 
     const canRenderImage = !imageError && isValidImageUrl(product.imageUrl)
 
@@ -53,22 +61,26 @@ export default function ProductCard({ product, onEdit, onInventoryUpdated }: Pro
                         <span className="text-xs">No image available</span>
                     </div>
                 )}
-                <Hint text="Edit">
-                    <Button
-                        size="icon"
-                        variant="secondary"
-                        onClick={() => onEdit(product)}
-                        className="
+
+                {/* ✅ Hide edit button for operators */}
+                {canEdit ? (
+                    <Hint text="Edit">
+                        <Button
+                            size="icon"
+                            variant="secondary"
+                            onClick={() => onEdit(product)}
+                            className="
                 absolute top-2 right-2
                 h-8 w-8 rounded-full
                 opacity-0 group-hover:opacity-100
                 transition
                 shadow-sm
               "
-                    >
-                        <Pencil className="h-4 w-4" />
-                    </Button>
-                </Hint>
+                        >
+                            <Pencil className="h-4 w-4" />
+                        </Button>
+                    </Hint>
+                ) : null}
             </div>
 
             <div className="p-4 space-y-3">
@@ -82,7 +94,8 @@ export default function ProductCard({ product, onEdit, onInventoryUpdated }: Pro
                     <p className="font-semibold">₹{formatINR(product.mrp)}</p>
                 </div>
 
-                    <InventoryPopover product={product} onUpdated={onInventoryUpdated} />
+                {/* Inventory visible for both, control handled inside popover */}
+                <InventoryPopover product={product} onUpdated={onInventoryUpdated} />
             </div>
         </div>
     )

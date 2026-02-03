@@ -4,13 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 import ProductCardGrid from "@/components/products/ProductCardGrid"
 import ProductModal from "@/components/products/ProductModal"
@@ -23,10 +17,10 @@ import type { ProductData } from "@/services/types"
 import { Hint } from "@/components/shared/Hint"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { can, Role } from "@/utils/permissions"
 
 const PAGE_SIZE = 9
 
-// backend-ish limits (keep just lengths; no “invalid email format while typing”)
 const EMAIL_MAX = 40
 const NAME_MAX = 30
 const BARCODE_MAX = 40
@@ -34,10 +28,7 @@ const BARCODE_MAX = 40
 type ProductFilterKey = "barcode" | "name" | "clientEmail"
 type ProductUI = ProductData & { clientName?: string }
 
-const PRODUCT_FILTERS: Record<
-    ProductFilterKey,
-    { label: string; placeholder: string; tooltip: string }
-> = {
+const PRODUCT_FILTERS: Record<ProductFilterKey, { label: string; placeholder: string; tooltip: string }> = {
     name: {
         label: "Name",
         placeholder: "Search product name…",
@@ -55,10 +46,22 @@ const PRODUCT_FILTERS: Record<
     },
 }
 
-// small concurrency to hydrate display names (does NOT affect filtering)
 const CLIENT_LOOKUP_CONCURRENCY = 4
 
 export default function ProductsPage() {
+    const role =
+        typeof window !== "undefined"
+            ? (sessionStorage.getItem("auth.role") as Role | null)
+            : null
+
+    const canManageProducts = useMemo(() => {
+        return (
+            can(role, "product_create") ||
+            can(role, "product_edit") ||
+            can(role, "product_bulk_upload")
+        )
+    }, [role])
+
     const [products, setProducts] = useState<ProductUI[]>([])
     const [page, setPage] = useState(0) // next page to load
     const [hasMore, setHasMore] = useState(true)
@@ -74,16 +77,11 @@ export default function ProductsPage() {
     const [bulkOpen, setBulkOpen] = useState(false)
     const [editingProduct, setEditingProduct] = useState<ProductData | null>(null)
 
-    // Cards-only scroll viewport (the only scrollbar)
     const scrollViewportRef = useRef<HTMLDivElement | null>(null)
-
-    // Sentinel inside the scroll viewport
     const observerRef = useRef<HTMLDivElement | null>(null)
 
-    // request guard: only latest request mutates state
     const requestIdRef = useRef(0)
 
-    // client email -> client name cache for display only
     const [clientNameByEmail, setClientNameByEmail] = useState<Record<string, string>>({})
     const clientNameByEmailRef = useRef<Record<string, string>>({})
     useEffect(() => {
@@ -111,7 +109,6 @@ export default function ProductsPage() {
         return list.map((p) => ({ ...p, clientName: map[p.clientEmail] }))
     }, [])
 
-    // hydrate missing client names (display-only)
     const fetchMissingClientNames = useCallback(async (emails: string[]) => {
         const unique = Array.from(new Set(emails))
         const missing = unique.filter(
@@ -160,8 +157,9 @@ export default function ProductsPage() {
 
                 setProducts((prev) => {
                     if (mode === "replace") return enriched
-                    const map = new Map(prev.map((p) => [p.id, p]))
-                    enriched.forEach((p) => map.set(p.id, p))
+
+                    const map = new Map(prev.map((p) => [p.barcode, p]))
+                    enriched.forEach((p) => map.set(p.barcode, p))
                     return Array.from(map.values())
                 })
 
@@ -178,7 +176,6 @@ export default function ProductsPage() {
             } else if (searchBy === "barcode") {
                 res = await filterProducts({ page: pageToLoad, size: PAGE_SIZE, barcode: trimmed })
             } else {
-                // clientEmail filter => backend expects { client: "<email>" }
                 res = await filterProducts({ page: pageToLoad, size: PAGE_SIZE, client: trimmed })
             }
 
@@ -188,8 +185,9 @@ export default function ProductsPage() {
 
             setProducts((prev) => {
                 if (mode === "replace") return enriched
-                const map = new Map(prev.map((p) => [p.id, p]))
-                enriched.forEach((p) => map.set(p.id, p))
+
+                const map = new Map(prev.map((p) => [p.barcode, p]))
+                enriched.forEach((p) => map.set(p.barcode, p))
                 return Array.from(map.values())
             })
 
@@ -254,10 +252,7 @@ export default function ProductsPage() {
             (entries) => {
                 if (entries[0]?.isIntersecting) loadNextPage()
             },
-            {
-                root, // root is the cards viewport so visibility is strictly clipped to it
-                rootMargin: "200px",
-            }
+            { root, rootMargin: "200px" }
         )
 
         observer.observe(target)
@@ -271,7 +266,7 @@ export default function ProductsPage() {
         setPage(0)
         try {
             await fetchPage(0, "replace")
-            toast.success("Updated")
+            // ✅ removed generic "Updated" toast to avoid duplicate toasts
         } catch (e) {
             toast.error(e instanceof Error ? e.message : "Failed")
         } finally {
@@ -279,16 +274,15 @@ export default function ProductsPage() {
         }
     }
 
-    // inventory update: patch in place (prevents scroll jump)
+    // inventory update: patch in place
     const handleInventoryUpdated = (updated: ProductData) => {
         setProducts((prev) =>
             prev.map((p) =>
-                p.id === updated.id
+                p.barcode === updated.barcode
                     ? {
                         ...p,
                         ...updated,
-                        clientName:
-                            clientNameByEmailRef.current[updated.clientEmail] ?? p.clientName,
+                        clientName: clientNameByEmailRef.current[updated.clientEmail] ?? p.clientName,
                     }
                     : p
             )
@@ -297,44 +291,43 @@ export default function ProductsPage() {
     }
 
     return (
-        // Lock page scroll: only the cards viewport will scroll
         <div className="h-[100dvh] bg-background">
-            {/* Fill height, header + scroll region */}
             <div className="h-full flex flex-col">
-                {/* Sticky header: fixed inside this screen, never moves */}
                 <div className="sticky top-0 z-30 bg-background border-b shrink-0">
                     <div className="max-w-7xl mx-auto px-6 py-4 space-y-4">
                         <div className="flex justify-between items-center">
                             <div>
                                 <h1 className="text-2xl font-semibold">Products</h1>
-                                <p className="text-sm text-muted-foreground">
-                                    Manage products and inventory
-                                </p>
+                                <p className="text-sm text-muted-foreground">Manage products and inventory</p>
                             </div>
 
-                            <div className="flex gap-2">
-                                <Hint text="Add a new product">
-                                    <Button
-                                        className="bg-indigo-600 hover:bg-indigo-700"
-                                        onClick={() => {
-                                            setEditingProduct(null)
-                                            setModalOpen(true)
-                                        }}
-                                    >
-                                        + Add Product
-                                    </Button>
-                                </Hint>
+                            {canManageProducts ? (
+                                <div className="flex gap-2">
+                                    <Hint text="Add a new product">
+                                        <Button
+                                            className="bg-indigo-600 hover:bg-indigo-700"
+                                            onClick={() => {
+                                                setEditingProduct(null)
+                                                setModalOpen(true)
+                                            }}
+                                        >
+                                            + Add Product
+                                        </Button>
+                                    </Hint>
 
-                                <Hint text="Upload TSV to add products / update inventory">
-                                    <Button
-                                        variant="outline"
-                                        className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
-                                        onClick={() => setBulkOpen(true)}
-                                    >
-                                        Bulk Upload
-                                    </Button>
-                                </Hint>
-                            </div>
+                                    <Hint text="Upload TSV to add products / update inventory">
+                                        <Button
+                                            variant="outline"
+                                            className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
+                                            onClick={() => setBulkOpen(true)}
+                                        >
+                                            Bulk Upload
+                                        </Button>
+                                    </Hint>
+                                </div>
+                            ) : (
+                                <div className="h-10" />
+                            )}
                         </div>
 
                         <div className="max-w-2xl space-y-1">
@@ -409,16 +402,13 @@ export default function ProductsPage() {
                     </div>
                 </div>
 
-                {/* Cards viewport: the ONLY scroll area (prevents body scrollbar) */}
-                <div
-                    ref={scrollViewportRef}
-                    className="flex-1 overflow-y-auto overscroll-none"
-                >
+                <div ref={scrollViewportRef} className="flex-1 overflow-y-auto overscroll-none">
                     <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
                         <ProductCardGrid
                             products={products}
                             loading={resetLoading}
                             onEdit={(product) => {
+                                if (!canManageProducts) return
                                 setEditingProduct(product)
                                 setModalOpen(true)
                             }}
@@ -441,18 +431,22 @@ export default function ProductsPage() {
                     </div>
                 </div>
 
-                <ProductModal
-                    isOpen={modalOpen}
-                    initialData={editingProduct}
-                    onClose={() => setModalOpen(false)}
-                    onSuccess={hardReload}
-                />
+                {canManageProducts ? (
+                    <>
+                        <ProductModal
+                            isOpen={modalOpen}
+                            initialData={editingProduct}
+                            onClose={() => setModalOpen(false)}
+                            onSuccess={hardReload}
+                        />
 
-                <BulkUploadModal
-                    isOpen={bulkOpen}
-                    onClose={() => setBulkOpen(false)}
-                    onSuccess={hardReload}
-                />
+                        <BulkUploadModal
+                            isOpen={bulkOpen}
+                            onClose={() => setBulkOpen(false)}
+                            onSuccess={hardReload}
+                        />
+                    </>
+                ) : null}
             </div>
         </div>
     )

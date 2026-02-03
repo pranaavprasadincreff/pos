@@ -21,12 +21,11 @@ import { toast } from "sonner"
 
 import { CLIENT_FILTERS, ClientFilterKey } from "@/filters/clients"
 import { Hint } from "@/components/shared/Hint"
+import { can, Role } from "@/utils/permissions"
 
-// backend mirrors (search validation: length only)
 const EMAIL_MAX = 40
 const NAME_MAX = 30
 
-// tiny debounce hook (no extra deps)
 function useDebouncedValue<T>(value: T, delayMs: number) {
     const [debounced, setDebounced] = useState(value)
     useEffect(() => {
@@ -49,16 +48,25 @@ export default function ClientsPage() {
     const [searchBy, setSearchBy] = useState<ClientFilterKey>("name")
     const [searchError, setSearchError] = useState<string | null>(null)
 
+    const [role, setRole] = useState<Role | null>(null)
+    useEffect(() => {
+        setRole((sessionStorage.getItem("auth.role") as Role | null) ?? null)
+    }, [])
+
+    // ✅ “manage” means create/edit
+    const canManageClients = useMemo(() => {
+        if (!role) return false
+        return can(role, "client_create") || can(role, "client_edit")
+    }, [role])
+
     const pageSize = 10
 
     const placeholder = useMemo(() => {
         return CLIENT_FILTERS[searchBy]?.placeholder ?? "Search…"
     }, [searchBy])
 
-    // ✅ Debounced search input (500ms)
     const debouncedSearchTerm = useDebouncedValue(searchTerm, 500)
 
-    // ✅ length-only validation for search (no regex for email while typing)
     function validateSearch(term: string, by: ClientFilterKey) {
         const t = term.trim()
         if (!t) return null
@@ -68,14 +76,12 @@ export default function ClientsPage() {
             return null
         }
 
-        // by === "email"
         if (t.length > EMAIL_MAX) return "Email filter too long"
         return null
     }
 
     async function fetchClientsPage() {
         let toastId: string | number | undefined
-
         try {
             setLoading(true)
 
@@ -87,7 +93,6 @@ export default function ClientsPage() {
 
             const trimmed = debouncedSearchTerm.trim()
 
-            // No search => normal paginated
             if (trimmed.length === 0) {
                 const res = await getClients(page, pageSize)
                 setClients(res.content)
@@ -95,8 +100,7 @@ export default function ClientsPage() {
                 return
             }
 
-            // ✅ one-at-a-time filter based on dropdown
-            const apiField = CLIENT_FILTERS[searchBy].apiField // "name" | "email"
+            const apiField = CLIENT_FILTERS[searchBy].apiField
             const res = await filterClients({
                 page,
                 size: pageSize,
@@ -111,31 +115,43 @@ export default function ClientsPage() {
         }
     }
 
-    // Fetch:
-    // - immediately on page or filter type change
-    // - only after 500ms pause on typing (debouncedSearchTerm)
     useEffect(() => {
         fetchClientsPage()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, searchBy, debouncedSearchTerm])
 
     async function handleSubmit(form: ClientForm | ClientUpdateForm) {
-        if (editingClient) {
-            await updateClient(form as ClientUpdateForm)
-        } else {
-            await addClient(form as ClientForm)
+        let toastId: string | number | undefined
+
+        try {
+            toastId = toast.loading(
+                editingClient ? "Updating client..." : "Creating client..."
+            )
+
+            if (editingClient) {
+                await updateClient(form as ClientUpdateForm)
+                toast.success("Client updated successfully")
+            } else {
+                await addClient(form as ClientForm)
+                toast.success("Client created successfully")
+            }
+
+            // close + reset
+            setModalOpen(false)
+            setEditingClient(null)
+
+            // reset to first page so update is visible
+            setPage(0)
+            fetchClientsPage()
+        } catch (e: any) {
+            // let modal field-level errors handle this
+            throw e
+        } finally {
+            if (toastId) toast.dismiss(toastId)
         }
-
-        // ✅ close + clear edit state so "Create" opens fresh
-        setModalOpen(false)
-        setEditingClient(null)
-
-        // reset to first page so update is visible
-        setPage(0)
-        fetchClientsPage()
     }
 
-    // ✅ single close handler (also clears edit state)
+
     function handleCloseModal() {
         setModalOpen(false)
         setEditingClient(null)
@@ -150,25 +166,31 @@ export default function ClientsPage() {
         supports-[backdrop-filter]:bg-background/80"
             >
                 <div className="max-w-6xl mx-auto px-6 py-4 space-y-4">
-                    {/* Title + CTA */}
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center min-h-[44px]">
                         <div>
                             <h1 className="text-2xl font-semibold">Clients</h1>
                             <p className="text-sm text-muted-foreground">Manage registered clients</p>
                         </div>
 
-                        <Hint text="Add a new client">
-                            <Button
-                                className="bg-indigo-600 hover:bg-indigo-700"
-                                onClick={() => {
-                                    // ✅ important: ensure fresh "Create"
-                                    setEditingClient(null)
-                                    setModalOpen(true)
-                                }}
-                            >
-                                + Add Client
-                            </Button>
-                        </Hint>
+                        {/* ✅ lock CTA area height/width so header height never changes */}
+                        <div className="min-h-[40px] flex items-center">
+                            {canManageClients ? (
+                                <Hint text="Add a new client">
+                                    <Button
+                                        className="bg-indigo-600 hover:bg-indigo-700 h-10"
+                                        onClick={() => {
+                                            setEditingClient(null)
+                                            setModalOpen(true)
+                                        }}
+                                    >
+                                        + Add Client
+                                    </Button>
+                                </Hint>
+                            ) : (
+                                // ✅ spacer with same dimensions as button
+                                <div className="h-10 w-[122px]" />
+                            )}
+                        </div>
                     </div>
 
                     {/* Filters */}
@@ -224,7 +246,7 @@ export default function ClientsPage() {
                                     const v = e.target.value
                                     setSearchTerm(v)
                                     setPage(0)
-                                    setSearchError(validateSearch(v, searchBy)) // immediate validation feedback
+                                    setSearchError(validateSearch(v, searchBy))
                                 }}
                                 className="focus-visible:ring-2 focus-visible:ring-indigo-500 transition"
                             />
@@ -258,7 +280,9 @@ export default function ClientsPage() {
                     loading={loading}
                     page={page}
                     pageSize={pageSize}
+                    canManage={canManageClients} // ✅ pass
                     onEdit={(c) => {
+                        if (!canManageClients) return
                         setEditingClient(c)
                         setModalOpen(true)
                     }}
@@ -267,12 +291,15 @@ export default function ClientsPage() {
                 <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
             </div>
 
-            <ClientModal
-                isOpen={modalOpen}
-                initialData={editingClient}
-                onClose={handleCloseModal}
-                onSubmit={handleSubmit}
-            />
+            {/* ✅ Modal only for supervisors */}
+            {canManageClients && (
+                <ClientModal
+                    isOpen={modalOpen}
+                    initialData={editingClient}
+                    onClose={handleCloseModal}
+                    onSubmit={handleSubmit}
+                />
+            )}
         </div>
     )
 }

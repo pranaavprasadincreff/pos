@@ -99,6 +99,9 @@ public class NormalizationUtil {
 
     public static void normalizeInventoryUpdateForm(InventoryUpdateForm form) {
         if (form == null) return;
-        form.setProductId(normalizeBarcode(form.getProductId())); // barcode comes in here
+
+        if (form.getBarcode() != null) {
+            form.setBarcode(form.getBarcode().trim().toUpperCase());
+        }
     }
 }

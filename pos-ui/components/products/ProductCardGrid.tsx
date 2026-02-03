@@ -1,3 +1,4 @@
+import React from "react"
 import ProductCard from "./ProductCard"
 import type { ProductData } from "@/services/types"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -29,12 +30,13 @@ export default function ProductCardGrid({ products, loading, onEdit, onInventory
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {products.map((product) => (
-                <ProductCard
-                    key={product.id}
-                    product={product}
-                    onEdit={() => onEdit(product)}
-                    onInventoryUpdated={onInventoryUpdated}
-                />
+                <React.Fragment key={product.barcode}>
+                    <ProductCard
+                        product={product}
+                        onEdit={() => onEdit(product)}
+                        onInventoryUpdated={onInventoryUpdated}
+                    />
+                </React.Fragment>
             ))}
         </div>
     )

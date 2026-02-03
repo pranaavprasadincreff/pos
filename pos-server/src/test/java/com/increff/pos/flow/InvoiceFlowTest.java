@@ -1,7 +1,7 @@
 package com.increff.pos.flow;
 
 import com.increff.pos.api.ProductApi;
-import com.increff.pos.client.InvoiceClient;
+import com.increff.pos.wrapper.InvoiceClientWrapper;
 import com.increff.pos.db.OrderItemPojo;
 import com.increff.pos.db.OrderPojo;
 import com.increff.pos.db.ProductPojo;
@@ -23,7 +23,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class InvoiceFlowTest {
 
-    @Mock private InvoiceClient invoiceClient;
+    @Mock private InvoiceClientWrapper invoiceClientWrapper;
     @Mock private OrderFlow orderFlow;
     @Mock private ProductApi productApi;
 
@@ -39,13 +39,13 @@ class InvoiceFlowTest {
         existing.setOrderReferenceId("ORD-1");
 
         when(orderFlow.getByRef("ORD-1")).thenReturn(order);
-        when(invoiceClient.getInvoice("ORD-1")).thenReturn(existing);
+        when(invoiceClientWrapper.getInvoice("ORD-1")).thenReturn(existing);
 
         InvoiceData result = invoiceFlow.generateInvoice("ORD-1");
 
         assertEquals("ORD-1", result.getOrderReferenceId());
-        verify(invoiceClient).getInvoice("ORD-1");
-        verify(invoiceClient, never()).generateInvoice(any());
+        verify(invoiceClientWrapper).getInvoice("ORD-1");
+        verify(invoiceClientWrapper, never()).generateInvoice(any());
         verify(orderFlow, never()).markInvoiced(anyString());
         verifyNoInteractions(productApi);
     }
@@ -61,8 +61,8 @@ class InvoiceFlowTest {
         ApiException ex = assertThrows(ApiException.class, () -> invoiceFlow.generateInvoice("ORD-1"));
         assertTrue(ex.getMessage().toLowerCase().contains("only fulfillable"));
 
-        verify(invoiceClient, never()).getInvoice(anyString());
-        verify(invoiceClient, never()).generateInvoice(any());
+        verify(invoiceClientWrapper, never()).getInvoice(anyString());
+        verify(invoiceClientWrapper, never()).generateInvoice(any());
         verify(orderFlow, never()).markInvoiced(anyString());
         verifyNoInteractions(productApi);
     }
@@ -82,14 +82,14 @@ class InvoiceFlowTest {
 
         when(orderFlow.getByRef("ORD-1")).thenReturn(order);
         when(productApi.findByBarcodes(List.of("P1"))).thenReturn(List.of(p));
-        when(invoiceClient.generateInvoice(any(InvoiceGenerateForm.class))).thenReturn(data);
+        when(invoiceClientWrapper.generateInvoice(any(InvoiceGenerateForm.class))).thenReturn(data);
 
         InvoiceData result = invoiceFlow.generateInvoice("ORD-1");
 
         assertEquals("ORD-1", result.getOrderReferenceId());
 
         ArgumentCaptor<InvoiceGenerateForm> cap = ArgumentCaptor.forClass(InvoiceGenerateForm.class);
-        verify(invoiceClient).generateInvoice(cap.capture());
+        verify(invoiceClientWrapper).generateInvoice(cap.capture());
 
         InvoiceGenerateForm sent = cap.getValue();
         assertEquals("ORD-1", sent.getOrderReferenceId());
@@ -114,7 +114,7 @@ class InvoiceFlowTest {
         ApiException ex = assertThrows(ApiException.class, () -> invoiceFlow.generateInvoice("ORD-1"));
         assertTrue(ex.getMessage().toLowerCase().contains("missing product data"));
 
-        verify(invoiceClient, never()).generateInvoice(any());
+        verify(invoiceClientWrapper, never()).generateInvoice(any());
         verify(orderFlow, never()).markInvoiced(anyString());
     }
 
@@ -130,7 +130,7 @@ class InvoiceFlowTest {
 
         when(orderFlow.getByRef("ORD-1")).thenReturn(order);
         when(productApi.findByBarcodes(List.of("P1"))).thenReturn(List.of(p));
-        when(invoiceClient.generateInvoice(any())).thenThrow(new ApiException("down"));
+        when(invoiceClientWrapper.generateInvoice(any())).thenThrow(new ApiException("down"));
 
         assertThrows(ApiException.class, () -> invoiceFlow.generateInvoice("ORD-1"));
 
@@ -142,11 +142,11 @@ class InvoiceFlowTest {
         InvoiceData data = new InvoiceData();
         data.setOrderReferenceId("ORD-9");
 
-        when(invoiceClient.getInvoice("ORD-9")).thenReturn(data);
+        when(invoiceClientWrapper.getInvoice("ORD-9")).thenReturn(data);
 
         InvoiceData out = invoiceFlow.getInvoice("ORD-9");
         assertEquals("ORD-9", out.getOrderReferenceId());
-        verify(invoiceClient).getInvoice("ORD-9");
+        verify(invoiceClientWrapper).getInvoice("ORD-9");
     }
 
     private OrderPojo sampleOrder() {

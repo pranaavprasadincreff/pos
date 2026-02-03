@@ -1,16 +1,12 @@
-import axios from 'axios'
-import { InvoiceData } from '@/services/types'
+import api from "@/services/api"
+import { InvoiceData } from "@/services/types"
 
 export const invoiceService = {
     generate(orderReferenceId: string) {
-        return axios.post<InvoiceData>(
-            `/api/pos/invoice/generate/${orderReferenceId}`
-        )
+        return api.post<InvoiceData>(`/pos/invoice/generate/${orderReferenceId}`)
     },
 
     get(orderReferenceId: string) {
-        return axios.get<InvoiceData>(
-            `/api/pos/invoice/get/${orderReferenceId}`
-        )
+        return api.get<InvoiceData>(`/pos/invoice/get/${orderReferenceId}`)
     },
 }

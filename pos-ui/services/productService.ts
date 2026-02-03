@@ -1,20 +1,35 @@
-import axios from "axios"
+import api from "@/services/api"
 import type { PageResponse, ProductData, ProductForm, ProductUpdateForm } from "./types"
 
-const API = "http://localhost:8080/api"
-
 function extractApiError(err: unknown): never {
-    if (axios.isAxiosError(err)) {
-        const data: any = err.response?.data
-        throw new Error(
-            data?.message ||
-            data?.error ||
-            err.response?.statusText ||
-            err.message ||
-            "Request failed"
-        )
-    }
-    throw err instanceof Error ? err : new Error("Request failed")
+    const anyErr: any = err
+    const data = anyErr?.response?.data
+    throw new Error(
+        data?.message ||
+        data?.error ||
+        anyErr?.response?.statusText ||
+        anyErr?.message ||
+        "Request failed"
+    )
+}
+
+/**
+ * ✅ Normalize backend product payloads so `id` is always present for frontend usage.
+ * Many backends return `productId` (not `id`) — this keeps UI + inventory update stable.
+ */
+function normalizeProduct(p: any): ProductData {
+    // Prefer explicit `id`, otherwise fall back to `productId`
+    const normalizedId = p?.id ?? p?.productId ?? ""
+
+    return {
+        ...p,
+        id: normalizedId, // ensure `id` exists for inventory update
+    } as ProductData
+}
+
+function normalizePage(resData: any): PageResponse<ProductData> {
+    const content = Array.isArray(resData?.content) ? resData.content.map(normalizeProduct) : []
+    return { ...resData, content } as PageResponse<ProductData>
 }
 
 export async function getAllProducts(
@@ -22,8 +37,8 @@ export async function getAllProducts(
     size: number
 ): Promise<PageResponse<ProductData>> {
     try {
-        const res = await axios.post(`${API}/product/get-all-paginated`, { page, size })
-        return res.data
+        const res = await api.post(`/product/get-all-paginated`, { page, size })
+        return normalizePage(res.data)
     } catch (e) {
         extractApiError(e)
     }
@@ -34,11 +49,11 @@ export async function filterProducts(params: {
     size: number
     barcode?: string
     name?: string
-    client?: string // backend expects "client" = clientEmail
+    client?: string
 }): Promise<PageResponse<ProductData>> {
     try {
-        const res = await axios.post(`${API}/product/filter`, params)
-        return res.data
+        const res = await api.post(`/product/filter`, params)
+        return normalizePage(res.data)
     } catch (e) {
         extractApiError(e)
     }
@@ -46,8 +61,8 @@ export async function filterProducts(params: {
 
 export async function getProductByBarcode(barcode: string): Promise<ProductData> {
     try {
-        const res = await axios.get(`${API}/product/get-by-barcode/${encodeURIComponent(barcode)}`)
-        return res.data
+        const res = await api.get(`/product/get-by-barcode/${encodeURIComponent(barcode)}`)
+        return normalizeProduct(res.data)
     } catch (e) {
         extractApiError(e)
     }
@@ -55,8 +70,8 @@ export async function getProductByBarcode(barcode: string): Promise<ProductData>
 
 export async function createProduct(form: ProductForm): Promise<ProductData> {
     try {
-        const res = await axios.post(`${API}/product/add`, form)
-        return res.data
+        const res = await api.post(`/product/add`, form)
+        return normalizeProduct(res.data)
     } catch (e) {
         extractApiError(e)
     }
@@ -64,17 +79,17 @@ export async function createProduct(form: ProductForm): Promise<ProductData> {
 
 export async function updateProduct(form: ProductUpdateForm): Promise<ProductData> {
     try {
-        const res = await axios.put(`${API}/product/update`, form)
-        return res.data
+        const res = await api.put(`/product/update`, form)
+        return normalizeProduct(res.data)
     } catch (e) {
         extractApiError(e)
     }
 }
 
-export async function updateInventory(productId: string, quantity: number): Promise<ProductData> {
+export async function updateInventory(barcode: string, quantity: number): Promise<ProductData> {
     try {
-        const res = await axios.patch(`${API}/inventory/update`, { productId, quantity })
-        return res.data
+        const res = await api.patch(`/inventory/update`, { barcode, quantity })
+        return normalizeProduct(res.data)
     } catch (e) {
         extractApiError(e)
     }
@@ -82,7 +97,7 @@ export async function updateInventory(productId: string, quantity: number): Prom
 
 export async function bulkAddProducts(fileBase64: string): Promise<{ file: string }> {
     try {
-        const res = await axios.post(`${API}/product/bulk-add-products`, { file: fileBase64 })
+        const res = await api.post(`/product/bulk-add-products`, { file: fileBase64 })
         return res.data
     } catch (e) {
         extractApiError(e)
@@ -91,9 +106,10 @@ export async function bulkAddProducts(fileBase64: string): Promise<{ file: strin
 
 export async function bulkUpdateInventory(fileBase64: string): Promise<{ file: string }> {
     try {
-        const res = await axios.post(`${API}/product/bulk-update-inventory`, { file: fileBase64 })
+        const res = await api.post(`/inventory/bulk-inventory-update`, { file: fileBase64 })
         return res.data
     } catch (e) {
         extractApiError(e)
     }
 }
+

@@ -4,6 +4,7 @@ import com.increff.pos.api.ClientApi;
 import com.increff.pos.api.InventoryApi;
 import com.increff.pos.api.ProductApi;
 import com.increff.pos.db.InventoryPojo;
+import com.increff.pos.db.InventoryUpdatePojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
@@ -54,12 +55,16 @@ public class ProductFlow {
         return Pair.of(updated, inv);
     }
 
-    public Pair<ProductPojo, InventoryPojo> updateInventory(InventoryPojo invPojo) throws ApiException {
-        validateInventoryCap(invPojo.getQuantity());
-        ProductPojo product = resolveProductForInventoryUpdate(invPojo);
-        InventoryPojo updatedInv = persistInventoryUpdate(product, invPojo.getQuantity());
+    public Pair<ProductPojo, InventoryPojo> updateInventory(InventoryUpdatePojo updatePojo) throws ApiException {
+        ProductPojo product = productApi.getProductByBarcode(updatePojo.getBarcode());
+        inventoryApi.createInventoryIfAbsent(product.getId());
+
+        InventoryPojo inv = createInventoryPojo(product.getId(), updatePojo.getQuantity());
+
+        InventoryPojo updatedInv = inventoryApi.updateInventory(inv);
         return Pair.of(product, updatedInv);
     }
+
 
     public Page<Pair<ProductPojo, InventoryPojo>> filter(ProductFilterForm form) throws ApiException {
         List<String> clientEmails = resolveClientEmailsForFilter(form);
@@ -104,12 +109,6 @@ public class ProductFlow {
     private InventoryPojo ensureInventoryExists(String productId) throws ApiException {
         inventoryApi.createInventoryIfAbsent(productId);
         return inventoryApi.getByProductId(productId);
-    }
-
-    private void validateInventoryCap(Integer qty) throws ApiException {
-        if (qty != null && qty > INVENTORY_MAX) {
-            throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
-        }
     }
 
     private ProductPojo resolveProductForInventoryUpdate(InventoryPojo invPojo) throws ApiException {
@@ -320,6 +319,13 @@ public class ProductFlow {
             results.add(new String[]{p.getProductId(), "ERROR", ""});
         }
         return results;
+    }
+
+    private InventoryPojo createInventoryPojo(String id, Integer quantity) {
+        InventoryPojo inv = new InventoryPojo();
+        inv.setProductId(id);
+        inv.setQuantity(quantity);
+        return inv;
     }
 
     private record BulkProductSavePlan(List<ProductPojo> toSave, List<Integer> indicesToSave) {}

@@ -1,6 +1,7 @@
 package com.increff.pos.dto;
 
 import com.increff.pos.db.InventoryPojo;
+import com.increff.pos.db.InventoryUpdatePojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.flow.ProductFlow;
@@ -61,10 +62,10 @@ public class ProductDto {
     public ProductData updateInventory(InventoryUpdateForm form) throws ApiException {
         NormalizationUtil.normalizeInventoryUpdateForm(form);
         ValidationUtil.validateInventoryUpdateForm(form);
-
-        InventoryPojo pojo = ProductHelper.convertInventoryUpdateFormToEntity(form);
+        InventoryUpdatePojo pojo = ProductHelper.convertInventoryUpdateFormToEntity(form);
         return toData(productFlow.updateInventory(pojo));
     }
+
 
     public BulkUploadData bulkAddProducts(BulkUploadForm form) throws ApiException {
         ParsedBulkData parsed = parseAndValidateHeadersForProducts(form);

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { createProduct, updateProduct } from "@/services/productService"
-import { ProductData } from "@/services/types"
+import type { ProductData } from "@/services/types"
 import { toast } from "sonner"
 import axios from "axios"
 
@@ -76,7 +76,7 @@ function extractApiMessage(err: unknown): string {
 }
 
 export default function ProductModal({ isOpen, onClose, onSuccess, initialData }: Props) {
-    const isEdit = Boolean(initialData)
+    const isEditMode = Boolean(initialData)
 
     const [barcode, setBarcode] = useState("")
     const [clientEmail, setClientEmail] = useState("")
@@ -85,14 +85,12 @@ export default function ProductModal({ isOpen, onClose, onSuccess, initialData }
     const [imageUrl, setImageUrl] = useState("")
     const [submitting, setSubmitting] = useState(false)
 
-    // show errors after blur or submit
     const [touched, setTouched] = useState<Record<string, boolean>>({})
     const [submitAttempted, setSubmitAttempted] = useState(false)
 
-    // server-mapped errors for highlighting
     const [serverErrors, setServerErrors] = useState<FieldErrors>({})
 
-    const barcodeRef = useRef<HTMLInputElement>(null)
+    const barcodeRef = useRef<HTMLInputElement | null>(null)
 
     function resetLocalState() {
         setBarcode("")
@@ -110,10 +108,10 @@ export default function ProductModal({ isOpen, onClose, onSuccess, initialData }
         if (!isOpen) return
 
         if (initialData) {
-            setBarcode(initialData.barcode)
-            setClientEmail(initialData.clientEmail)
-            setName(initialData.name)
-            setMrp(String(initialData.mrp))
+            setBarcode(initialData.barcode ?? "")
+            setClientEmail(initialData.clientEmail ?? "")
+            setName(initialData.name ?? "")
+            setMrp(String(initialData.mrp ?? ""))
             setImageUrl(initialData.imageUrl ?? "")
         } else {
             setBarcode("")
@@ -202,30 +200,34 @@ export default function ProductModal({ isOpen, onClose, onSuccess, initialData }
         }
 
         setSubmitting(true)
-        const toastId = toast.loading(isEdit ? "Updating product..." : "Adding product...")
+
+        const toastId = toast.loading(isEditMode ? "Updating product..." : "Creating product...")
+
+        const payload = {
+            barcode: barcode.trim(),
+            clientEmail: clientEmail.trim(),
+            name: name.trim(),
+            mrp: Number(mrp),
+            imageUrl: imageUrl.trim() ? imageUrl.trim() : undefined,
+        }
 
         try {
-            const payload = {
-                barcode: barcode.trim(),
-                clientEmail: clientEmail.trim(),
-                name: name.trim(),
-                mrp: Number(mrp),
-                imageUrl: imageUrl.trim() ? imageUrl.trim() : undefined,
-            }
+            if (isEditMode && initialData) {
+                const oldBarcode = (initialData.barcode ?? "").trim()
 
-            if (isEdit && initialData) {
                 await updateProduct({
-                    oldBarcode: initialData.barcode,
+                    oldBarcode,
                     newBarcode: payload.barcode,
                     clientEmail: payload.clientEmail,
                     name: payload.name,
                     mrp: payload.mrp,
                     imageUrl: payload.imageUrl,
                 })
-                toast.success("Product updated")
+
+                toast.success("Updated product details", { id: toastId })
             } else {
                 await createProduct(payload)
-                toast.success("Product added")
+                toast.success("Created product", { id: toastId })
             }
 
             onSuccess()
@@ -233,7 +235,7 @@ export default function ProductModal({ isOpen, onClose, onSuccess, initialData }
             onClose()
         } catch (err: unknown) {
             const msg = extractApiMessage(err)
-            toast.error(msg)
+            toast.error(msg, { id: toastId })
 
             const lower = msg.toLowerCase()
             if (lower.includes("barcode")) {
@@ -251,13 +253,11 @@ export default function ProductModal({ isOpen, onClose, onSuccess, initialData }
                 setServerErrors({ barcode: msg })
             }
         } finally {
-            toast.dismiss(toastId)
             setSubmitting(false)
         }
     }
 
     function handleClose() {
-        // close from Cancel or X only
         resetLocalState()
         onClose()
     }
@@ -270,7 +270,7 @@ export default function ProductModal({ isOpen, onClose, onSuccess, initialData }
                 onEscapeKeyDown={(e) => e.preventDefault()}
             >
                 <DialogHeader>
-                    <DialogTitle>{isEdit ? "Edit Product" : "Add Product"}</DialogTitle>
+                    <DialogTitle>{isEditMode ? "Edit Product" : "Add Product"}</DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-4">
@@ -299,8 +299,7 @@ export default function ProductModal({ isOpen, onClose, onSuccess, initialData }
                             value={clientEmail}
                             onChange={(e) => {
                                 setClientEmail(e.target.value)
-                                if (serverErrors.clientEmail)
-                                    setServerErrors((p) => ({ ...p, clientEmail: undefined }))
+                                if (serverErrors.clientEmail) setServerErrors((p) => ({ ...p, clientEmail: undefined }))
                             }}
                             onBlur={() => setTouched((p) => ({ ...p, clientEmail: true }))}
                             placeholder="client@email.com"
@@ -355,8 +354,7 @@ export default function ProductModal({ isOpen, onClose, onSuccess, initialData }
                             value={imageUrl}
                             onChange={(e) => {
                                 setImageUrl(e.target.value)
-                                if (serverErrors.imageUrl)
-                                    setServerErrors((p) => ({ ...p, imageUrl: undefined }))
+                                if (serverErrors.imageUrl) setServerErrors((p) => ({ ...p, imageUrl: undefined }))
                             }}
                             onBlur={() => setTouched((p) => ({ ...p, imageUrl: true }))}
                             placeholder="https://image.com/product.jpg"
