@@ -1,6 +1,7 @@
 package com.increff.pos.dto;
 
 import com.increff.pos.api.ClientApi;
+import com.increff.pos.api.ProductApi;
 import com.increff.pos.db.ClientPojo;
 import com.increff.pos.model.data.BulkUploadData;
 import com.increff.pos.model.data.ProductData;
@@ -23,6 +24,9 @@ public class ProductDtoTest extends AbstractUnitTest {
 
     @Autowired
     private ClientApi clientApi;
+
+    @Autowired
+    private ProductApi productApi;
 
     private void createClient(String email, String name) throws ApiException {
         ClientPojo c = new ClientPojo();
@@ -54,6 +58,11 @@ public class ProductDtoTest extends AbstractUnitTest {
             createClient(email, name);
         } catch (ApiException ignored) {
         }
+    }
+
+    private String getProductIdByBarcode(String barcode) throws ApiException {
+        // barcode in ProductData is already normalized to upper-case by your flow/normalization
+        return productApi.getProductByBarcode(barcode).getId();
     }
 
     // ------------------------
@@ -204,7 +213,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         ProductData created = productDto.addProduct(validProductForm("p-old", "c1@example.com"));
 
         InventoryUpdateForm inv = new InventoryUpdateForm();
-        inv.setProductId(created.getId());
+        inv.setProductId(getProductIdByBarcode(created.getBarcode()));
         inv.setQuantity(10);
         productDto.updateInventory(inv);
 
@@ -245,7 +254,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         ProductData created = productDto.addProduct(validProductForm("p1", "c1@example.com"));
 
         InventoryUpdateForm inv = new InventoryUpdateForm();
-        inv.setProductId(created.getId());
+        inv.setProductId(getProductIdByBarcode(created.getBarcode()));
         inv.setQuantity(1001);
 
         assertThrows(ApiException.class, () -> productDto.updateInventory(inv));
@@ -257,7 +266,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         ProductData created = productDto.addProduct(validProductForm("p1", "c1@example.com"));
 
         InventoryUpdateForm inv = new InventoryUpdateForm();
-        inv.setProductId(created.getId());
+        inv.setProductId(getProductIdByBarcode(created.getBarcode()));
         inv.setQuantity(25);
 
         ProductData updated = productDto.updateInventory(inv);

@@ -4,7 +4,6 @@ import lombok.Data;
 
 @Data
 public class ProductData {
-    private String id;
     private String barcode;
     private String clientEmail;
     private String name;

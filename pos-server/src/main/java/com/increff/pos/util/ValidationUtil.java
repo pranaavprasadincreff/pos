@@ -330,4 +330,14 @@ public class ValidationUtil {
         }
         return count;
     }
+
+    private static final int PASSWORD_MIN = 6;
+    private static final int PASSWORD_MAX = 60;
+
+    public static void validatePassword(String password) throws ApiException {
+        if (!StringUtils.hasText(password)) throw new ApiException("Password required");
+        if (password.length() < PASSWORD_MIN) throw new ApiException("Password must be at least " + PASSWORD_MIN + " characters");
+        if (password.length() > PASSWORD_MAX) throw new ApiException("Password too long");
+    }
+
 }

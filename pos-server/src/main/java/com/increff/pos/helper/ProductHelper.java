@@ -51,7 +51,6 @@ public class ProductHelper {
             InventoryPojo inventory) {
 
         ProductData data = new ProductData();
-        data.setId(product.getId());
         data.setBarcode(product.getBarcode());
         data.setClientEmail(product.getClientEmail());
         data.setName(product.getName());
