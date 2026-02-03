@@ -1,9 +1,17 @@
 export function formatDate(dateString: string): string {
     const d = new Date(dateString)
 
-    const day = d.getDate().toString().padStart(2, '0')
-    const month = d.toLocaleString('en-IN', { month: 'short' })
-    const year = d.getFullYear()
+    const datePart = d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    })
 
-    return `${day} ${month}, ${year}`
+    const timePart = d.toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false, // ✅ 24-hour clock
+    })
+
+    return ` ${timePart}, ${datePart}`
 }

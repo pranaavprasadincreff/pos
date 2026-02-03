@@ -74,6 +74,10 @@ export default function ProductsPage() {
     const [bulkOpen, setBulkOpen] = useState(false)
     const [editingProduct, setEditingProduct] = useState<ProductData | null>(null)
 
+    // Cards-only scroll viewport (the only scrollbar)
+    const scrollViewportRef = useRef<HTMLDivElement | null>(null)
+
+    // Sentinel inside the scroll viewport
     const observerRef = useRef<HTMLDivElement | null>(null)
 
     // request guard: only latest request mutates state
@@ -242,14 +246,21 @@ export default function ProductsPage() {
     }, [page, hasMore, loadingMore, resetLoading, fetchPage])
 
     useEffect(() => {
-        if (!observerRef.current) return
+        const root = scrollViewportRef.current
+        const target = observerRef.current
+        if (!root || !target) return
+
         const observer = new IntersectionObserver(
             (entries) => {
-                if (entries[0].isIntersecting) loadNextPage()
+                if (entries[0]?.isIntersecting) loadNextPage()
             },
-            { rootMargin: "150px" }
+            {
+                root, // root is the cards viewport so visibility is strictly clipped to it
+                rootMargin: "200px",
+            }
         )
-        observer.observe(observerRef.current)
+
+        observer.observe(target)
         return () => observer.disconnect()
     }, [loadNextPage])
 
@@ -273,7 +284,12 @@ export default function ProductsPage() {
         setProducts((prev) =>
             prev.map((p) =>
                 p.id === updated.id
-                    ? { ...p, ...updated, clientName: clientNameByEmailRef.current[updated.clientEmail] ?? p.clientName }
+                    ? {
+                        ...p,
+                        ...updated,
+                        clientName:
+                            clientNameByEmailRef.current[updated.clientEmail] ?? p.clientName,
+                    }
                     : p
             )
         )
@@ -281,150 +297,163 @@ export default function ProductsPage() {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="sticky top-0 z-30 bg-background border-b">
-                <div className="max-w-7xl mx-auto px-6 py-4 space-y-4">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h1 className="text-2xl font-semibold">Products</h1>
-                            <p className="text-sm text-muted-foreground">Manage products and inventory</p>
-                        </div>
+        // Lock page scroll: only the cards viewport will scroll
+        <div className="h-[100dvh] bg-background">
+            {/* Fill height, header + scroll region */}
+            <div className="h-full flex flex-col">
+                {/* Sticky header: fixed inside this screen, never moves */}
+                <div className="sticky top-0 z-30 bg-background border-b shrink-0">
+                    <div className="max-w-7xl mx-auto px-6 py-4 space-y-4">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h1 className="text-2xl font-semibold">Products</h1>
+                                <p className="text-sm text-muted-foreground">
+                                    Manage products and inventory
+                                </p>
+                            </div>
 
-                        <div className="flex gap-2">
-                            <Hint text="Add a new product">
-                                <Button
-                                    className="bg-indigo-600 hover:bg-indigo-700"
-                                    onClick={() => {
-                                        setEditingProduct(null)
-                                        setModalOpen(true)
-                                    }}
-                                >
-                                    + Add Product
-                                </Button>
-                            </Hint>
-
-                            <Hint text="Upload TSV to add products / update inventory">
-                                <Button
-                                    variant="outline"
-                                    className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
-                                    onClick={() => setBulkOpen(true)}
-                                >
-                                    Bulk Upload
-                                </Button>
-                            </Hint>
-                        </div>
-                    </div>
-
-                    <div className="max-w-2xl space-y-1">
-                        <div className="flex items-center gap-2 flex-nowrap">
-              <span className="text-sm text-muted-foreground whitespace-nowrap shrink-0">
-                Filter by:
-              </span>
-
-                            <Hint text={PRODUCT_FILTERS[searchBy]?.tooltip ?? "Choose filter"}>
-                                <div>
-                                    <Select
-                                        value={searchBy}
-                                        onValueChange={(v) => {
-                                            setSearchBy(v as ProductFilterKey)
-                                            setSearchError(null)
+                            <div className="flex gap-2">
+                                <Hint text="Add a new product">
+                                    <Button
+                                        className="bg-indigo-600 hover:bg-indigo-700"
+                                        onClick={() => {
+                                            setEditingProduct(null)
+                                            setModalOpen(true)
                                         }}
                                     >
-                                        <SelectTrigger
-                                            className="
-                        w-40 transition
-                        focus-visible:ring-2 focus-visible:ring-indigo-500
-                        data-[state=open]:ring-2 data-[state=open]:ring-indigo-500
-                      "
-                                        >
-                                            <SelectValue />
-                                        </SelectTrigger>
+                                        + Add Product
+                                    </Button>
+                                </Hint>
 
-                                        <SelectContent
-                                            side="bottom"
-                                            align="start"
-                                            sideOffset={4}
-                                            avoidCollisions={false}
-                                            position="popper"
-                                        >
-                                            <SelectItem value="name">Name</SelectItem>
-                                            <SelectItem value="barcode">Barcode</SelectItem>
-                                            <SelectItem value="clientEmail">Client Email</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </Hint>
-
-                            <Input
-                                placeholder={placeholder}
-                                value={searchTerm}
-                                onChange={(e) => {
-                                    const v = e.target.value
-                                    setSearchTerm(v)
-                                    setSearchError(validateFilterInput(v, searchBy))
-                                }}
-                                className="focus-visible:ring-2 focus-visible:ring-indigo-500 transition"
-                            />
-
-                            {searchTerm && (
-                                <Hint text="Clear current search">
+                                <Hint text="Upload TSV to add products / update inventory">
                                     <Button
                                         variant="outline"
                                         className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
-                                        onClick={() => {
-                                            setSearchTerm("")
-                                            setSearchError(null)
-                                        }}
+                                        onClick={() => setBulkOpen(true)}
                                     >
-                                        Clear
+                                        Bulk Upload
                                     </Button>
                                 </Hint>
-                            )}
+                            </div>
                         </div>
 
-                        {searchError && <p className="text-sm text-red-500">{searchError}</p>}
+                        <div className="max-w-2xl space-y-1">
+                            <div className="flex items-center gap-2 flex-nowrap">
+                <span className="text-sm text-muted-foreground whitespace-nowrap shrink-0">
+                  Filter by:
+                </span>
+
+                                <Hint text={PRODUCT_FILTERS[searchBy]?.tooltip ?? "Choose filter"}>
+                                    <div>
+                                        <Select
+                                            value={searchBy}
+                                            onValueChange={(v) => {
+                                                setSearchBy(v as ProductFilterKey)
+                                                setSearchError(null)
+                                            }}
+                                        >
+                                            <SelectTrigger
+                                                className="
+                          w-40 transition
+                          focus-visible:ring-2 focus-visible:ring-indigo-500
+                          data-[state=open]:ring-2 data-[state=open]:ring-indigo-500
+                        "
+                                            >
+                                                <SelectValue />
+                                            </SelectTrigger>
+
+                                            <SelectContent
+                                                side="bottom"
+                                                align="start"
+                                                sideOffset={4}
+                                                avoidCollisions={false}
+                                                position="popper"
+                                            >
+                                                <SelectItem value="name">Name</SelectItem>
+                                                <SelectItem value="barcode">Barcode</SelectItem>
+                                                <SelectItem value="clientEmail">Client Email</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </Hint>
+
+                                <Input
+                                    placeholder={placeholder}
+                                    value={searchTerm}
+                                    onChange={(e) => {
+                                        const v = e.target.value
+                                        setSearchTerm(v)
+                                        setSearchError(validateFilterInput(v, searchBy))
+                                    }}
+                                    className="focus-visible:ring-2 focus-visible:ring-indigo-500 transition"
+                                />
+
+                                {searchTerm && (
+                                    <Hint text="Clear current search">
+                                        <Button
+                                            variant="outline"
+                                            className="border-indigo-200 bg-indigo-50/40 text-indigo-700 hover:bg-indigo-50"
+                                            onClick={() => {
+                                                setSearchTerm("")
+                                                setSearchError(null)
+                                            }}
+                                        >
+                                            Clear
+                                        </Button>
+                                    </Hint>
+                                )}
+                            </div>
+
+                            {searchError && <p className="text-sm text-red-500">{searchError}</p>}
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div className="max-w-7xl mx-auto px-6 pt-6 space-y-6">
-                <ProductCardGrid
-                    products={products}
-                    loading={resetLoading}
-                    onEdit={(product) => {
-                        setEditingProduct(product)
-                        setModalOpen(true)
-                    }}
-                    onInventoryUpdated={handleInventoryUpdated}
+                {/* Cards viewport: the ONLY scroll area (prevents body scrollbar) */}
+                <div
+                    ref={scrollViewportRef}
+                    className="flex-1 overflow-y-auto overscroll-none"
+                >
+                    <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+                        <ProductCardGrid
+                            products={products}
+                            loading={resetLoading}
+                            onEdit={(product) => {
+                                setEditingProduct(product)
+                                setModalOpen(true)
+                            }}
+                            onInventoryUpdated={handleInventoryUpdated}
+                        />
+
+                        {hasMore && (
+                            <div
+                                ref={observerRef}
+                                className="h-16 flex items-center justify-center text-sm text-muted-foreground"
+                            >
+                                {loadingMore ? (
+                                    <div className="flex items-center gap-2">
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Loading more products…
+                                    </div>
+                                ) : null}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <ProductModal
+                    isOpen={modalOpen}
+                    initialData={editingProduct}
+                    onClose={() => setModalOpen(false)}
+                    onSuccess={hardReload}
                 />
 
-                {hasMore && (
-                    <div
-                        ref={observerRef}
-                        className="h-16 flex items-center justify-center text-sm text-muted-foreground"
-                    >
-                        {loadingMore ? (
-                            <div className="flex items-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Loading more products…
-                            </div>
-                        ) : null}
-                    </div>
-                )}
+                <BulkUploadModal
+                    isOpen={bulkOpen}
+                    onClose={() => setBulkOpen(false)}
+                    onSuccess={hardReload}
+                />
             </div>
-
-            <ProductModal
-                isOpen={modalOpen}
-                initialData={editingProduct}
-                onClose={() => setModalOpen(false)}
-                onSuccess={hardReload}
-            />
-
-            <BulkUploadModal
-                isOpen={bulkOpen}
-                onClose={() => setBulkOpen(false)}
-                onSuccess={hardReload}
-            />
         </div>
     )
 }

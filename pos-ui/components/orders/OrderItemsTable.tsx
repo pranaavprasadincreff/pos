@@ -157,7 +157,7 @@ export default function OrderItemsTable({ items }: OrderItemsTableProps) {
 
                                 {/* Selling Price shown as total for the row */}
                                 <TableCell className="text-right font-medium tabular-nums">
-                                    ₹ {sellingTotal.toFixed(2)}
+                                    ₹{formatINR(sellingTotal)}
                                 </TableCell>
                             </TableRow>
                         )

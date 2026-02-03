@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { ProductData } from "@/services/types"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import type { ProductData } from "@/services/types"
+import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
@@ -46,10 +46,9 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
             setIsDirty(false)
             setOpen(false)
             toast.success("Inventory updated")
-            onUpdated(updated) // ✅ patch in parent, no reload
+            onUpdated(updated)
         } catch (e: unknown) {
-            const message = e instanceof Error ? e.message : "Inventory update failed"
-            toast.error(message)
+            toast.error(e instanceof Error ? e.message : "Inventory update failed")
         }
     }
 
@@ -64,92 +63,102 @@ export default function InventoryPopover({ product, onUpdated }: Props) {
     }, [value])
 
     return (
-        <Popover
+        <PopoverPrimitive.Root
             open={open}
             onOpenChange={(o) => {
                 if (!o) handleClose()
                 else setOpen(true)
             }}
         >
-            <PopoverTrigger asChild>
-                {/* Hint MUST wrap the actual trigger element */}
-                <Hint text="Update inventory">
+            <Hint text="Update inventory">
+                <PopoverPrimitive.Trigger asChild>
                     <Button variant="outline" className="w-full justify-between">
                         Inventory
                         <span className="font-semibold">{product.inventory}</span>
                     </Button>
-                </Hint>
-            </PopoverTrigger>
+                </PopoverPrimitive.Trigger>
+            </Hint>
 
-            <PopoverContent
-                className={cn("w-64 space-y-3", error ? "border-red-500" : "")}
-                onOpenAutoFocus={() => inputRef.current?.focus()}
-            >
-                <p className="text-sm font-medium">Update Inventory</p>
+            {/* ✅ Portal ensures popover never affects card height */}
+            <PopoverPrimitive.Portal>
+                <PopoverPrimitive.Content
+                    side="bottom"
+                    align="start"
+                    sideOffset={8}
+                    collisionPadding={12}
+                    className={cn(
+                        "z-50 w-64 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none space-y-3",
+                        error && "border-red-500"
+                    )}
+                    onOpenAutoFocus={(e) => {
+                        e.preventDefault()
+                        inputRef.current?.focus()
+                    }}
+                    onInteractOutside={(e) => {
+                        // optional: allow clicking outside to close normally
+                        // (Radix default is fine; keeping this here in case you want to tweak)
+                    }}
+                >
+                    <p className="text-sm font-medium">Update Inventory</p>
 
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        onClick={() =>
-                            setValue((v) => {
-                                const base = v ?? 0
-                                const nv = base - 1
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                const nv = (value ?? 0) - 1
                                 validate(nv)
-                                return nv
-                            })
-                        }
-                    >
-                        –
-                    </Button>
+                                setValue(nv)
+                            }}
+                        >
+                            –
+                        </Button>
 
-                    <Input
-                        ref={inputRef}
-                        type="text"
-                        inputMode="numeric"
-                        value={value === null ? "" : value}
-                        onFocus={(e) => e.target.select()}
-                        onWheel={(e) => e.currentTarget.blur()}
-                        onChange={(e) => {
-                            const raw = e.target.value
-                            if (raw === "") {
-                                setValue(null)
-                                setError("")
-                                return
-                            }
-                            if (!/^-?\d+$/.test(raw)) return
-                            const num = Number(raw)
-                            setValue(num)
-                            validate(num)
-                        }}
-                        className={cn("text-center", error && "border-red-500 focus-visible:ring-red-500")}
-                    />
+                        <Input
+                            ref={inputRef}
+                            type="text"
+                            inputMode="numeric"
+                            value={value === null ? "" : value}
+                            onFocus={(e) => e.target.select()}
+                            onWheel={(e) => e.currentTarget.blur()}
+                            onChange={(e) => {
+                                const raw = e.target.value
+                                if (raw === "") {
+                                    setValue(null)
+                                    setError("")
+                                    return
+                                }
+                                if (!/^-?\d+$/.test(raw)) return
+                                const num = Number(raw)
+                                setValue(num)
+                                validate(num)
+                            }}
+                            className={cn("text-center", error && "border-red-500 focus-visible:ring-red-500")}
+                        />
 
-                    <Button
-                        variant="outline"
-                        onClick={() =>
-                            setValue((v) => {
-                                const base = v ?? 0
-                                const nv = base + 1
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                const nv = (value ?? 0) + 1
                                 validate(nv)
-                                return nv
-                            })
-                        }
-                    >
-                        +
-                    </Button>
-                </div>
+                                setValue(nv)
+                            }}
+                        >
+                            +
+                        </Button>
+                    </div>
 
-                {error && <p className="text-xs text-red-600">{error}</p>}
+                    {error && <p className="text-xs text-red-600">{error}</p>}
 
-                <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="ghost" onClick={handleClose}>
-                        Cancel
-                    </Button>
-                    <Button onClick={handleUpdate} disabled={!!error || !isDirty}>
-                        Update
-                    </Button>
-                </div>
-            </PopoverContent>
-        </Popover>
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="ghost" onClick={handleClose}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleUpdate} disabled={!!error || !isDirty}>
+                            Update
+                        </Button>
+                    </div>
+                </PopoverPrimitive.Content>
+            </PopoverPrimitive.Portal>
+        </PopoverPrimitive.Root>
     )
 }

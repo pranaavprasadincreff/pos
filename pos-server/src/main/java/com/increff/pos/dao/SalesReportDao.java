@@ -41,8 +41,6 @@ public class SalesReportDao extends AbstractDao<SalesReportAggregatePojo> {
         ensureIndexes();
     }
 
-    // -------------------- Stored Daily Aggregates --------------------
-
     public void replaceDailyAggregates(LocalDate date, List<SalesReportAggregatePojo> rows) {
         Query delete = Query.query(Criteria.where("date").is(date));
         mongoOperations.remove(delete, SalesReportAggregatePojo.class);
@@ -78,14 +76,6 @@ public class SalesReportDao extends AbstractDao<SalesReportAggregatePojo> {
         return p;
     }
 
-    // -------------------- MIN-DB Daily Facet Builder --------------------
-
-    /**
-     * ONE aggregation with $facet for daily generation:
-     * orders -> unwind items -> lookup product -> unwind product -> facet:
-     *   clientRows: group by product.clientEmail
-     *   productRows: group by product.clientEmail + orderItems.productBarcode
-     */
     public List<SalesReportAggregatePojo> buildDailyAggregatesFacet(LocalDate date) {
         ZonedDateTime from = date.atStartOfDay(IST);
         ZonedDateTime toExclusive = date.plusDays(1).atStartOfDay(IST);
@@ -103,14 +93,12 @@ public class SalesReportDao extends AbstractDao<SalesReportAggregatePojo> {
                 .foreignField(PRODUCT_BARCODE_FIELD)
                 .as("product");
 
-        // if product not found, drop that item (cannot attribute to any client)
         UnwindOperation unwindProduct = unwind("product");
 
         AggregationExpression lineRevenue =
                 ArithmeticOperators.Multiply.valueOf("orderItems.orderedQuantity")
                         .multiplyBy("orderItems.sellingPrice");
 
-        // CLIENT facet: group by product.clientEmail
         GroupOperation groupByClient = group(PRODUCT_CLIENT_EMAIL_PATH)
                 .addToSet("orderReferenceId").as("orderRefs")
                 .sum("orderItems.orderedQuantity").as("itemsCount")
@@ -122,7 +110,6 @@ public class SalesReportDao extends AbstractDao<SalesReportAggregatePojo> {
                 .and("itemsCount").as("itemsCount")
                 .and("totalRevenue").as("totalRevenue");
 
-        // PRODUCT facet: group by product.clientEmail + item barcode
         GroupOperation groupByClientAndProduct = group(
                 Fields.from(
                         Fields.field("clientEmail", PRODUCT_CLIENT_EMAIL_PATH),
@@ -184,8 +171,6 @@ public class SalesReportDao extends AbstractDao<SalesReportAggregatePojo> {
         return p;
     }
 
-    // -------------------- On-demand Computation from Orders --------------------
-
     public List<SalesReportRowPojo> computeFromOrdersForSingleDay(LocalDate date, String clientEmail, ReportRowType type) {
         ZonedDateTime from = date.atStartOfDay(IST);
         ZonedDateTime toExclusive = date.plusDays(1).atStartOfDay(IST);
@@ -225,7 +210,6 @@ public class SalesReportDao extends AbstractDao<SalesReportAggregatePojo> {
         ops.add(lookupProduct);
         ops.add(unwindProduct);
 
-        // filter by client owner (seller)
         if (StringUtils.hasText(clientEmail)) {
             ops.add(match(Criteria.where(PRODUCT_CLIENT_EMAIL_PATH).is(clientEmail)));
         }
@@ -283,8 +267,6 @@ public class SalesReportDao extends AbstractDao<SalesReportAggregatePojo> {
 
     private long nullSafeLong(Long v) { return v == null ? 0L : v; }
     private double nullSafeDouble(Double v) { return v == null ? 0.0 : v; }
-
-    // ---------- Aggregation mapping classes ----------
 
     public static class AggRow {
         private String clientEmail;
