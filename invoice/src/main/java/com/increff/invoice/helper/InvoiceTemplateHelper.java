@@ -13,73 +13,206 @@ public class InvoiceTemplateHelper {
 
     public static String createInvoiceXslFo(InvoiceGenerateForm form) {
 
+        // -------- Items table rows ----------
         StringBuilder itemsTable = new StringBuilder();
 
-        // Table header
-        itemsTable.append("<fo:table-row font-weight='bold'>")
-                .append("<fo:table-cell><fo:block>S.No</fo:block></fo:table-cell>")
-                .append("<fo:table-cell><fo:block>Product Barcode</fo:block></fo:table-cell>")
-                .append("<fo:table-cell><fo:block>Product Name</fo:block></fo:table-cell>")
-                .append("<fo:table-cell><fo:block>Quantity</fo:block></fo:table-cell>")
-                .append("<fo:table-cell><fo:block>Price</fo:block></fo:table-cell>")
-                .append("<fo:table-cell><fo:block>Total</fo:block></fo:table-cell>")
-                .append("</fo:table-row>");
-
         int sno = 1;
-        double grandTotal = 0.0;
+        double totalAmount = 0.0;
 
         for (InvoiceItemForm item : form.getItems()) {
-            double total = item.getQuantity() * item.getSellingPrice();
-            grandTotal += total;
+            double lineTotal = item.getQuantity() * item.getSellingPrice();
+            totalAmount += lineTotal;
 
             itemsTable.append("<fo:table-row>")
-                    .append("<fo:table-cell><fo:block>").append(sno++).append("</fo:block></fo:table-cell>")
-                    .append("<fo:table-cell><fo:block>").append(item.getBarcode()).append("</fo:block></fo:table-cell>")
-                    .append("<fo:table-cell><fo:block>").append(item.getProductName()).append("</fo:block></fo:table-cell>")
-                    .append("<fo:table-cell><fo:block>").append(item.getQuantity()).append("</fo:block></fo:table-cell>")
-                    .append("<fo:table-cell><fo:block>").append(df.format(item.getSellingPrice())).append("</fo:block></fo:table-cell>")
-                    .append("<fo:table-cell><fo:block>").append(df.format(total)).append("</fo:block></fo:table-cell>")
+                    .append(cell(String.valueOf(sno++), "center"))
+                    .append(cell(escape(item.getBarcode()), "left"))
+                    .append(cell(escape(item.getProductName()), "left"))
+                    .append(cell(String.valueOf(item.getQuantity()), "right"))
+                    .append(cell(df.format(item.getSellingPrice()), "right"))
+                    .append(cell(df.format(lineTotal), "right"))
                     .append("</fo:table-row>");
         }
 
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
-        String invoiceDate = dtf.format(ZonedDateTime.now());
+        // -------- Date format: "16:49, 26th March 2022" ----------
+        ZonedDateTime now = ZonedDateTime.now();
 
-        // Full XSL-FO document
+        int day = now.getDayOfMonth();
+        String daySuffix;
+        if (day >= 11 && day <= 13) {
+            daySuffix = "th";
+        } else {
+            switch (day % 10) {
+                case 1:
+                    daySuffix = "st";
+                    break;
+                case 2:
+                    daySuffix = "nd";
+                    break;
+                case 3:
+                    daySuffix = "rd";
+                    break;
+                default:
+                    daySuffix = "th";
+            }
+        }
+
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("MMMM yyyy");
+
+        String orderDate =
+                timeFormatter.format(now) +
+                        ", " +
+                        day + daySuffix +
+                        " " +
+                        dateFormatter.format(now);
+
+        // This is order reference number
+        String orderReferenceNumber = safe(form.getOrderReferenceId());
+
+        // -------- XSL-FO ----------
         String xslFo =
                 "<?xml version='1.0' encoding='UTF-8'?>\n" +
                         "<fo:root xmlns:fo='http://www.w3.org/1999/XSL/Format'>\n" +
                         "  <fo:layout-master-set>\n" +
-                        "    <fo:simple-page-master master-name='A4' page-height='29.7cm' page-width='21cm' margin='2cm'>\n" +
+                        "    <fo:simple-page-master master-name='A4' page-height='29.7cm' page-width='21cm' margin='1.5cm'>\n" +
                         "      <fo:region-body/>\n" +
                         "    </fo:simple-page-master>\n" +
                         "  </fo:layout-master-set>\n" +
                         "  <fo:page-sequence master-reference='A4'>\n" +
-                        "    <fo:flow flow-name='xsl-region-body'>\n" +
-                        "      <fo:block font-size='20pt' font-weight='bold' text-align='center' margin-bottom='10pt'>Invoice</fo:block>\n" +
-                        "      <fo:block>Invoice Date: " + invoiceDate + "</fo:block>\n" +
-                        "      <fo:block>Order Reference ID: " + form.getOrderReferenceId() + "</fo:block>\n" +
-                        "      <fo:block margin-top='10pt'>\n" +
-                        "        <fo:table table-layout='fixed' width='100%' border='0.5pt solid black' border-collapse='collapse'>\n" +
-                        "          <fo:table-column column-width='5%'/>\n" +
+                        "    <fo:flow flow-name='xsl-region-body' font-family='Helvetica'>\n" +
+
+                        // Top: Title + meta (right)
+                        // Give more space to the right meta area so DATE always fits in a single line
+                        "      <fo:table table-layout='fixed' width='100%'>\n" +
+                        "        <fo:table-column column-width='55%'/>\n" +
+                        "        <fo:table-column column-width='45%'/>\n" +
+                        "        <fo:table-body>\n" +
+                        "          <fo:table-row>\n" +
+                        "            <fo:table-cell>\n" +
+                        "              <fo:block font-size='20pt' font-weight='bold' color='#9E9E9E' margin-bottom='6pt'>Invoice</fo:block>\n" +
+                        "            </fo:table-cell>\n" +
+                        "            <fo:table-cell>\n" +
+                        "              <fo:block margin-top='2pt'>\n" +
+                        // Slightly wider value column + extra padding for breathing space
+                        "                <fo:table table-layout='fixed' width='100%' border='0.5pt solid #BDBDBD'>\n" +
+                        "                  <fo:table-column column-width='50%'/>\n" +
+                        "                  <fo:table-column column-width='50%'/>\n" +
+                        "                  <fo:table-body>\n" +
+                        metaRow("DATE", orderDate) +
+                        metaRow("ORDER REFERENCE NO.", orderReferenceNumber) +
+                        "                  </fo:table-body>\n" +
+                        "                </fo:table>\n" +
+                        "              </fo:block>\n" +
+                        "            </fo:table-cell>\n" +
+                        "          </fo:table-row>\n" +
+                        "        </fo:table-body>\n" +
+                        "      </fo:table>\n" +
+
+                        // Items table (grid)
+                        "      <fo:block margin-top='14pt'>\n" +
+                        "        <fo:table table-layout='fixed' width='100%' border='0.5pt solid #BDBDBD' border-collapse='separate'>\n" +
+                        "          <fo:table-column column-width='6%'/>\n" +
                         "          <fo:table-column column-width='20%'/>\n" +
-                        "          <fo:table-column column-width='25%'/>\n" +
+                        "          <fo:table-column column-width='30%'/>\n" +
                         "          <fo:table-column column-width='10%'/>\n" +
-                        "          <fo:table-column column-width='20%'/>\n" +
-                        "          <fo:table-column column-width='20%'/>" +
+                        "          <fo:table-column column-width='17%'/>\n" +
+                        "          <fo:table-column column-width='17%'/>\n" +
+                        "          <fo:table-header>\n" +
+                        "            <fo:table-row background-color='#F2F2F2' font-weight='bold'>\n" +
+                        headerCell("S.No", "center") +
+                        headerCell("Product Barcode", "left") +
+                        headerCell("Product Name", "left") +
+                        headerCell("Quantity", "right") +
+                        headerCell("Price", "right") +
+                        headerCell("Total", "right") +
+                        "            </fo:table-row>\n" +
+                        "          </fo:table-header>\n" +
                         "          <fo:table-body>\n" +
-                        itemsTable.toString() +
-                        "            <fo:table-row font-weight='bold'>\n" +
-                        "              <fo:table-cell number-columns-spanned='5'><fo:block text-align='right'>Grand Total</fo:block></fo:table-cell>\n" +
-                        "              <fo:table-cell><fo:block>" + df.format(grandTotal) + "</fo:block></fo:table-cell>\n" +
+                        itemsTable +
+                        "          </fo:table-body>\n" +
+                        "        </fo:table>\n" +
+                        "      </fo:block>\n" +
+
+                        // Bottom area: remarks (left) + total (right)
+                        "      <fo:block margin-top='12pt'>\n" +
+                        "        <fo:table table-layout='fixed' width='100%'>\n" +
+                        "          <fo:table-column column-width='60%'/>\n" +
+                        "          <fo:table-column column-width='40%'/>\n" +
+                        "          <fo:table-body>\n" +
+                        "            <fo:table-row>\n" +
+                        "              <fo:table-cell padding-right='10pt'>\n" +
+                        "                <fo:block font-size='9pt' color='#666666'>Remarks / Instructions:</fo:block>\n" +
+                        "                <fo:block font-size='9pt' color='#444444' margin-top='4pt'>Thank you for your purchase.</fo:block>\n" +
+                        "                <fo:block font-size='9pt' color='#444444'>Please retain this invoice for your records.</fo:block>\n" +
+                        "              </fo:table-cell>\n" +
+                        "              <fo:table-cell>\n" +
+                        "                <fo:table table-layout='fixed' width='100%'>\n" +
+                        "                  <fo:table-column column-width='60%'/>\n" +
+                        "                  <fo:table-column column-width='40%'/>\n" +
+                        "                  <fo:table-body>\n" +
+                        totalsRowOnly("TOTAL", df.format(totalAmount)) +
+                        "                  </fo:table-body>\n" +
+                        "                </fo:table>\n" +
+                        "              </fo:table-cell>\n" +
                         "            </fo:table-row>\n" +
                         "          </fo:table-body>\n" +
                         "        </fo:table>\n" +
                         "      </fo:block>\n" +
+
                         "    </fo:flow>\n" +
                         "  </fo:page-sequence>\n" +
                         "</fo:root>";
 
         return xslFo;
+    }
+
+    // ---------- Helpers ----------
+    private static String headerCell(String text, String align) {
+        return "<fo:table-cell border='0.5pt solid #BDBDBD' padding='6pt'>" +
+                "<fo:block font-size='9pt' text-align='" + align + "'>" + escape(text) + "</fo:block>" +
+                "</fo:table-cell>";
+    }
+
+    private static String cell(String text, String align) {
+        return "<fo:table-cell border='0.5pt solid #BDBDBD' padding='6pt'>" +
+                "<fo:block font-size='9pt' text-align='" + align + "'>" + escape(text) + "</fo:block>" +
+                "</fo:table-cell>";
+    }
+
+    private static String metaRow(String label, String value) {
+        // wrap-option="no-wrap" ensures single-line; slightly smaller font to handle worst-case strings.
+        return "                    <fo:table-row>\n" +
+                "                      <fo:table-cell border='0.5pt solid #BDBDBD' padding-top='6pt' padding-bottom='6pt' padding-left='8pt' padding-right='8pt'>\n" +
+                "                        <fo:block font-size='8pt' font-weight='bold' color='#666666' wrap-option='no-wrap'>" + escape(label) + "</fo:block>\n" +
+                "                      </fo:table-cell>\n" +
+                "                      <fo:table-cell border='0.5pt solid #BDBDBD' padding-top='6pt' padding-bottom='6pt' padding-left='8pt' padding-right='8pt'>\n" +
+                "                        <fo:block font-size='8.5pt' text-align='right' wrap-option='no-wrap'>" + escape(value) + "</fo:block>\n" +
+                "                      </fo:table-cell>\n" +
+                "                    </fo:table-row>\n";
+    }
+
+    private static String totalsRowOnly(String label, String value) {
+        return "                    <fo:table-row>\n" +
+                "                      <fo:table-cell padding='6pt'>\n" +
+                "                        <fo:block font-size='8pt' color='#666666' font-weight='bold' text-align='right' wrap-option='no-wrap'>" + escape(label) + "</fo:block>\n" +
+                "                      </fo:table-cell>\n" +
+                "                      <fo:table-cell padding='6pt' background-color='#F2F2F2'>\n" +
+                "                        <fo:block font-size='10pt' text-align='right' font-weight='bold' wrap-option='no-wrap'>" + escape(value) + "</fo:block>\n" +
+                "                      </fo:table-cell>\n" +
+                "                    </fo:table-row>\n";
+    }
+
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
+    // Minimal XML escaping for safety
+    private static String escape(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&apos;");
     }
 }
