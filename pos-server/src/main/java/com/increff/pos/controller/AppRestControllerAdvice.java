@@ -22,7 +22,6 @@ public class AppRestControllerAdvice {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<MessageData> handle(MethodArgumentNotValidException e) {
-        // Keep it simple: return first field error message
         FieldError fieldError = e.getBindingResult().getFieldError();
         String message = fieldError != null ? fieldError.getDefaultMessage() : "Validation failed";
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new MessageData(message));
@@ -30,7 +29,6 @@ public class AppRestControllerAdvice {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<MessageData> handle(ConstraintViolationException e) {
-        // Typically for @PathVariable/@RequestParam validation
         String message = e.getMessage() == null ? "Validation failed" : e.getMessage();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new MessageData(message));
     }

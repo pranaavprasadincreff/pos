@@ -21,7 +21,7 @@ public class ClientDto {
     private ClientApi clientApi;
 
     public ClientData create(ClientForm clientCreateForm) throws ApiException {
-        normalizeClientCreateRequest(clientCreateForm);
+        NormalizationUtil.normalizeClientForm(clientCreateForm);
         ClientPojo clientToCreate = ClientHelper.convertFormToEntity(clientCreateForm);
         ClientPojo createdClient = clientApi.add(clientToCreate);
         return ClientHelper.convertFormToDto(createdClient);
@@ -34,7 +34,7 @@ public class ClientDto {
     }
 
     public Page<ClientData> filter(ClientFilterForm clientFilterForm) throws ApiException {
-        normalizeClientFilterRequest(clientFilterForm);
+        NormalizationUtil.normalizeClientFilterForm(clientFilterForm);
         Page<ClientPojo> clientPage = clientApi.filter(
                 clientFilterForm.getName(),
                 clientFilterForm.getEmail(),
@@ -45,7 +45,7 @@ public class ClientDto {
     }
 
     public ClientData update(ClientUpdateForm clientUpdateForm) throws ApiException {
-        normalizeClientUpdateRequest(clientUpdateForm);
+        NormalizationUtil.normalizeClientUpdateForm(clientUpdateForm);
         ClientUpdatePojo updateRequest = ClientHelper.convertUpdateFormToEntity(clientUpdateForm);
         ClientPojo updatedClient = clientApi.update(updateRequest);
         return ClientHelper.convertFormToDto(updatedClient);
@@ -54,18 +54,6 @@ public class ClientDto {
     public Page<ClientData> getAllUsingFilter(PageForm pageForm) throws ApiException {
         ClientFilterForm clientFilterForm = buildEmptyFilterFromPage(pageForm);
         return filter(clientFilterForm);
-    }
-
-    private void normalizeClientCreateRequest(ClientForm clientCreateForm) {
-        NormalizationUtil.normalizeClientForm(clientCreateForm);
-    }
-
-    private void normalizeClientUpdateRequest(ClientUpdateForm clientUpdateForm) {
-        NormalizationUtil.normalizeClientUpdateForm(clientUpdateForm);
-    }
-
-    private void normalizeClientFilterRequest(ClientFilterForm clientFilterForm) {
-        NormalizationUtil.normalizeClientFilterForm(clientFilterForm);
     }
 
     private ClientFilterForm buildEmptyFilterFromPage(PageForm pageForm) {

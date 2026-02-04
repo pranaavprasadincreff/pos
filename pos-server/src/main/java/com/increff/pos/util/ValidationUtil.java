@@ -29,28 +29,6 @@ public class ValidationUtil {
             "CANCELLED"
     );
 
-    // ---------------- CLIENT ----------------
-
-    public static void validateClientForm(ClientForm form) throws ApiException {
-        if (form == null) throw new ApiException("Client form required");
-        validateEmail(form.getEmail());
-        validateName(form.getName());
-    }
-
-    public static void validateClientUpdateForm(ClientUpdateForm form) throws ApiException {
-        if (form == null) throw new ApiException("Client update form required");
-        validateEmail(form.getOldEmail());
-        validateEmail(form.getNewEmail());
-        validateName(form.getName());
-    }
-
-    public static void validateClientFilterForm(ClientFilterForm form) throws ApiException {
-        if (form == null) throw new ApiException("Client filter form required");
-        validateOptionalName(form.getName());
-        validateOptionalEmail(form.getEmail());
-        validatePageBounds(form.getPage(), form.getSize());
-    }
-
     // ---------------- PRODUCT ----------------
 
     public static void validateProductForm(ProductForm form) throws ApiException {

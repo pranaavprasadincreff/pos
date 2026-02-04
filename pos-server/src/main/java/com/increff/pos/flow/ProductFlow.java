@@ -21,20 +21,26 @@ import java.util.stream.Collectors;
 
 @Component
 public class ProductFlow {
+
+    private static final int INVENTORY_MAX = 1000;
+    private static final int CLIENT_MATCH_LIMIT = 1000;
+
     @Autowired
     private ProductApi productApi;
+
     @Autowired
     private InventoryApi inventoryApi;
+
     @Autowired
     private ClientApi clientApi;
 
-    private static final int INVENTORY_MAX = 1000;
+    public Pair<ProductPojo, InventoryPojo> addProduct(ProductPojo productToCreate) throws ApiException {
+        ensureClientExists(productToCreate.getClientEmail());
 
-    public Pair<ProductPojo, InventoryPojo> addProduct(ProductPojo pojo) throws ApiException {
-        ensureClientExists(pojo.getClientEmail());
-        ProductPojo saved = productApi.addProduct(pojo);
-        InventoryPojo inv = ensureInventoryExists(saved.getId());
-        return Pair.of(saved, inv);
+        ProductPojo createdProduct = productApi.addProduct(productToCreate);
+        InventoryPojo inventory = ensureInventoryExists(createdProduct.getId());
+
+        return Pair.of(createdProduct, inventory);
     }
 
     public Pair<ProductPojo, InventoryPojo> getByBarcode(String barcode) throws ApiException {
@@ -43,64 +49,98 @@ public class ProductFlow {
         return Pair.of(product, inventory);
     }
 
-    public Page<Pair<ProductPojo, InventoryPojo>> getAll(PageForm form) {
-        Page<ProductPojo> products = productApi.getAllProducts(form.getPage(), form.getSize());
-        return attachInventory(products);
+    public Page<Pair<ProductPojo, InventoryPojo>> getAll(PageForm pageForm) {
+        Page<ProductPojo> productsPage = productApi.getAllProducts(pageForm.getPage(), pageForm.getSize());
+        return attachInventory(productsPage);
     }
 
-    public Pair<ProductPojo, InventoryPojo> updateProduct(ProductUpdatePojo updatePojo) throws ApiException {
-        ensureClientExists(updatePojo.getClientEmail());
-        ProductPojo updated = productApi.updateProduct(updatePojo);
-        InventoryPojo inv = inventoryApi.getByProductId(updated.getId());
-        return Pair.of(updated, inv);
+    public Pair<ProductPojo, InventoryPojo> updateProduct(ProductUpdatePojo updateRequest) throws ApiException {
+        ensureClientExists(updateRequest.getClientEmail());
+
+        ProductPojo updatedProduct = productApi.updateProduct(updateRequest);
+        InventoryPojo inventory = inventoryApi.getByProductId(updatedProduct.getId());
+
+        return Pair.of(updatedProduct, inventory);
     }
 
-    public Pair<ProductPojo, InventoryPojo> updateInventory(InventoryUpdatePojo updatePojo) throws ApiException {
-        ProductPojo product = productApi.getProductByBarcode(updatePojo.getBarcode());
+    public Pair<ProductPojo, InventoryPojo> updateInventory(InventoryUpdatePojo updateRequest) throws ApiException {
+        ProductPojo product = productApi.getProductByBarcode(updateRequest.getBarcode());
         inventoryApi.createInventoryIfAbsent(product.getId());
 
-        InventoryPojo inv = createInventoryPojo(product.getId(), updatePojo.getQuantity());
+        InventoryPojo inventoryToUpdate = new InventoryPojo();
+        inventoryToUpdate.setProductId(product.getId());
+        inventoryToUpdate.setQuantity(updateRequest.getQuantity());
 
-        InventoryPojo updatedInv = inventoryApi.updateInventory(inv);
-        return Pair.of(product, updatedInv);
+        InventoryPojo updatedInventory = inventoryApi.updateInventory(inventoryToUpdate);
+        return Pair.of(product, updatedInventory);
     }
 
+    public Page<Pair<ProductPojo, InventoryPojo>> filter(ProductFilterForm filterForm) throws ApiException {
+        List<String> matchedClientEmails = resolveClientEmailsForFilter(filterForm);
 
-    public Page<Pair<ProductPojo, InventoryPojo>> filter(ProductFilterForm form) throws ApiException {
-        List<String> clientEmails = resolveClientEmailsForFilter(form);
-        Page<ProductPojo> filtered = productApi.filter(form, clientEmails);
-        return attachInventory(filtered);
+        Page<ProductPojo> productsPage = productApi.filter(filterForm, matchedClientEmails);
+        return attachInventory(productsPage);
     }
 
-    public List<String[]> bulkAddProducts(List<ProductPojo> pojos) {
-        List<String[]> results = initResultsForProducts(pojos);
-        if (pojos == null || pojos.isEmpty()) return results;
+    public List<String[]> bulkAddProducts(List<ProductPojo> productsToCreate) {
+        List<String[]> resultRows = initResultsForProducts(productsToCreate);
+        if (productsToCreate == null || productsToCreate.isEmpty()) {
+            return resultRows;
+        }
 
-        Set<String> validClients = validateClients(extractClientEmails(pojos));
-        // TODO: existingByBarcode - existingProducts
-        Map<String, ProductPojo> existingByBarcode = getExistingProductsByBarcode(pojos);
+        Set<String> validClientEmails = resolveValidClientEmails(productsToCreate);
+        Map<String, ProductPojo> existingProductsByBarcode = fetchExistingProductsByBarcode(productsToCreate);
 
-        BulkProductSavePlan plan = planBulkProductSaves(pojos, results, validClients, existingByBarcode);
-        if (plan.toSave().isEmpty()) return results;
+        BulkProductSavePlan savePlan = buildBulkProductSavePlan(productsToCreate, resultRows, validClientEmails, existingProductsByBarcode);
+        if (savePlan.productsToSave().isEmpty()) {
+            return resultRows;
+        }
 
-        // TODO: change name
-        Map<String, ProductPojo> savedByBarcode = saveProductsAndCreateInventories(plan.toSave());
-        markSuccessfulProductRows(results, pojos, plan.indicesToSave(), savedByBarcode);
-        return results;
+        Map<String, ProductPojo> savedByBarcode = saveProductsAndCreateInventories(savePlan.productsToSave());
+        markSuccessfulProductRows(resultRows, productsToCreate, savePlan.rowIndicesToSave(), savedByBarcode);
+
+        return resultRows;
     }
 
-    public List<String[]> bulkUpdateInventory(List<InventoryPojo> pojos) {
-        List<String[]> results = initResultsForInventory(pojos);
-        if (pojos == null || pojos.isEmpty()) return results;
+    /**
+     * NEW BEHAVIOR:
+     * - Allows duplicate barcodes in the incoming list
+     * - Aggregates deltas per barcode
+     * - Invalid rows do not block other rows
+     * - If aggregated update would exceed INVENTORY_MAX, ALL rows for that barcode become error
+     */
+    public List<String[]> bulkUpdateInventory(List<InventoryPojo> incomingRows) {
+        List<String[]> resultRows = initResultsForInventory(incomingRows);
+        if (incomingRows == null || incomingRows.isEmpty()) {
+            return resultRows;
+        }
 
-        Map<String, ProductPojo> productByBarcode = resolveProductsForBulkInventory(pojos);
-        Map<String, InventoryPojo> inventoryByProductId = resolveInventoriesForBulkInventory(productByBarcode);
+        AggregatedInventoryInput aggregatedInput = aggregateInventoryDeltas(incomingRows, resultRows);
 
-        List<InventoryPojo> updates = applyBulkInventoryUpdates(pojos, results, productByBarcode, inventoryByProductId);
+        if (aggregatedInput.totalDeltaByBarcode().isEmpty()) {
+            return resultRows;
+        }
 
-        if (!updates.isEmpty()) inventoryApi.saveAll(updates);
-        return results;
+        Map<String, ProductPojo> productByBarcode = fetchProductsByBarcode(aggregatedInput.totalDeltaByBarcode().keySet());
+        Map<String, InventoryPojo> inventoryByProductId = fetchInventoriesByProductId(productByBarcode.values());
+
+        List<InventoryPojo> inventoriesToSave = new ArrayList<>();
+        applyAggregatedInventoryUpdates(
+                aggregatedInput,
+                productByBarcode,
+                inventoryByProductId,
+                inventoriesToSave,
+                resultRows
+        );
+
+        if (!inventoriesToSave.isEmpty()) {
+            inventoryApi.saveAll(inventoriesToSave);
+        }
+
+        return resultRows;
     }
+
+    // -------------------- Private helpers (max 2 levels) --------------------
 
     private void ensureClientExists(String clientEmail) throws ApiException {
         clientApi.getClientByEmail(clientEmail);
@@ -111,222 +151,265 @@ public class ProductFlow {
         return inventoryApi.getByProductId(productId);
     }
 
-    private ProductPojo resolveProductForInventoryUpdate(InventoryPojo invPojo) throws ApiException {
-        return productApi.getProductById(invPojo.getProductId());
+    /**
+     * Product filter requirement:
+     * - form.getClient() should match client NAME OR EMAIL (case-insensitive, partial)
+     * - keep existing client filter behavior unchanged
+     */
+    private List<String> resolveClientEmailsForFilter(ProductFilterForm form) {
+        if (form.getClient() == null || form.getClient().isBlank()) {
+            return null;
+        }
+        return clientApi.findClientEmailsByNameOrEmail(form.getClient(), CLIENT_MATCH_LIMIT);
     }
 
-    private InventoryPojo persistInventoryUpdate(ProductPojo product, Integer qty) throws ApiException {
-        InventoryPojo toUpdate = new InventoryPojo();
-        toUpdate.setProductId(product.getId());
-        toUpdate.setQuantity(qty);
+    private Set<String> resolveValidClientEmails(List<ProductPojo> productsToCreate) {
+        Set<String> clientEmailsInFile = productsToCreate.stream()
+                .map(ProductPojo::getClientEmail)
+                .collect(Collectors.toSet());
+
+        if (clientEmailsInFile.isEmpty()) {
+            return Set.of();
+        }
 
         try {
-            return inventoryApi.updateInventory(toUpdate);
-        } catch (ApiException e) {
-            throw new ApiException("Inventory not found for barcode: " + product.getBarcode());
+            clientApi.validateClientsExist(clientEmailsInFile);
+            return clientEmailsInFile;
+        } catch (ApiException ignored) {
+            return validateClientsIndividually(clientEmailsInFile);
         }
     }
 
-    private List<String> resolveClientEmailsForFilter(ProductFilterForm form) throws ApiException {
-        if (form.getClient() == null || form.getClient().isBlank()) return null;
-
-        return clientApi.filter(form.getClient(), form.getClient(), 0, 1000)
-                .stream()
-                .map(c -> c.getEmail())
-                .toList();
+    private Set<String> validateClientsIndividually(Set<String> emails) {
+        Set<String> valid = new HashSet<>();
+        for (String email : emails) {
+            try {
+                clientApi.getClientByEmail(email);
+                valid.add(email);
+            } catch (ApiException ignored) {
+            }
+        }
+        return valid;
     }
 
-    private Set<String> extractClientEmails(List<ProductPojo> pojos) {
-        return pojos.stream()
-                .map(ProductPojo::getClientEmail)
-                .collect(Collectors.toSet());
-    }
-
-    private Map<String, ProductPojo> getExistingProductsByBarcode(List<ProductPojo> pojos) {
-        List<String> barcodes = pojos.stream().map(ProductPojo::getBarcode).toList();
+    private Map<String, ProductPojo> fetchExistingProductsByBarcode(List<ProductPojo> products) {
+        List<String> barcodes = products.stream().map(ProductPojo::getBarcode).toList();
         return productApi.findByBarcodes(barcodes)
                 .stream()
                 .collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
     }
 
-    private BulkProductSavePlan planBulkProductSaves(
-            List<ProductPojo> pojos,
-            List<String[]> results,
+    private BulkProductSavePlan buildBulkProductSavePlan(
+            List<ProductPojo> productsToCreate,
+            List<String[]> resultRows,
             Set<String> validClients,
             Map<String, ProductPojo> existingByBarcode
     ) {
         List<ProductPojo> toSave = new ArrayList<>();
-        List<Integer> indicesToSave = new ArrayList<>();
+        List<Integer> rowIndicesToSave = new ArrayList<>();
 
-        for (int i = 0; i < pojos.size(); i++) {
-            ProductPojo p = pojos.get(i);
+        for (int i = 0; i < productsToCreate.size(); i++) {
+            ProductPojo product = productsToCreate.get(i);
 
-            if (!validClients.contains(p.getClientEmail())) {
-                results.get(i)[2] = "Client does not exist";
-                continue;
-            }
-            if (existingByBarcode.containsKey(p.getBarcode())) {
-                results.get(i)[2] = "Duplicate barcode";
+            if (!validClients.contains(product.getClientEmail())) {
+                resultRows.get(i)[2] = "Client does not exist";
                 continue;
             }
 
-            toSave.add(p);
-            indicesToSave.add(i);
+            if (existingByBarcode.containsKey(product.getBarcode())) {
+                resultRows.get(i)[2] = "Duplicate barcode";
+                continue;
+            }
+
+            toSave.add(product);
+            rowIndicesToSave.add(i);
         }
 
-        return new BulkProductSavePlan(toSave, indicesToSave);
+        return new BulkProductSavePlan(toSave, rowIndicesToSave);
     }
 
-    private Map<String, ProductPojo> saveProductsAndCreateInventories(List<ProductPojo> toSave) {
-        List<ProductPojo> saved = productApi.saveAll(toSave);
-        // TODO: savedByBarcode -> barcodeProductMap
-        Map<String, ProductPojo> savedByBarcode = saved.stream()
+    private Map<String, ProductPojo> saveProductsAndCreateInventories(List<ProductPojo> productsToSave) {
+        List<ProductPojo> savedProducts = productApi.saveAll(productsToSave);
+
+        Map<String, ProductPojo> savedByBarcode = savedProducts.stream()
                 .collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
 
-        List<InventoryPojo> inventories = saved.stream()
-                .map(p -> {
-                    InventoryPojo i = new InventoryPojo();
-                    i.setProductId(p.getId());
-                    i.setQuantity(0);
-                    return i;
+        List<InventoryPojo> inventoriesToCreate = savedProducts.stream()
+                .map(product -> {
+                    InventoryPojo inventory = new InventoryPojo();
+                    inventory.setProductId(product.getId());
+                    inventory.setQuantity(0);
+                    return inventory;
                 })
                 .toList();
 
-        inventoryApi.saveAll(inventories);
+        inventoryApi.saveAll(inventoriesToCreate);
         return savedByBarcode;
     }
 
     private void markSuccessfulProductRows(
-            List<String[]> results,
-            List<ProductPojo> originalPojos,
-            List<Integer> indicesToSave,
+            List<String[]> resultRows,
+            List<ProductPojo> originalProducts,
+            List<Integer> rowIndicesToSave,
             Map<String, ProductPojo> savedByBarcode
     ) {
-        for (int k = 0; k < indicesToSave.size(); k++) {
-            int originalIndex = indicesToSave.get(k);
-            ProductPojo original = originalPojos.get(originalIndex);
-
+        for (Integer rowIndex : rowIndicesToSave) {
+            ProductPojo original = originalProducts.get(rowIndex);
             if (savedByBarcode.containsKey(original.getBarcode())) {
-                results.get(originalIndex)[1] = "SUCCESS";
-                results.get(originalIndex)[2] = "";
+                resultRows.get(rowIndex)[1] = "SUCCESS";
+                resultRows.get(rowIndex)[2] = "";
             }
         }
     }
 
-    private Map<String, ProductPojo> resolveProductsForBulkInventory(List<InventoryPojo> pojos) {
-        List<String> barcodes = pojos.stream().map(InventoryPojo::getProductId).toList(); // barcode carrier
-        return productApi.findByBarcodes(barcodes)
+    private AggregatedInventoryInput aggregateInventoryDeltas(List<InventoryPojo> incomingRows, List<String[]> resultRows) {
+        Map<String, Integer> totalDeltaByBarcode = new LinkedHashMap<>();
+        Map<String, List<Integer>> rowIndicesByBarcode = new HashMap<>();
+
+        for (int i = 0; i < incomingRows.size(); i++) {
+            InventoryPojo incoming = incomingRows.get(i);
+            String barcode = incoming == null ? null : incoming.getProductId(); // barcode carrier
+            Integer delta = incoming == null ? null : incoming.getQuantity();
+
+            if (barcode == null || barcode.isBlank()) {
+                resultRows.get(i)[2] = "Barcode cannot be empty";
+                continue;
+            }
+
+            if (delta == null) {
+                resultRows.get(i)[2] = "Quantity is required";
+                continue;
+            }
+
+            if (delta < 0) {
+                resultRows.get(i)[2] = "Quantity cannot be negative";
+                continue;
+            }
+
+            totalDeltaByBarcode.merge(barcode, delta, Integer::sum);
+            rowIndicesByBarcode.computeIfAbsent(barcode, k -> new ArrayList<>()).add(i);
+        }
+
+        return new AggregatedInventoryInput(totalDeltaByBarcode, rowIndicesByBarcode);
+    }
+
+    private Map<String, ProductPojo> fetchProductsByBarcode(Set<String> barcodes) {
+        if (barcodes == null || barcodes.isEmpty()) {
+            return Map.of();
+        }
+
+        return productApi.findByBarcodes(new ArrayList<>(barcodes))
                 .stream()
                 .collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
     }
 
-    private Map<String, InventoryPojo> resolveInventoriesForBulkInventory(Map<String, ProductPojo> productByBarcode) {
-        List<String> productIds = productByBarcode.values().stream().map(ProductPojo::getId).toList();
+    private Map<String, InventoryPojo> fetchInventoriesByProductId(Collection<ProductPojo> products) {
+        if (products == null || products.isEmpty()) {
+            return Map.of();
+        }
+
+        List<String> productIds = products.stream().map(ProductPojo::getId).toList();
         return inventoryApi.getByProductIds(productIds)
                 .stream()
                 .collect(Collectors.toMap(InventoryPojo::getProductId, Function.identity()));
     }
 
-    private List<InventoryPojo> applyBulkInventoryUpdates(
-            List<InventoryPojo> incomingRows,
-            List<String[]> results,
+    private void applyAggregatedInventoryUpdates(
+            AggregatedInventoryInput aggregatedInput,
             Map<String, ProductPojo> productByBarcode,
-            Map<String, InventoryPojo> inventoryByProductId
+            Map<String, InventoryPojo> inventoryByProductId,
+            List<InventoryPojo> inventoriesToSave,
+            List<String[]> resultRows
     ) {
-        List<InventoryPojo> updates = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : aggregatedInput.totalDeltaByBarcode().entrySet()) {
+            String barcode = entry.getKey();
+            int totalDelta = entry.getValue();
 
-        for (int i = 0; i < incomingRows.size(); i++) {
-            InventoryPojo incoming = incomingRows.get(i);
-            String barcode = incoming.getProductId();
+            List<Integer> rowIndices = aggregatedInput.rowIndicesByBarcode().getOrDefault(barcode, List.of());
 
-            ProductPojo p = productByBarcode.get(barcode);
-            if (p == null) {
-                results.get(i)[2] = "Product not found";
+            ProductPojo product = productByBarcode.get(barcode);
+            if (product == null) {
+                markInventoryRowsError(resultRows, rowIndices, "Product not found");
                 continue;
             }
 
-            InventoryPojo inv = inventoryByProductId.get(p.getId());
-            if (inv == null) {
-                results.get(i)[2] = "Inventory not found for barcode: " + barcode;
+            InventoryPojo inventory = inventoryByProductId.get(product.getId());
+            if (inventory == null) {
+                markInventoryRowsError(resultRows, rowIndices, "Inventory not found for barcode: " + barcode);
                 continue;
             }
 
-            int current = inv.getQuantity() == null ? 0 : inv.getQuantity();
-            int delta = incoming.getQuantity() == null ? 0 : incoming.getQuantity();
-            int next = current + delta;
+            int current = inventory.getQuantity() == null ? 0 : inventory.getQuantity();
+            int next = current + totalDelta;
 
             if (next > INVENTORY_MAX) {
-                results.get(i)[2] = "Inventory cannot exceed " + INVENTORY_MAX;
+                markInventoryRowsError(resultRows, rowIndices, "Inventory cannot exceed " + INVENTORY_MAX);
                 continue;
             }
 
-            inv.setQuantity(next);
-            updates.add(inv);
-
-            results.get(i)[1] = "SUCCESS";
-            results.get(i)[2] = "";
-        }
-        return updates;
-    }
-
-    private Set<String> validateClients(Set<String> emails) {
-        Set<String> validClients = new HashSet<>();
-        if (emails == null || emails.isEmpty()) return validClients;
-
-        // TODO: Return the client list and implement mapping, no need to validate clients one by one
-        try {
-            clientApi.validateClientsExist(emails);
-            validClients.addAll(emails);
-            return validClients;
-        } catch (ApiException ignored) {
-            for (String email : emails) {
-                try {
-                    clientApi.getClientByEmail(email);
-                    validClients.add(email);
-                } catch (ApiException ignored2) {
-                }
-            }
-            return validClients;
+            inventory.setQuantity(next);
+            inventoriesToSave.add(inventory);
+            markInventoryRowsSuccess(resultRows, rowIndices);
         }
     }
 
-    private Page<Pair<ProductPojo, InventoryPojo>> attachInventory(Page<ProductPojo> page) {
-        Map<String, InventoryPojo> invMap = inventoryApi.getByProductIds(
-                        page.getContent().stream().map(ProductPojo::getId).toList()
-                ).stream()
+    private void markInventoryRowsError(List<String[]> resultRows, List<Integer> rowIndices, String message) {
+        for (Integer idx : rowIndices) {
+            resultRows.get(idx)[1] = "ERROR";
+            resultRows.get(idx)[2] = message;
+        }
+    }
+
+    private void markInventoryRowsSuccess(List<String[]> resultRows, List<Integer> rowIndices) {
+        for (Integer idx : rowIndices) {
+            resultRows.get(idx)[1] = "SUCCESS";
+            resultRows.get(idx)[2] = "";
+        }
+    }
+
+    private Page<Pair<ProductPojo, InventoryPojo>> attachInventory(Page<ProductPojo> productPage) {
+        List<String> productIds = productPage.getContent().stream().map(ProductPojo::getId).toList();
+
+        Map<String, InventoryPojo> inventoryByProductId = inventoryApi.getByProductIds(productIds)
+                .stream()
                 .collect(Collectors.toMap(InventoryPojo::getProductId, Function.identity()));
 
-        List<Pair<ProductPojo, InventoryPojo>> list = page.getContent().stream()
-                .map(p -> Pair.of(p, invMap.getOrDefault(p.getId(), new InventoryPojo())))
+        List<Pair<ProductPojo, InventoryPojo>> combined = productPage.getContent().stream()
+                .map(product -> Pair.of(product, inventoryByProductId.getOrDefault(product.getId(), new InventoryPojo())))
                 .toList();
 
-        return new PageImpl<>(list, page.getPageable(), page.getTotalElements());
+        return new PageImpl<>(combined, productPage.getPageable(), productPage.getTotalElements());
     }
 
-    private List<String[]> initResultsForProducts(List<ProductPojo> pojos) {
-        if (pojos == null) return new ArrayList<>();
-        List<String[]> results = new ArrayList<>(pojos.size());
-        for (ProductPojo p : pojos) {
-            results.add(new String[]{p.getBarcode(), "ERROR", ""});
+    private List<String[]> initResultsForProducts(List<ProductPojo> products) {
+        if (products == null) {
+            return new ArrayList<>();
         }
-        return results;
-    }
 
-    private List<String[]> initResultsForInventory(List<InventoryPojo> pojos) {
-        if (pojos == null) return new ArrayList<>();
-        List<String[]> results = new ArrayList<>(pojos.size());
-        for (InventoryPojo p : pojos) {
-            results.add(new String[]{p.getProductId(), "ERROR", ""});
+        List<String[]> result = new ArrayList<>(products.size());
+        for (ProductPojo product : products) {
+            result.add(new String[]{product.getBarcode(), "ERROR", ""});
         }
-        return results;
+        return result;
     }
 
-    private InventoryPojo createInventoryPojo(String id, Integer quantity) {
-        InventoryPojo inv = new InventoryPojo();
-        inv.setProductId(id);
-        inv.setQuantity(quantity);
-        return inv;
+    private List<String[]> initResultsForInventory(List<InventoryPojo> incomingRows) {
+        if (incomingRows == null) {
+            return new ArrayList<>();
+        }
+
+        List<String[]> result = new ArrayList<>(incomingRows.size());
+        for (InventoryPojo row : incomingRows) {
+            String barcode = row == null ? "" : row.getProductId(); // barcode carrier
+            result.add(new String[]{barcode == null ? "" : barcode, "ERROR", ""});
+        }
+        return result;
     }
 
-    private record BulkProductSavePlan(List<ProductPojo> toSave, List<Integer> indicesToSave) {}
+    private record BulkProductSavePlan(List<ProductPojo> productsToSave, List<Integer> rowIndicesToSave) {}
+
+    private record AggregatedInventoryInput(
+            Map<String, Integer> totalDeltaByBarcode,
+            Map<String, List<Integer>> rowIndicesByBarcode
+    ) {}
 }

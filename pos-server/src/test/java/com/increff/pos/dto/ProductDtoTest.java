@@ -295,11 +295,11 @@ public class ProductDtoTest extends AbstractUnitTest {
 
         BulkUploadData out = productDto.bulkAddProducts(f);
         assertNotNull(out);
-        assertNotNull(out.getFile());
+        assertNotNull(out.file());
 
-        String decoded = decodeB64(out.getFile()).toLowerCase();
+        String decoded = decodeB64(out.file()).toLowerCase();
         assertTrue(decoded.contains("error") || decoded.contains("invalid"),
-                "Expected output file to contain error/invalid but got:\n" + decodeB64(out.getFile()));
+                "Expected output file to contain error/invalid but got:\n" + decodeB64(out.file()));
     }
 
     @Test
@@ -314,10 +314,10 @@ public class ProductDtoTest extends AbstractUnitTest {
 
         BulkUploadData out = productDto.bulkUpdateInventory(f);
         assertNotNull(out);
-        assertNotNull(out.getFile());
+        assertNotNull(out.file());
 
-        String decoded = decodeB64(out.getFile()).toLowerCase();
+        String decoded = decodeB64(out.file()).toLowerCase();
         assertTrue(decoded.contains("error") || decoded.contains("invalid"),
-                "Expected output file to contain error/invalid but got:\n" + decodeB64(out.getFile()));
+                "Expected output file to contain error/invalid but got:\n" + decodeB64(out.file()));
     }
 }

@@ -1,7 +1,6 @@
 package com.increff.pos.dao;
 
 import com.increff.pos.db.OrderPojo;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,15 +21,14 @@ import java.util.regex.Pattern;
 public class OrderDao extends AbstractDao<OrderPojo> {
     public OrderDao(MongoOperations mongoOperations) {
         super(
-                new MongoRepositoryFactory(mongoOperations)
-                        .getEntityInformation(OrderPojo.class),
+                new MongoRepositoryFactory(mongoOperations).getEntityInformation(OrderPojo.class),
                 mongoOperations
         );
     }
 
     public OrderPojo findByOrderReferenceId(String orderReferenceId) {
-        Query q = Query.query(Criteria.where("orderReferenceId").is(orderReferenceId));
-        return mongoOperations.findOne(q, OrderPojo.class);
+        Query query = Query.query(Criteria.where("orderReferenceId").is(orderReferenceId));
+        return mongoOperations.findOne(query, OrderPojo.class);
     }
 
     public Page<OrderPojo> search(
@@ -41,25 +39,32 @@ public class OrderDao extends AbstractDao<OrderPojo> {
             int page,
             int size
     ) {
-        List<Criteria> list = new ArrayList<>();
+        List<Criteria> criteriaList = new ArrayList<>();
+
         if (StringUtils.hasText(refContains)) {
             String safe = Pattern.quote(refContains.trim());
-            list.add(Criteria.where("orderReferenceId").regex(".*" + safe + ".*", "i"));
+            Pattern pattern = Pattern.compile(".*" + safe + ".*", Pattern.CASE_INSENSITIVE);
+            criteriaList.add(Criteria.where("orderReferenceId").regex(pattern));
         }
+
         if (StringUtils.hasText(status)) {
-            list.add(Criteria.where("status").is(status.trim()));
+            criteriaList.add(Criteria.where("status").is(status.trim()));
         }
+
         if (fromTime != null) {
-            list.add(Criteria.where("orderTime").gte(fromTime));
+            criteriaList.add(Criteria.where("orderTime").gte(fromTime));
         }
+
         if (toTime != null) {
-            list.add(Criteria.where("orderTime").lte(toTime));
+            criteriaList.add(Criteria.where("orderTime").lte(toTime));
         }
-        Query q = new Query();
-        if (!list.isEmpty()) {
-            q.addCriteria(new Criteria().andOperator(list));
+
+        Query query = new Query();
+        if (!criteriaList.isEmpty()) {
+            query.addCriteria(new Criteria().andOperator(criteriaList));
         }
-        Pageable p = PageRequest.of(page, size, Sort.by("orderTime").descending());
-        return pageableQuery(q, p);
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "orderTime"));
+        return pageableQuery(query, pageable);
     }
 }

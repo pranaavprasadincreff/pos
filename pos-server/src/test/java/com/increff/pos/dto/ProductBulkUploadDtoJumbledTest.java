@@ -58,8 +58,8 @@ public class ProductBulkUploadDtoJumbledTest extends AbstractUnitTest {
 
         BulkUploadData out = productDto.bulkAddProducts(formFromTsv(tsv));
         assertNotNull(out);
-        assertNotNull(out.getFile());
-        assertTrue(decodeB64(out.getFile()).contains("barcode\tstatus\tcomment"));
+        assertNotNull(out.file());
+        assertTrue(decodeB64(out.file()).contains("barcode\tstatus\tcomment"));
 
         ArgumentCaptor<List<ProductPojo>> cap = ArgumentCaptor.forClass(List.class);
         verify(productFlow, times(1)).bulkAddProducts(cap.capture());

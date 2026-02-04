@@ -17,6 +17,7 @@ import java.util.Set;
 
 @Service
 public class ClientApiImpl implements ClientApi {
+
     @Autowired
     private ClientDao clientDao;
 
@@ -51,6 +52,11 @@ public class ClientApiImpl implements ClientApi {
     public void validateClientsExist(Set<String> emails) throws ApiException {
         List<ClientPojo> clients = clientDao.findByEmails(new ArrayList<>(emails));
         validateAllClientsExist(emails, clients);
+    }
+
+    @Override
+    public List<String> findClientEmailsByNameOrEmail(String query, int limit) {
+        return clientDao.findEmailsByNameOrEmail(query, limit);
     }
 
     private ClientPojo fetchClientByEmail(String email) throws ApiException {

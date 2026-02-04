@@ -1,8 +1,10 @@
 package com.increff.pos.model.data;
 
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
-@Data
+@Getter
+@Setter
 public class ProductData {
     private String barcode;
     private String clientEmail;
@@ -11,4 +13,3 @@ public class ProductData {
     private String imageUrl;
     private Integer inventory;
 }
-

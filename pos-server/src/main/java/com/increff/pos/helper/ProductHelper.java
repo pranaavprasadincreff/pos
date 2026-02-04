@@ -9,74 +9,105 @@ import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.InventoryUpdateForm;
 import com.increff.pos.model.form.ProductForm;
 import com.increff.pos.model.form.ProductUpdateForm;
-import com.increff.pos.util.ValidationUtil;
-
-import java.util.*;
 
 public class ProductHelper {
 
-    public static ProductPojo convertProductFormToEntity(ProductForm form) {
-        ProductPojo pojo = new ProductPojo();
-        pojo.setBarcode(form.getBarcode());
-        pojo.setClientEmail(form.getClientEmail());
-        pojo.setName(form.getName());
-        pojo.setMrp(form.getMrp());
-        pojo.setImageUrl(form.getImageUrl());
-        return pojo;
+    public static ProductPojo convertProductFormToEntity(ProductForm productCreateForm) {
+        ProductPojo productToCreate = new ProductPojo();
+        productToCreate.setBarcode(productCreateForm.getBarcode());
+        productToCreate.setClientEmail(productCreateForm.getClientEmail());
+        productToCreate.setName(productCreateForm.getName());
+        productToCreate.setMrp(productCreateForm.getMrp());
+        productToCreate.setImageUrl(productCreateForm.getImageUrl());
+        return productToCreate;
     }
 
-    public static InventoryUpdatePojo convertInventoryUpdateFormToEntity(InventoryUpdateForm form) {
-        InventoryUpdatePojo pojo = new InventoryUpdatePojo();
-        pojo.setBarcode(form.getBarcode());
-        pojo.setQuantity(form.getQuantity());
-        return pojo;
+    public static InventoryUpdatePojo convertInventoryUpdateFormToEntity(InventoryUpdateForm inventoryUpdateForm) {
+        InventoryUpdatePojo updateRequest = new InventoryUpdatePojo();
+        updateRequest.setBarcode(inventoryUpdateForm.getBarcode());
+        updateRequest.setQuantity(inventoryUpdateForm.getQuantity());
+        return updateRequest;
     }
 
-
-    public static ProductUpdatePojo convertProductUpdateFormToEntity(
-            ProductUpdateForm form) {
-
-        ProductUpdatePojo pojo = new ProductUpdatePojo();
-        pojo.setOldBarcode(form.getOldBarcode());
-        pojo.setNewBarcode(form.getNewBarcode());
-        pojo.setClientEmail(form.getClientEmail());
-        pojo.setName(form.getName());
-        pojo.setMrp(form.getMrp());
-        pojo.setImageUrl(form.getImageUrl());
-        return pojo;
+    public static ProductUpdatePojo convertProductUpdateFormToEntity(ProductUpdateForm productUpdateForm) {
+        ProductUpdatePojo updateRequest = new ProductUpdatePojo();
+        updateRequest.setOldBarcode(productUpdateForm.getOldBarcode());
+        updateRequest.setNewBarcode(productUpdateForm.getNewBarcode());
+        updateRequest.setClientEmail(productUpdateForm.getClientEmail());
+        updateRequest.setName(productUpdateForm.getName());
+        updateRequest.setMrp(productUpdateForm.getMrp());
+        updateRequest.setImageUrl(productUpdateForm.getImageUrl());
+        return updateRequest;
     }
 
-    public static ProductData convertToProductData(
-            ProductPojo product,
-            InventoryPojo inventory) {
-
-        ProductData data = new ProductData();
-        data.setBarcode(product.getBarcode());
-        data.setClientEmail(product.getClientEmail());
-        data.setName(product.getName());
-        data.setMrp(product.getMrp());
-        data.setImageUrl(product.getImageUrl());
-        data.setInventory(inventory.getQuantity());
-        return data;
+    public static ProductData convertToProductData(ProductPojo product, InventoryPojo inventory) {
+        ProductData productData = new ProductData();
+        productData.setBarcode(product.getBarcode());
+        productData.setClientEmail(product.getClientEmail());
+        productData.setName(product.getName());
+        productData.setMrp(product.getMrp());
+        productData.setImageUrl(product.getImageUrl());
+        productData.setInventory(inventory == null ? null : inventory.getQuantity());
+        return productData;
     }
 
-    public static ProductPojo toBulkProductPojo(String[] row)
-            throws ApiException {
+    /**
+     * Row format: barcode, clientEmail, name, mrp, imageUrl(optional)
+     */
+    public static ProductPojo toBulkProductPojo(String[] canonicalRow) throws ApiException {
+        validateBulkProductRowShape(canonicalRow);
 
-        return ValidationUtil
-                .convertBulkProductRowsToPojos(
-                        Collections.singletonList(row)
-                )
-                .getFirst();
+        ProductPojo productPojo = new ProductPojo();
+        productPojo.setBarcode(canonicalRow[0]);
+        productPojo.setClientEmail(canonicalRow[1]);
+        productPojo.setName(canonicalRow[2]);
+        productPojo.setMrp(parseMrp(canonicalRow[3]));
+
+        if (canonicalRow.length == 5) {
+            productPojo.setImageUrl(canonicalRow[4]);
+        }
+
+        return productPojo;
     }
 
-    public static InventoryPojo toBulkInventoryPojo(String[] row)
-            throws ApiException {
+    /**
+     * Row format: barcode, inventoryDelta
+     * Note: productId is used as "barcode carrier" in bulk inventory flow.
+     */
+    public static InventoryPojo toBulkInventoryPojo(String[] canonicalRow) throws ApiException {
+        validateBulkInventoryRowShape(canonicalRow);
 
-        return ValidationUtil
-                .convertBulkInventoryRowsToPojos(
-                        Collections.singletonList(row)
-                )
-                .getFirst();
+        InventoryPojo inventoryPojo = new InventoryPojo();
+        inventoryPojo.setProductId(canonicalRow[0]); // barcode carrier
+        inventoryPojo.setQuantity(parseInventoryDelta(canonicalRow[1]));
+        return inventoryPojo;
+    }
+
+    private static void validateBulkProductRowShape(String[] row) throws ApiException {
+        if (row == null || row.length < 4 || row.length > 5) {
+            throw new ApiException("Invalid product row");
+        }
+    }
+
+    private static void validateBulkInventoryRowShape(String[] row) throws ApiException {
+        if (row == null || row.length != 2) {
+            throw new ApiException("Invalid inventory row");
+        }
+    }
+
+    private static Double parseMrp(String value) throws ApiException {
+        try {
+            return Double.parseDouble(value);
+        } catch (Exception e) {
+            throw new ApiException("MRP must be a number");
+        }
+    }
+
+    private static Integer parseInventoryDelta(String value) throws ApiException {
+        try {
+            return Integer.parseInt(value);
+        } catch (Exception e) {
+            throw new ApiException("Quantity must be a valid integer");
+        }
     }
 }

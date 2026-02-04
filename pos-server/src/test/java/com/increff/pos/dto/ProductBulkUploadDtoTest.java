@@ -49,7 +49,7 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
     }
 
     private static List<String[]> decodeResultRows(BulkUploadData data) {
-        String decoded = decodeB64(data.getFile());
+        String decoded = decodeB64(data.file());
         decoded = decoded.replace("\r\n", "\n").replace("\r", "\n");
 
         String[] lines = decoded.split("\n", -1);

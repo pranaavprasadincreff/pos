@@ -1,12 +1,35 @@
 package com.increff.pos.model.form;
 
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
-@Data
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+
+@Getter
+@Setter
 public class ProductForm {
+
+    @NotBlank(message = "Barcode is required")
+    @Size(max = 40, message = "Barcode too long")
     private String barcode;
+
+    @NotBlank(message = "Client email is required")
+    @Size(max = 40, message = "Email too long")
+    @Email(message = "Invalid email format")
     private String clientEmail;
+
+    @NotBlank(message = "Product name is required")
+    @Size(max = 30, message = "Name too long")
     private String name;
+
+    @NotNull(message = "MRP is required")
+    @Positive(message = "MRP must be > 0")
     private Double mrp;
+
+    @Size(max = 500, message = "Image URL too long")
     private String imageUrl;
 }

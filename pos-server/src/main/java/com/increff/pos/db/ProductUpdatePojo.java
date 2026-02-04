@@ -1,12 +1,15 @@
 package com.increff.pos.db;
 
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.data.mongodb.core.index.Indexed;
 
-@Data
-public class ProductUpdatePojo extends AbstractPojo{
+@Getter
+@Setter
+public class ProductUpdatePojo extends AbstractPojo {
     @Indexed(unique = true)
     private String oldBarcode;
+
     private String newBarcode;
     private String clientEmail;
     private String name;

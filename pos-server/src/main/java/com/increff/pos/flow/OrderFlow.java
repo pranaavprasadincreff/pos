@@ -21,54 +21,68 @@ import java.util.stream.Collectors;
 
 @Service
 public class OrderFlow {
+    private static final int MAX_REF_GENERATION_ATTEMPTS = 10;
+
     @Autowired
     private OrderApi orderApi;
+
     @Autowired
     private InventoryApi inventoryApi;
+
     @Autowired
     private ProductApi productApi;
 
     @Transactional(rollbackFor = ApiException.class)
-    public OrderPojo create(OrderPojo order) throws ApiException {
-        populateNewOrderFields(order);
-        Map<String, ProductPojo> productByBarcode = getProductsByBarcode(order.getOrderItems());
-        validateSellingPriceWithinMrp(order.getOrderItems(), productByBarcode);
-        boolean fulfillable = tryDeductInventory(order.getOrderItems(), productByBarcode);
-        setStatusByFulfillability(order, fulfillable);
-        return orderApi.createOrder(order);
+    public OrderPojo create(OrderPojo orderToCreate) throws ApiException {
+        populateNewOrder(orderToCreate);
+
+        Map<String, ProductPojo> productByBarcode = fetchProductsByBarcode(orderToCreate.getOrderItems());
+        validateSellingPrices(orderToCreate.getOrderItems(), productByBarcode);
+
+        boolean isFulfillable = deductInventoryIfPossible(orderToCreate.getOrderItems(), productByBarcode);
+        setOrderStatus(orderToCreate, isFulfillable);
+
+        return orderApi.createOrder(orderToCreate);
     }
 
     @Transactional(rollbackFor = ApiException.class)
-    public OrderPojo update(String ref, OrderPojo updated) throws ApiException {
-        OrderPojo existing = orderApi.getByOrderReferenceId(ref);
-        validateEditable(existing);
-        restoreInventoryIfNeeded(existing);
-        Map<String, ProductPojo> productByBarcode = getProductsByBarcode(updated.getOrderItems());
-        validateSellingPriceWithinMrp(updated.getOrderItems(), productByBarcode);
-        boolean fulfillable = tryDeductInventory(updated.getOrderItems(), productByBarcode);
-        applyUpdate(existing, updated, fulfillable);
-        return orderApi.updateOrder(existing);
+    public OrderPojo update(String orderReferenceId, OrderPojo updatedOrderRequest) throws ApiException {
+        OrderPojo existingOrder = orderApi.getByOrderReferenceId(orderReferenceId);
+        validateOrderIsEditable(existingOrder);
+
+        restoreInventoryIfFulfillable(existingOrder);
+
+        Map<String, ProductPojo> productByBarcode = fetchProductsByBarcode(updatedOrderRequest.getOrderItems());
+        validateSellingPrices(updatedOrderRequest.getOrderItems(), productByBarcode);
+
+        boolean isFulfillable = deductInventoryIfPossible(updatedOrderRequest.getOrderItems(), productByBarcode);
+        applyOrderUpdate(existingOrder, updatedOrderRequest, isFulfillable);
+
+        return orderApi.updateOrder(existingOrder);
     }
 
     @Transactional(rollbackFor = ApiException.class)
-    public OrderPojo cancel(String ref) throws ApiException {
-        OrderPojo order = orderApi.getByOrderReferenceId(ref);
-        validateEditable(order);
-        restoreInventoryIfNeeded(order);
-        order.setStatus(OrderStatus.CANCELLED.name());
-        return orderApi.updateOrder(order);
+    public OrderPojo cancel(String orderReferenceId) throws ApiException {
+        OrderPojo existingOrder = orderApi.getByOrderReferenceId(orderReferenceId);
+        validateOrderIsEditable(existingOrder);
+
+        restoreInventoryIfFulfillable(existingOrder);
+
+        existingOrder.setStatus(OrderStatus.CANCELLED.name());
+        return orderApi.updateOrder(existingOrder);
     }
 
     @Transactional(rollbackFor = ApiException.class)
-    public void markInvoiced(String ref) throws ApiException {
-        OrderPojo order = orderApi.getByOrderReferenceId(ref);
+    public void markInvoiced(String orderReferenceId) throws ApiException {
+        OrderPojo order = orderApi.getByOrderReferenceId(orderReferenceId);
         validateInvoicingAllowed(order);
+
         order.setStatus(OrderStatus.INVOICED.name());
         orderApi.updateOrder(order);
     }
 
-    public OrderPojo getByRef(String ref) throws ApiException {
-        return orderApi.getByOrderReferenceId(ref);
+    public OrderPojo getByRef(String orderReferenceId) throws ApiException {
+        return orderApi.getByOrderReferenceId(orderReferenceId);
     }
 
     public Page<OrderPojo> search(
@@ -82,31 +96,36 @@ public class OrderFlow {
         return orderApi.search(refContains, status, fromTime, toTime, page, size);
     }
 
-    private void populateNewOrderFields(OrderPojo order) {
+    // -------------------- Private helpers --------------------
+
+    private void populateNewOrder(OrderPojo order) {
         order.setOrderReferenceId(generateUniqueOrderReferenceId());
         order.setOrderTime(ZonedDateTime.now());
     }
 
-    private boolean tryDeductInventory(List<OrderItemPojo> items, Map<String, ProductPojo> productByBarcode) throws ApiException {
-        InventoryContext ctx = buildInventoryContext(items, productByBarcode);
-        if (!hasSufficientInventory(items, ctx)) return false;
-        deductInventory(items, ctx);
+    private boolean deductInventoryIfPossible(List<OrderItemPojo> items, Map<String, ProductPojo> productByBarcode) throws ApiException {
+        InventoryContext inventoryContext = buildInventoryContext(items, productByBarcode);
+        if (!hasSufficientInventory(items, inventoryContext)) {
+            return false;
+        }
+        deductInventory(items, inventoryContext);
         return true;
     }
 
-    private void restoreInventoryIfNeeded(OrderPojo order) throws ApiException {
-        if (isUnfulfillable(order)) return;
+    private void restoreInventoryIfFulfillable(OrderPojo order) throws ApiException {
+        if (!isFulfillable(order)) {
+            return;
+        }
 
-        Map<String, ProductPojo> productByBarcode = getProductsByBarcode(order.getOrderItems());
-        InventoryContext ctx = buildInventoryContext(order.getOrderItems(), productByBarcode);
-        incrementInventory(order.getOrderItems(), ctx);
+        Map<String, ProductPojo> productByBarcode = fetchProductsByBarcode(order.getOrderItems());
+        InventoryContext inventoryContext = buildInventoryContext(order.getOrderItems(), productByBarcode);
+
+        incrementInventory(order.getOrderItems(), inventoryContext);
     }
 
     private InventoryContext buildInventoryContext(List<OrderItemPojo> items, Map<String, ProductPojo> productByBarcode) throws ApiException {
         Map<String, String> productIdByBarcode = mapProductIdByBarcode(items, productByBarcode);
-        Map<String, InventoryPojo> inventoryByProductId =
-                getInventoryByProductId(productIdByBarcode.values());
-
+        Map<String, InventoryPojo> inventoryByProductId = fetchInventoryByProductId(productIdByBarcode.values());
         return new InventoryContext(productIdByBarcode, inventoryByProductId);
     }
 
@@ -116,6 +135,154 @@ public class OrderFlow {
                 .distinct()
                 .toList();
 
+        validateAllProductsExist(barcodes, productByBarcode);
+
+        Map<String, String> productIdByBarcode = new HashMap<>();
+        for (String barcode : barcodes) {
+            productIdByBarcode.put(barcode, productByBarcode.get(barcode).getId());
+        }
+        return productIdByBarcode;
+    }
+
+    private Map<String, InventoryPojo> fetchInventoryByProductId(Collection<String> productIds) {
+        List<String> uniqueProductIds = productIds.stream().distinct().toList();
+        return inventoryApi.getByProductIds(uniqueProductIds).stream()
+                .collect(Collectors.toMap(InventoryPojo::getProductId, Function.identity()));
+    }
+
+    private boolean hasSufficientInventory(List<OrderItemPojo> items, InventoryContext inventoryContext) {
+        Map<String, Integer> requiredQtyByProductId = aggregateRequiredQuantity(items, inventoryContext);
+
+        for (Map.Entry<String, Integer> requirement : requiredQtyByProductId.entrySet()) {
+            InventoryPojo inventory = inventoryContext.inventoryByProductId().get(requirement.getKey());
+            int available = inventory == null || inventory.getQuantity() == null ? 0 : inventory.getQuantity();
+            if (available < requirement.getValue()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void deductInventory(List<OrderItemPojo> items, InventoryContext inventoryContext) throws ApiException {
+        Map<String, Integer> requiredQtyByProductId = aggregateRequiredQuantity(items, inventoryContext);
+
+        for (Map.Entry<String, Integer> requirement : requiredQtyByProductId.entrySet()) {
+            inventoryApi.deductInventory(requirement.getKey(), requirement.getValue());
+        }
+    }
+
+    private void incrementInventory(List<OrderItemPojo> items, InventoryContext inventoryContext) throws ApiException {
+        Map<String, Integer> requiredQtyByProductId = aggregateRequiredQuantity(items, inventoryContext);
+
+        for (Map.Entry<String, Integer> requirement : requiredQtyByProductId.entrySet()) {
+            inventoryApi.incrementInventory(requirement.getKey(), requirement.getValue());
+        }
+    }
+
+    private Map<String, Integer> aggregateRequiredQuantity(List<OrderItemPojo> items, InventoryContext inventoryContext) {
+        Map<String, Integer> requiredQtyByProductId = new HashMap<>();
+
+        for (OrderItemPojo item : items) {
+            String productId = inventoryContext.productIdByBarcode().get(item.getProductBarcode());
+            requiredQtyByProductId.put(
+                    productId,
+                    requiredQtyByProductId.getOrDefault(productId, 0) + item.getOrderedQuantity()
+            );
+        }
+        return requiredQtyByProductId;
+    }
+
+    private void setOrderStatus(OrderPojo order, boolean isFulfillable) {
+        order.setStatus(isFulfillable ? OrderStatus.FULFILLABLE.name() : OrderStatus.UNFULFILLABLE.name());
+    }
+
+    private void applyOrderUpdate(OrderPojo existingOrder, OrderPojo updatedOrderRequest, boolean isFulfillable) {
+        existingOrder.setOrderItems(updatedOrderRequest.getOrderItems());
+        setOrderStatus(existingOrder, isFulfillable);
+    }
+
+    private void validateOrderIsEditable(OrderPojo order) throws ApiException {
+        if (isCancelled(order) || isInvoiced(order)) {
+            throw new ApiException("Order cannot be modified in current state");
+        }
+    }
+
+    private void validateInvoicingAllowed(OrderPojo order) throws ApiException {
+        if (isInvoiced(order)) {
+            throw new ApiException("Order already invoiced");
+        }
+        if (!isFulfillable(order)) {
+            throw new ApiException("Only fulfillable orders can be invoiced");
+        }
+    }
+
+    private boolean isFulfillable(OrderPojo order) {
+        return OrderStatus.FULFILLABLE.name().equals(order.getStatus());
+    }
+
+    private boolean isCancelled(OrderPojo order) {
+        return OrderStatus.CANCELLED.name().equals(order.getStatus());
+    }
+
+    private boolean isInvoiced(OrderPojo order) {
+        return OrderStatus.INVOICED.name().equals(order.getStatus());
+    }
+
+    private String generateUniqueOrderReferenceId() {
+        int attempts = 0;
+
+        while (true) {
+            attempts++;
+            validateRefGenerationAttempts(attempts);
+
+            String ref = generateRandomOrderReferenceId();
+            if (!orderApi.orderReferenceIdExists(ref)) {
+                return ref;
+            }
+        }
+    }
+
+    private void validateRefGenerationAttempts(int attempts) {
+        if (attempts > MAX_REF_GENERATION_ATTEMPTS) {
+            throw new RuntimeException("Unable to generate unique order ID after 10 attempts");
+        }
+    }
+
+    private String generateRandomOrderReferenceId() {
+        String part1 = String.format("%04d", (int) (Math.random() * 10000));
+        String part2 = String.format("%04d", (int) (Math.random() * 10000));
+        return "ORD-" + part1 + "-" + part2;
+    }
+
+    private void validateSellingPrices(List<OrderItemPojo> items, Map<String, ProductPojo> productByBarcode) throws ApiException {
+        for (OrderItemPojo item : items) {
+            String barcode = item.getProductBarcode();
+            ProductPojo product = productByBarcode.get(barcode);
+
+            if (product == null) {
+                throw new ApiException("Product not found for barcode: " + barcode);
+            }
+            if (item.getSellingPrice() > product.getMrp()) {
+                throw new ApiException("Selling price cannot exceed MRP for barcode: " + barcode);
+            }
+        }
+    }
+
+    private Map<String, ProductPojo> fetchProductsByBarcode(List<OrderItemPojo> items) throws ApiException {
+        List<String> barcodes = items.stream()
+                .map(OrderItemPojo::getProductBarcode)
+                .distinct()
+                .toList();
+
+        List<ProductPojo> products = productApi.findByBarcodes(barcodes);
+        Map<String, ProductPojo> productByBarcode = products.stream()
+                .collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
+
+        validateAllProductsExist(barcodes, productByBarcode);
+        return productByBarcode;
+    }
+
+    private void validateAllProductsExist(List<String> barcodes, Map<String, ProductPojo> productByBarcode) throws ApiException {
         Set<String> missing = barcodes.stream()
                 .filter(b -> !productByBarcode.containsKey(b))
                 .collect(Collectors.toSet());
@@ -123,149 +290,10 @@ public class OrderFlow {
         if (!missing.isEmpty()) {
             throw new ApiException("Products not found for barcodes: " + String.join(", ", missing));
         }
-
-        Map<String, String> map = new HashMap<>();
-        for (String b : barcodes) {
-            map.put(b, productByBarcode.get(b).getId());
-        }
-        return map;
-    }
-
-    private Map<String, InventoryPojo> getInventoryByProductId(Collection<String> productIds) {
-        List<String> ids = productIds.stream().distinct().toList();
-        return inventoryApi.getByProductIds(ids).stream()
-                .collect(Collectors.toMap(InventoryPojo::getProductId, Function.identity()));
-    }
-
-    private boolean hasSufficientInventory(List<OrderItemPojo> items, InventoryContext ctx) {
-        Map<String, Integer> requiredQtyByProductId = aggregateRequiredQty(items, ctx);
-
-        for (Map.Entry<String, Integer> e : requiredQtyByProductId.entrySet()) {
-            InventoryPojo inv = ctx.inventoryByProductId().get(e.getKey());
-            int available = inv == null || inv.getQuantity() == null ? 0 : inv.getQuantity();
-            if (available < e.getValue()) return false;
-        }
-        return true;
-    }
-
-    private void deductInventory(List<OrderItemPojo> items, InventoryContext ctx) throws ApiException {
-        Map<String, Integer> requiredQtyByProductId = aggregateRequiredQty(items, ctx);
-
-        for (Map.Entry<String, Integer> e : requiredQtyByProductId.entrySet()) {
-            inventoryApi.deductInventory(e.getKey(), e.getValue());
-        }
-    }
-
-    private void incrementInventory(List<OrderItemPojo> items, InventoryContext ctx) throws ApiException {
-        Map<String, Integer> requiredQtyByProductId = aggregateRequiredQty(items, ctx);
-
-        for (Map.Entry<String, Integer> e : requiredQtyByProductId.entrySet()) {
-            inventoryApi.incrementInventory(e.getKey(), e.getValue());
-        }
-    }
-
-    private Map<String, Integer> aggregateRequiredQty(List<OrderItemPojo> items, InventoryContext ctx) {
-        Map<String, Integer> map = new HashMap<>();
-        for (OrderItemPojo item : items) {
-            String productId = ctx.productIdByBarcode().get(item.getProductBarcode());
-            map.put(productId, map.getOrDefault(productId, 0) + item.getOrderedQuantity());
-        }
-        return map;
-    }
-
-    private void setStatusByFulfillability(OrderPojo order, boolean fulfillable) {
-        order.setStatus(fulfillable
-                ? OrderStatus.FULFILLABLE.name()
-                : OrderStatus.UNFULFILLABLE.name());
-    }
-
-    private void applyUpdate(OrderPojo existing, OrderPojo updated, boolean fulfillable) {
-        existing.setOrderItems(updated.getOrderItems());
-        setStatusByFulfillability(existing, fulfillable);
-    }
-
-    private void validateEditable(OrderPojo order) throws ApiException {
-        if (isCancelled(order) || isInvoiced(order)) {
-            throw new ApiException("Order cannot be modified in current state");
-        }
-    }
-
-    private void validateInvoicingAllowed(OrderPojo order) throws ApiException {
-        if (isInvoiced(order)) throw new ApiException("Order already invoiced");
-        if (isUnfulfillable(order)) throw new ApiException("Only fulfillable orders can be invoiced");
-    }
-
-    private boolean isUnfulfillable(OrderPojo o) {
-        return !OrderStatus.FULFILLABLE.name().equals(o.getStatus());
-    }
-
-    private boolean isCancelled(OrderPojo o) {
-        return OrderStatus.CANCELLED.name().equals(o.getStatus());
-    }
-
-    private boolean isInvoiced(OrderPojo o) {
-        return OrderStatus.INVOICED.name().equals(o.getStatus());
-    }
-
-    private String generateUniqueOrderReferenceId() {
-        String ref;
-        int attempts = 0;
-
-        do {
-            attempts++;
-            validateRefGenerationAttempts(attempts);
-            ref = randomRef();
-        } while (orderApi.orderReferenceIdExists(ref));
-        return ref;
-    }
-
-    private void validateRefGenerationAttempts(int attempts) {
-        if (attempts > 10) {
-            throw new RuntimeException("Unable to generate unique order ID after 10 attempts");
-        }
-    }
-
-    private String randomRef() {
-        String part1 = String.format("%04d", (int) (Math.random() * 10000));
-        String part2 = String.format("%04d", (int) (Math.random() * 10000));
-        return "ORD-" + part1 + "-" + part2;
     }
 
     private record InventoryContext(
             Map<String, String> productIdByBarcode,
             Map<String, InventoryPojo> inventoryByProductId
     ) {}
-
-    private void validateSellingPriceWithinMrp(List<OrderItemPojo> items, Map<String, ProductPojo> productByBarcode) throws ApiException {
-        for (OrderItemPojo item : items) {
-            String barcode = item.getProductBarcode();
-            ProductPojo p = productByBarcode.get(barcode);
-            if (p == null) {
-                throw new ApiException("Product not found for barcode: " + barcode);
-            }
-            if (item.getSellingPrice() > p.getMrp()) {
-                throw new ApiException("Selling price cannot exceed MRP for barcode: " + barcode);
-            }
-        }
-    }
-
-    private Map<String, ProductPojo> getProductsByBarcode(List<OrderItemPojo> items) throws ApiException {
-        List<String> barcodes = items.stream()
-                .map(OrderItemPojo::getProductBarcode)
-                .distinct()
-                .toList();
-
-        List<ProductPojo> products = productApi.findByBarcodes(barcodes);
-        Map<String, ProductPojo> map = products.stream()
-                .collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
-
-        Set<String> missing = barcodes.stream()
-                .filter(b -> !map.containsKey(b))
-                .collect(Collectors.toSet());
-
-        if (!missing.isEmpty()) {
-            throw new ApiException("Products not found for barcodes: " + String.join(", ", missing));
-        }
-        return map;
-    }
 }

@@ -11,6 +11,7 @@ import java.time.ZonedDateTime;
 
 @Service
 public class OrderApiImpl implements OrderApi {
+
     @Autowired
     private OrderDao orderDao;
 
@@ -32,7 +33,9 @@ public class OrderApiImpl implements OrderApi {
     @Override
     public OrderPojo getByOrderReferenceId(String orderReferenceId) throws ApiException {
         OrderPojo order = orderDao.findByOrderReferenceId(orderReferenceId);
-        if (order == null) throw new ApiException("Order not found: " + orderReferenceId);
+        if (order == null) {
+            throw new ApiException("Order not found: " + orderReferenceId);
+        }
         return order;
     }
 

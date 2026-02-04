@@ -5,6 +5,7 @@ import com.increff.pos.db.ClientUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
 import org.springframework.data.domain.Page;
 
+import java.util.List;
 import java.util.Set;
 
 public interface ClientApi {
@@ -13,4 +14,5 @@ public interface ClientApi {
     ClientPojo update(ClientUpdatePojo clientUpdatePojo) throws ApiException;
     Page<ClientPojo> filter(String name, String email, int page, int size);
     void validateClientsExist(Set<String> emails) throws ApiException;
+    List<String> findClientEmailsByNameOrEmail(String query, int limit);
 }
