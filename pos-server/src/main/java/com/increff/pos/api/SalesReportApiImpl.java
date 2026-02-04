@@ -1,13 +1,10 @@
 package com.increff.pos.api;
 
 import com.increff.pos.dao.SalesReportDao;
-import com.increff.pos.db.SalesReportAggregatePojo;
 import com.increff.pos.db.SalesReportRowPojo;
 import com.increff.pos.model.constants.ReportRowType;
-import com.increff.pos.model.exception.ApiException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -19,26 +16,24 @@ public class SalesReportApiImpl implements SalesReportApi {
     private SalesReportDao salesReportDao;
 
     @Override
-    public List<SalesReportRowPojo> getDailyReport(LocalDate date, String clientEmail, ReportRowType type) throws ApiException {
-        List<SalesReportRowPojo> stored = salesReportDao.fetchDaily(date, clientEmail, type);
-        if (!CollectionUtils.isEmpty(stored)) return stored;
-        return salesReportDao.computeFromOrdersForSingleDay(date, clientEmail, type);
+    public List<SalesReportRowPojo> getDailyReport(LocalDate reportDate, String clientEmail, ReportRowType rowType) {
+        salesReportDao.ensureDailyNestedReportExists(reportDate);
+        return salesReportDao.fetchDailyRowsFromNestedReport(reportDate, clientEmail, rowType);
     }
 
     @Override
-    public List<SalesReportRowPojo> getRangeReport(LocalDate start, LocalDate end, String clientEmail, ReportRowType type) throws ApiException {
-        return salesReportDao.computeFromOrdersForRange(start, end, clientEmail, type);
+    public List<SalesReportRowPojo> getRangeReport(LocalDate startDate, LocalDate endDate, String clientEmail, ReportRowType rowType) {
+        salesReportDao.ensureDailyNestedReportsExistForRange(startDate, endDate);
+        return salesReportDao.fetchRangeRowsFromNestedReports(startDate, endDate, clientEmail, rowType);
     }
 
     @Override
-    public void generateAndStoreDaily(LocalDate date) throws ApiException {
-        List<SalesReportAggregatePojo> docs = salesReportDao.buildDailyAggregatesFacet(date);
-        salesReportDao.replaceDailyAggregates(date, docs);
+    public void generateAndStoreDailyNested(LocalDate reportDate) {
+        salesReportDao.generateAndStoreDailyNestedReport(reportDate);
     }
 
     @Override
-    public boolean existsForDate(LocalDate date) {
-        return salesReportDao.existsForDate(date);
+    public boolean existsDailyNested(LocalDate reportDate) {
+        return salesReportDao.existsDailyNestedReport(reportDate);
     }
-
 }
