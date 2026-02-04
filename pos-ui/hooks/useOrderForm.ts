@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
-import { AxiosError } from 'axios'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { OrderCreateItemForm, ProductData, OrderData } from '@/services/types'
 import { create, edit } from '@/services/orderService'
 import { getProductByBarcode } from '@/services/productService'
@@ -51,6 +50,7 @@ function extractApiMessage(err: unknown): string {
     return status ? `${msg} (HTTP ${status})` : msg
 }
 
+const INVALID_BARCODE_MSG = "Invalid barcode"
 
 export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
     const role = getSessionRole()
@@ -61,6 +61,18 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
     const [rows, setRows] = useState<InputRow[]>([emptyRow()])
     const [loading, setLoading] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
+
+    // ✅ debounce timers per row index
+    const barcodeTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
+    // ✅ request sequence per row to ignore stale responses
+    const reqSeqRef = useRef<Map<number, number>>(new Map())
+
+    const clearRowTimer = useCallback((index: number) => {
+        const t = barcodeTimersRef.current.get(index)
+        if (t) clearTimeout(t)
+        barcodeTimersRef.current.delete(index)
+        reqSeqRef.current.delete(index)
+    }, [])
 
     const initializeRows = useCallback(async () => {
         if (orderToEdit?.items.length) {
@@ -91,7 +103,7 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
                             quantity: item.quantity.toString(),
                             sellingPrice: (item.sellingPrice * item.quantity).toString(),
                             unitSellingPrice: item.sellingPrice,
-                            error: 'Invalid barcode',
+                            error: INVALID_BARCODE_MSG,
                         }
                     }
                 })
@@ -104,6 +116,11 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
     }, [orderToEdit])
 
     const resetForm = useCallback(() => {
+        // clear all timers
+        barcodeTimersRef.current.forEach((t) => clearTimeout(t))
+        barcodeTimersRef.current.clear()
+        reqSeqRef.current.clear()
+
         if (orderToEdit) initializeRows()
         else {
             setRows([emptyRow()])
@@ -111,20 +128,32 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
         }
     }, [orderToEdit, initializeRows])
 
-    const updateRow = <K extends keyof InputRow>(index: number, field: K, value: InputRow[K]) => {
+    const updateRow = useCallback(<K extends keyof InputRow>(index: number, field: K, value: InputRow[K]) => {
         setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)))
-    }
+    }, [])
 
-    const addRow = () => setRows((prev) => [...prev, emptyRow()])
-    const removeRow = (index: number) => setRows((prev) => prev.filter((_, i) => i !== index))
+    const addRow = useCallback(() => setRows((prev) => [...prev, emptyRow()]), [])
 
-    const handleBarcodeChange = async (index: number, value: string) => {
+    const removeRow = useCallback((index: number) => {
+        clearRowTimer(index)
+        setRows((prev) => prev.filter((_, i) => i !== index))
+    }, [clearRowTimer])
+
+    // ✅ Debounced barcode lookup
+    const handleBarcodeChange = useCallback((index: number, value: string) => {
+        // Update barcode immediately
         updateRow(index, 'productBarcode', value)
 
         const barcode = value.trim()
+
+        // cancel any pending lookup for this row
+        clearRowTimer(index)
+
+        // if empty: clear row fields (no lookup)
         if (!barcode) {
             setRows((prev) => {
                 const r = prev[index]
+                if (!r) return prev
                 const next = [...prev]
                 next[index] = {
                     ...r,
@@ -140,52 +169,82 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
             return
         }
 
-        try {
-            const product: ProductData = await getProductByBarcode(barcode)
+        // UX: clear only invalid-barcode while typing (keep other errors if any)
+        setRows((prev) => {
+            const r = prev[index]
+            if (!r) return prev
+            if (r.error !== INVALID_BARCODE_MSG) return prev
+            const next = [...prev]
+            next[index] = { ...r, error: undefined }
+            return next
+        })
 
-            setRows((prev) => {
-                const row = prev[index]
-                const qty = Number(row.quantity) || 1
-                const unitMrp = product.mrp
+        // schedule lookup after 500ms of inactivity
+        const timer = setTimeout(async () => {
+            const seq = (reqSeqRef.current.get(index) ?? 0) + 1
+            reqSeqRef.current.set(index, seq)
 
-                const unitSelling = row.unitSellingPrice ?? unitMrp
-                const sellingTotal = qty > 0 ? unitSelling * qty : ''
+            try {
+                const product: ProductData = await getProductByBarcode(barcode)
 
-                const next = [...prev]
-                next[index] = {
-                    ...row,
-                    productName: product.name,
-                    unitMrp,
-                    quantity: row.quantity || '1',
-                    unitSellingPrice: unitSelling,
-                    sellingPrice: sellingTotal.toString(),
-                    error: undefined,
-                }
-                return next
-            })
-        } catch {
-            setRows((prev) => {
-                const row = prev[index]
-                const next = [...prev]
-                next[index] = {
-                    ...row,
-                    productName: '',
-                    unitMrp: undefined,
-                    unitSellingPrice: undefined,
-                    quantity: row.quantity || '',
-                    sellingPrice: '',
-                    error: 'Invalid barcode',
-                }
-                return next
-            })
-        }
-    }
+                // ignore stale responses
+                if ((reqSeqRef.current.get(index) ?? 0) !== seq) return
 
-    const handleQuantityChange = (index: number, value: string) => {
+                setRows((prev) => {
+                    const row = prev[index]
+                    if (!row) return prev
+
+                    const qty = Number(row.quantity) || 1
+                    const unitMrp = product.mrp
+
+                    const unitSelling = row.unitSellingPrice ?? unitMrp
+                    const sellingTotal = qty > 0 ? unitSelling * qty : ''
+
+                    const next = [...prev]
+                    next[index] = {
+                        ...row,
+                        productName: product.name,
+                        unitMrp,
+                        quantity: row.quantity || '1',
+                        unitSellingPrice: unitSelling,
+                        sellingPrice: sellingTotal.toString(),
+                        error: undefined,
+                    }
+                    return next
+                })
+            } catch {
+                // ignore stale responses
+                if ((reqSeqRef.current.get(index) ?? 0) !== seq) return
+
+                setRows((prev) => {
+                    const row = prev[index]
+                    if (!row) return prev
+                    const next = [...prev]
+                    next[index] = {
+                        ...row,
+                        productName: '',
+                        unitMrp: undefined,
+                        unitSellingPrice: undefined,
+                        // keep user's qty if already entered
+                        quantity: row.quantity || '',
+                        sellingPrice: '',
+                        error: INVALID_BARCODE_MSG,
+                    }
+                    return next
+                })
+            }
+        }, 500)
+
+        barcodeTimersRef.current.set(index, timer)
+    }, [updateRow, clearRowTimer])
+
+    const handleQuantityChange = useCallback((index: number, value: string) => {
         if (!/^\d*$/.test(value)) return
 
         setRows((prev) => {
             const row = prev[index]
+            if (!row) return prev
+
             const qty = Number(value)
 
             let nextSelling = row.sellingPrice
@@ -213,13 +272,15 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
             }
             return next
         })
-    }
+    }, [])
 
-    const handlePriceChange = (index: number, value: string) => {
+    const handlePriceChange = useCallback((index: number, value: string) => {
         if (!/^\d*\.?\d*$/.test(value)) return
 
         setRows((prev) => {
             const row = prev[index]
+            if (!row) return prev
+
             const qty = Number(row.quantity) || 0
             const total = Number(value)
 
@@ -234,7 +295,7 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
             }
             return next
         })
-    }
+    }, [])
 
     const validateRows = (): boolean => {
         let valid = true
@@ -313,6 +374,15 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
         if (orderToEdit) initializeRows()
     }, [orderToEdit, initializeRows])
 
+    // cleanup on unmount
+    useEffect(() => {
+        return () => {
+            barcodeTimersRef.current.forEach((t) => clearTimeout(t))
+            barcodeTimersRef.current.clear()
+            reqSeqRef.current.clear()
+        }
+    }, [])
+
     return {
         rows,
         loading,
@@ -321,7 +391,7 @@ export function useOrderForm({ onSuccess, orderToEdit }: UseOrderFormProps) {
         updateRow,
         addRow,
         removeRow,
-        handleBarcodeChange,
+        handleBarcodeChange, // ✅ now debounced
         handleQuantityChange,
         handlePriceChange,
         handleSubmit,

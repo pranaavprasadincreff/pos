@@ -35,4 +35,10 @@ public class SalesReportApiImpl implements SalesReportApi {
         List<SalesReportAggregatePojo> docs = salesReportDao.buildDailyAggregatesFacet(date);
         salesReportDao.replaceDailyAggregates(date, docs);
     }
+
+    @Override
+    public boolean existsForDate(LocalDate date) {
+        return salesReportDao.existsForDate(date);
+    }
+
 }

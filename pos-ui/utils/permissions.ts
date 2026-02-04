@@ -8,6 +8,7 @@ export const PAGE_ACCESS = {
     products: ["SUPERVISOR", "OPERATOR"],
     orders: ["SUPERVISOR", "OPERATOR"],
     reports: ["SUPERVISOR"],
+    operators: ["SUPERVISOR"],
 } as const
 
 export const ACTION_ACCESS = {
@@ -33,6 +34,9 @@ export const ACTION_ACCESS = {
 
     // ✅ Reports actions
     report_view: ["SUPERVISOR"],
+
+
+    operator_create: ["SUPERVISOR"],
 } as const
 
 // --------- Types derived from maps ---------

@@ -306,4 +306,9 @@ public class SalesReportDao extends AbstractDao<SalesReportAggregatePojo> {
                         .on("productBarcode", Sort.Direction.ASC)
         );
     }
+
+    public boolean existsForDate(LocalDate date) {
+        Query q = Query.query(Criteria.where("date").is(date));
+        return mongoOperations.exists(q, SalesReportAggregatePojo.class);
+    }
 }

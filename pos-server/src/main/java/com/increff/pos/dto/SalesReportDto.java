@@ -59,6 +59,13 @@ public class SalesReportDto {
         );
     }
 
+    public void generateAndStoreDaily(LocalDate date) throws ApiException {
+        if (date == null) throw new ApiException("date is required");
+        LocalDate today = LocalDate.now(IST);
+        if (date.isAfter(today)) throw new ApiException("date cannot be in the future");
+        salesReportApi.generateAndStoreDaily(date);
+    }
+
     // -------------------- Normalization + Validation helpers --------------------
 
     private SalesReportForm normalize(SalesReportForm form) {

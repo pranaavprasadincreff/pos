@@ -12,4 +12,5 @@ public interface SalesReportApi {
     List<SalesReportRowPojo> getRangeReport(LocalDate start, LocalDate end, String clientEmail, ReportRowType type) throws ApiException;
 
     void generateAndStoreDaily(LocalDate date) throws ApiException;
+    boolean existsForDate(LocalDate date);
 }

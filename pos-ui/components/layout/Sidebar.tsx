@@ -37,6 +37,7 @@ const NAV_ITEMS = [
     { label: "Products", href: "/products", icon: Package, pageKey: "products" },
     { label: "Orders", href: "/orders", icon: ShoppingCart, pageKey: "orders" },
     { label: "Sales Reports", href: "/reports", icon: BarChart3, pageKey: "reports" },
+    { label: "Operators", href: "/supervisor/operators", icon: Users, pageKey: "operators" },
 ] satisfies NavItem[]
 
 export default function Sidebar() {

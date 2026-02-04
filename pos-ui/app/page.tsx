@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
-import { Users, Package, ShoppingCart, BarChart3 } from "lucide-react"
+import { Users, Package, ShoppingCart, BarChart3, UserPlus } from "lucide-react"
 import { canView, Role } from "@/utils/permissions"
 
 export default function HomePage() {
@@ -30,7 +30,9 @@ export default function HomePage() {
                                 <Users className="h-8 w-8 text-indigo-600" />
                                 <div>
                                     <p className="font-medium">Clients</p>
-                                    <p className="text-sm text-muted-foreground">Manage registered clients</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Manage registered clients
+                                    </p>
                                 </div>
                             </CardContent>
                         </Card>
@@ -44,7 +46,9 @@ export default function HomePage() {
                                 <Package className="h-8 w-8 text-emerald-600" />
                                 <div>
                                     <p className="font-medium">Products</p>
-                                    <p className="text-sm text-muted-foreground">Manage products & inventory</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Manage products & inventory
+                                    </p>
                                 </div>
                             </CardContent>
                         </Card>
@@ -58,7 +62,9 @@ export default function HomePage() {
                                 <ShoppingCart className="h-8 w-8 text-orange-500" />
                                 <div>
                                     <p className="font-medium">Orders</p>
-                                    <p className="text-sm text-muted-foreground">Create and manage orders</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Create and manage orders
+                                    </p>
                                 </div>
                             </CardContent>
                         </Card>
@@ -72,11 +78,32 @@ export default function HomePage() {
                                 <BarChart3 className="h-8 w-8 text-yellow-500" />
                                 <div>
                                     <p className="font-medium">Sales Reports</p>
-                                    <p className="text-sm text-muted-foreground">Daily and range-wise analytics</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Daily and range-wise analytics
+                                    </p>
                                 </div>
                             </CardContent>
                         </Card>
                     </Link>
+                )}
+
+                {/* ✅ Supervisor-only card, centered under the grid */}
+                {canView(role, "operators") && (
+                    <div className="sm:col-span-2 flex justify-center">
+                        <Link href="/supervisor/operators" className="w-full sm:max-w-md">
+                            <Card className="hover:shadow-md transition cursor-pointer">
+                                <CardContent className="flex items-center gap-4 p-6">
+                                    <UserPlus className="h-8 w-8 text-pink-600" />
+                                    <div>
+                                        <p className="font-medium">Operators</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            Create operator logins and manage access
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </Link>
+                    </div>
                 )}
             </div>
         </div>

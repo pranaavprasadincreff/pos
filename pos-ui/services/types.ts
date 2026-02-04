@@ -87,3 +87,13 @@ export interface InvoiceData {
 export interface ApiError {
     message: string
 }
+
+export interface AuthUserData {
+    email: string
+    role: "SUPERVISOR" | "OPERATOR"
+}
+
+export interface CreateOperatorForm {
+    email: string
+    password: string
+}

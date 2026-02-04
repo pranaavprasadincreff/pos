@@ -30,7 +30,7 @@ export default function OrderFormModal({
         formError,
         addRow,
         removeRow,
-        handleBarcodeChange,
+        handleBarcodeChange, // ✅ use the hook function you actually return
         handleQuantityChange,
         handlePriceChange,
         handleSubmit,
@@ -119,23 +119,38 @@ export default function OrderFormModal({
                                     !Number.isNaN(sellingTotal) &&
                                     sellingTotal > row.unitMrp * qty
 
+                                const isInvalidBarcode =
+                                    row.error?.trim().toLowerCase() === "invalid barcode"
+
                                 return (
                                     <div key={index} className="grid grid-cols-12 gap-3 items-start w-full">
-                                        {/* Barcode */}
-                                        <Input
-                                            className="col-span-3 bg-background w-full"
-                                            placeholder="Barcode"
-                                            maxLength={40}
-                                            value={row.productBarcode}
-                                            onChange={(e) =>
-                                                handleBarcodeChange(index, e.target.value.toUpperCase())
-                                            }
-                                        />
+                                        {/* ✅ Barcode: input + fixed-height error line under it */}
+                                        <div className="col-span-3 space-y-1">
+                                            <Input
+                                                className="bg-background w-full"
+                                                placeholder="Barcode"
+                                                maxLength={40}
+                                                value={row.productBarcode}
+                                                onChange={(e) =>
+                                                    handleBarcodeChange(index, e.target.value.toUpperCase())
+                                                }
+                                            />
 
-                                        {/* Product name + unit MRP */}
+                                            {/* fixed height line = same as MRP line */}
+                                            <div className="h-4 leading-4 text-[11px] font-medium">
+                                                {isInvalidBarcode ? (
+                                                    <span className="text-red-600">Invalid barcode</span>
+                                                ) : (
+                                                    // keep alignment even when empty
+                                                    <span className="opacity-0">.</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* ✅ Product name + fixed-height MRP line */}
                                         <div className="col-span-3 space-y-1">
                                             <Input className="bg-background w-full" value={row.productName} disabled />
-                                            <div className="text-[11px] text-muted-foreground">
+                                            <div className="h-4 leading-4 text-[11px] text-muted-foreground">
                                                 MRP{" "}
                                                 {row.unitMrp != null ? (
                                                     <span className="font-medium text-foreground">
@@ -189,8 +204,11 @@ export default function OrderFormModal({
                                             )}
                                         </div>
 
-                                        {row.error && (
-                                            <div className="col-span-12 text-xs text-red-600">{row.error}</div>
+                                        {/* ✅ other errors below row (skip invalid barcode because shown under barcode input) */}
+                                        {row.error && !isInvalidBarcode && (
+                                            <div className="col-span-12 text-xs text-red-600">
+                                                {row.error}
+                                            </div>
                                         )}
                                     </div>
                                 )
@@ -199,7 +217,7 @@ export default function OrderFormModal({
                     </div>
                 </div>
 
-                {/* Bottom bar: Add item (left) + hint (right) */}
+                {/* Bottom bar */}
                 <div className="flex items-center justify-between pt-1">
                     <Button
                         type="button"
@@ -215,11 +233,9 @@ export default function OrderFormModal({
                     </div>
                 </div>
 
-                {/* ✅ Footer row: Grand total (bottom-left) + actions (right) */}
+                {/* Footer */}
                 <div className="flex items-center justify-between pt-2">
-                    <div className="font-semibold">
-                        Grand Total: ₹{grandTotal.toFixed(2)}
-                    </div>
+                    <div className="font-semibold">Grand Total: ₹{grandTotal.toFixed(2)}</div>
 
                     <div className="flex justify-end gap-2">
                         <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
