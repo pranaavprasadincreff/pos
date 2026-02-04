@@ -7,49 +7,76 @@ import com.increff.pos.model.form.ClientForm;
 import com.increff.pos.model.form.ClientUpdateForm;
 import com.increff.pos.model.form.PageForm;
 import com.increff.pos.test.AbstractUnitTest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.ValidatorFactory;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ClientDtoTest extends AbstractUnitTest {
-
     @Autowired
     private ClientDto clientDto;
 
-    // NormalizeUtil lowercases names in your project, so assert accordingly.
+    private Validator validator;
+
+    @BeforeEach
+    public void setupValidator() {
+        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        validator = factory.getValidator();
+    }
+
     private static void assertNormalizedNameEquals(String expectedRaw, String actualNormalized) {
         assertNotNull(actualNormalized);
         assertEquals(expectedRaw.trim().toLowerCase(), actualNormalized);
     }
 
+    private static void assertHasViolationForField(Set<? extends ConstraintViolation<?>> violations, String fieldName) {
+        boolean found = violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals(fieldName));
+        assertTrue(found, "Expected validation error for field: " + fieldName);
+    }
+
     // ------------------------
-    // CREATE
+    // CREATE (validation is annotation-driven now)
     // ------------------------
 
     @Test
-    public void testCreateClientWithInvalidEmail() {
+    public void testCreateFormValidationInvalidEmail() {
         ClientForm form = new ClientForm();
         form.setEmail("invalid-email");
         form.setName("Test Client");
-        assertThrows(ApiException.class, () -> clientDto.create(form));
+
+        Set<ConstraintViolation<ClientForm>> violations = validator.validate(form);
+        assertFalse(violations.isEmpty());
+        assertHasViolationForField(violations, "email");
     }
 
     @Test
-    public void testCreateClientWithEmptyEmail() {
+    public void testCreateFormValidationEmptyEmail() {
         ClientForm form = new ClientForm();
         form.setEmail("");
         form.setName("Test Client");
-        assertThrows(ApiException.class, () -> clientDto.create(form));
+
+        Set<ConstraintViolation<ClientForm>> violations = validator.validate(form);
+        assertFalse(violations.isEmpty());
+        assertHasViolationForField(violations, "email");
     }
 
     @Test
-    public void testCreateClientWithEmptyName() {
+    public void testCreateFormValidationEmptyName() {
         ClientForm form = new ClientForm();
         form.setEmail("test@example.com");
         form.setName("");
-        assertThrows(ApiException.class, () -> clientDto.create(form));
+
+        Set<ConstraintViolation<ClientForm>> violations = validator.validate(form);
+        assertFalse(violations.isEmpty());
+        assertHasViolationForField(violations, "name");
     }
 
     @Test
@@ -58,21 +85,26 @@ public class ClientDtoTest extends AbstractUnitTest {
         form.setEmail("test@example.com");
         form.setName("Test Client");
 
-        ClientData created = clientDto.create(form);
+        Set<ConstraintViolation<ClientForm>> violations = validator.validate(form);
+        assertTrue(violations.isEmpty());
 
-        assertNotNull(created);
-        assertEquals("test@example.com", created.getEmail());
-        assertNormalizedNameEquals("Test Client", created.getName());
+        ClientData createdClient = clientDto.create(form);
+
+        assertNotNull(createdClient);
+        assertEquals("test@example.com", createdClient.getEmail());
+        assertNormalizedNameEquals("Test Client", createdClient.getName());
     }
 
     @Test
-    public void testCreateDuplicateClient() throws ApiException {
+    public void testCreateDuplicateClientShouldFail() throws ApiException {
         ClientForm form = new ClientForm();
         form.setEmail("duplicate@example.com");
         form.setName("Test Client");
 
         clientDto.create(form);
-        assertThrows(ApiException.class, () -> clientDto.create(form));
+
+        ApiException exception = assertThrows(ApiException.class, () -> clientDto.create(form));
+        assertTrue(exception.getMessage().toLowerCase().contains("already exists"));
     }
 
     @Test
@@ -81,15 +113,14 @@ public class ClientDtoTest extends AbstractUnitTest {
         form.setEmail("  TeSt@Example.COM  ");
         form.setName("   John   Doe   ");
 
-        ClientData created = clientDto.create(form);
+        ClientData createdClient = clientDto.create(form);
 
-        assertNotNull(created);
-        assertEquals("test@example.com", created.getEmail());
+        assertNotNull(createdClient);
+        assertEquals("test@example.com", createdClient.getEmail());
 
-        // Don't assume whitespace collapsing rules beyond trim+lowercase unless you want to mirror util exactly
-        assertFalse(created.getName().startsWith(" "));
-        assertFalse(created.getName().endsWith(" "));
-        assertTrue(created.getName().contains("john"));
+        assertFalse(createdClient.getName().startsWith(" "));
+        assertFalse(createdClient.getName().endsWith(" "));
+        assertTrue(createdClient.getName().contains("john"));
     }
 
     // ------------------------
@@ -97,14 +128,9 @@ public class ClientDtoTest extends AbstractUnitTest {
     // ------------------------
 
     @Test
-    public void testGetByEmailInvalidEmail() {
-        assertThrows(ApiException.class, () -> clientDto.getByEmail("not-an-email"));
-    }
-
-    @Test
     public void testGetByEmailNotFound() {
-        ApiException ex = assertThrows(ApiException.class, () -> clientDto.getByEmail("missing@example.com"));
-        assertTrue(ex.getMessage().toLowerCase().contains("not found"));
+        ApiException exception = assertThrows(ApiException.class, () -> clientDto.getByEmail("missing@example.com"));
+        assertTrue(exception.getMessage().toLowerCase().contains("not found"));
     }
 
     @Test
@@ -122,29 +148,33 @@ public class ClientDtoTest extends AbstractUnitTest {
     }
 
     // ------------------------
-    // PAGINATION
+    // GET ALL (via filter compatibility)
     // ------------------------
 
     @Test
-    public void testPaginationInvalidPageSize() {
-        PageForm form = new PageForm();
-        form.setPage(0);
-        form.setSize(101); // Max size 100 per your ValidationUtil
+    public void testPageFormValidationInvalidPageSize() {
+        PageForm pageForm = new PageForm();
+        pageForm.setPage(0);
+        pageForm.setSize(101);
 
-        assertThrows(ApiException.class, () -> clientDto.getAllClients(form));
+        Set<ConstraintViolation<PageForm>> violations = validator.validate(pageForm);
+        assertFalse(violations.isEmpty());
+        assertHasViolationForField(violations, "size");
     }
 
     @Test
-    public void testPaginationInvalidPageNumber() {
-        PageForm form = new PageForm();
-        form.setPage(-1);
-        form.setSize(10);
+    public void testPageFormValidationInvalidPageNumber() {
+        PageForm pageForm = new PageForm();
+        pageForm.setPage(-1);
+        pageForm.setSize(10);
 
-        assertThrows(ApiException.class, () -> clientDto.getAllClients(form));
+        Set<ConstraintViolation<PageForm>> violations = validator.validate(pageForm);
+        assertFalse(violations.isEmpty());
+        assertHasViolationForField(violations, "page");
     }
 
     @Test
-    public void testPaginationValidParams() throws ApiException {
+    public void testGetAllUsingFilterValidParams() throws ApiException {
         for (int i = 0; i < 5; i++) {
             ClientForm form = new ClientForm();
             form.setEmail("test" + i + "@example.com");
@@ -156,7 +186,7 @@ public class ClientDtoTest extends AbstractUnitTest {
         pageForm.setPage(0);
         pageForm.setSize(3);
 
-        Page<ClientData> page = clientDto.getAllClients(pageForm);
+        Page<ClientData> page = clientDto.getAllUsingFilter(pageForm);
 
         assertNotNull(page);
         assertTrue(page.getContent().size() <= 3);
@@ -169,15 +199,15 @@ public class ClientDtoTest extends AbstractUnitTest {
 
     @Test
     public void testFilterValidByNameCaseInsensitive() throws ApiException {
-        ClientForm a = new ClientForm();
-        a.setEmail("alice@example.com");
-        a.setName("Alice Johnson");
-        clientDto.create(a);
+        ClientForm alice = new ClientForm();
+        alice.setEmail("alice@example.com");
+        alice.setName("Alice Johnson");
+        clientDto.create(alice);
 
-        ClientForm b = new ClientForm();
-        b.setEmail("bob@example.com");
-        b.setName("Bob Smith");
-        clientDto.create(b);
+        ClientForm bob = new ClientForm();
+        bob.setEmail("bob@example.com");
+        bob.setName("Bob Smith");
+        clientDto.create(bob);
 
         ClientFilterForm filter = new ClientFilterForm();
         filter.setName("aLiCe");
@@ -185,7 +215,11 @@ public class ClientDtoTest extends AbstractUnitTest {
         filter.setPage(0);
         filter.setSize(10);
 
+        Set<ConstraintViolation<ClientFilterForm>> violations = validator.validate(filter);
+        assertTrue(violations.isEmpty());
+
         Page<ClientData> page = clientDto.filter(filter);
+
         assertNotNull(page);
         assertEquals(1, page.getTotalElements());
         assertEquals("alice@example.com", page.getContent().get(0).getEmail());
@@ -193,15 +227,15 @@ public class ClientDtoTest extends AbstractUnitTest {
 
     @Test
     public void testFilterValidByEmailCaseInsensitivePartial() throws ApiException {
-        ClientForm a = new ClientForm();
-        a.setEmail("first.user@example.com");
-        a.setName("First User");
-        clientDto.create(a);
+        ClientForm first = new ClientForm();
+        first.setEmail("first.user@example.com");
+        first.setName("First User");
+        clientDto.create(first);
 
-        ClientForm b = new ClientForm();
-        b.setEmail("second.user@example.com");
-        b.setName("Second User");
-        clientDto.create(b);
+        ClientForm second = new ClientForm();
+        second.setEmail("second.user@example.com");
+        second.setName("Second User");
+        clientDto.create(second);
 
         ClientFilterForm filter = new ClientFilterForm();
         filter.setName(null);
@@ -209,45 +243,55 @@ public class ClientDtoTest extends AbstractUnitTest {
         filter.setPage(0);
         filter.setSize(10);
 
+        Set<ConstraintViolation<ClientFilterForm>> violations = validator.validate(filter);
+        assertTrue(violations.isEmpty());
+
         Page<ClientData> page = clientDto.filter(filter);
+
         assertNotNull(page);
         assertEquals(1, page.getTotalElements());
         assertEquals("second.user@example.com", page.getContent().get(0).getEmail());
     }
 
     @Test
-    public void testFilterInvalidPaginationParams() {
+    public void testFilterFormValidationInvalidPaginationParams() {
         ClientFilterForm filter = new ClientFilterForm();
         filter.setName("x");
         filter.setEmail("y@example.com");
         filter.setPage(-1);
         filter.setSize(10);
 
-        assertThrows(ApiException.class, () -> clientDto.filter(filter));
+        Set<ConstraintViolation<ClientFilterForm>> violations = validator.validate(filter);
+        assertFalse(violations.isEmpty());
+        assertHasViolationForField(violations, "page");
     }
 
     // ------------------------
-    // UPDATE
+    // UPDATE (validation is annotation-driven now)
     // ------------------------
 
     @Test
-    public void testUpdateInvalidOldEmail() {
+    public void testUpdateFormValidationInvalidOldEmail() {
         ClientUpdateForm form = new ClientUpdateForm();
         form.setOldEmail("not-an-email");
         form.setNewEmail("new@example.com");
         form.setName("New Name");
 
-        assertThrows(ApiException.class, () -> clientDto.update(form));
+        Set<ConstraintViolation<ClientUpdateForm>> violations = validator.validate(form);
+        assertFalse(violations.isEmpty());
+        assertHasViolationForField(violations, "oldEmail");
     }
 
     @Test
-    public void testUpdateInvalidNewEmail() {
+    public void testUpdateFormValidationInvalidNewEmail() {
         ClientUpdateForm form = new ClientUpdateForm();
         form.setOldEmail("old@example.com");
         form.setNewEmail("not-an-email");
         form.setName("New Name");
 
-        assertThrows(ApiException.class, () -> clientDto.update(form));
+        Set<ConstraintViolation<ClientUpdateForm>> violations = validator.validate(form);
+        assertFalse(violations.isEmpty());
+        assertHasViolationForField(violations, "newEmail");
     }
 
     @Test
@@ -257,7 +301,8 @@ public class ClientDtoTest extends AbstractUnitTest {
         form.setNewEmail("new@example.com");
         form.setName("New Name");
 
-        assertThrows(ApiException.class, () -> clientDto.update(form));
+        ApiException exception = assertThrows(ApiException.class, () -> clientDto.update(form));
+        assertTrue(exception.getMessage().toLowerCase().contains("not found"));
     }
 
     @Test
@@ -272,12 +317,12 @@ public class ClientDtoTest extends AbstractUnitTest {
         b.setName("B");
         clientDto.create(b);
 
-        ClientUpdateForm upd = new ClientUpdateForm();
-        upd.setOldEmail("a@example.com");
-        upd.setNewEmail("b@example.com"); // already exists for a different client
-        upd.setName("A Updated");
+        ClientUpdateForm updateForm = new ClientUpdateForm();
+        updateForm.setOldEmail("a@example.com");
+        updateForm.setNewEmail("b@example.com");
+        updateForm.setName("A Updated");
 
-        assertThrows(ApiException.class, () -> clientDto.update(upd));
+        assertThrows(ApiException.class, () -> clientDto.update(updateForm));
     }
 
     @Test
@@ -287,12 +332,12 @@ public class ClientDtoTest extends AbstractUnitTest {
         a.setName("Old Name");
         clientDto.create(a);
 
-        ClientUpdateForm upd = new ClientUpdateForm();
-        upd.setOldEmail("same@example.com");
-        upd.setNewEmail("same@example.com"); // same email should be allowed
-        upd.setName("New Name");
+        ClientUpdateForm updateForm = new ClientUpdateForm();
+        updateForm.setOldEmail("same@example.com");
+        updateForm.setNewEmail("same@example.com");
+        updateForm.setName("New Name");
 
-        ClientData updated = clientDto.update(upd);
+        ClientData updated = clientDto.update(updateForm);
 
         assertNotNull(updated);
         assertEquals("same@example.com", updated.getEmail());
@@ -306,12 +351,12 @@ public class ClientDtoTest extends AbstractUnitTest {
         a.setName("Old");
         clientDto.create(a);
 
-        ClientUpdateForm upd = new ClientUpdateForm();
-        upd.setOldEmail("old@example.com");
-        upd.setNewEmail("  NEW@EXAMPLE.COM  ");
-        upd.setName("Updated");
+        ClientUpdateForm updateForm = new ClientUpdateForm();
+        updateForm.setOldEmail("old@example.com");
+        updateForm.setNewEmail("  NEW@EXAMPLE.COM  ");
+        updateForm.setName("Updated");
 
-        ClientData updated = clientDto.update(upd);
+        ClientData updated = clientDto.update(updateForm);
 
         assertNotNull(updated);
         assertEquals("new@example.com", updated.getEmail());

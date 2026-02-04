@@ -11,7 +11,6 @@ import com.increff.pos.model.form.ClientForm;
 import com.increff.pos.model.form.ClientUpdateForm;
 import com.increff.pos.model.form.PageForm;
 import com.increff.pos.util.NormalizationUtil;
-import com.increff.pos.util.ValidationUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
@@ -21,69 +20,58 @@ public class ClientDto {
     @Autowired
     private ClientApi clientApi;
 
-    public ClientData create(ClientForm form) throws ApiException {
-        normalizeClientCreate(form);
-        validateClientCreate(form);
-
-        ClientPojo pojo = ClientHelper.convertFormToEntity(form);
-        //TODO change saved name
-        ClientPojo saved = clientApi.add(pojo);
-        return ClientHelper.convertFormToDto(saved);
+    public ClientData create(ClientForm clientCreateForm) throws ApiException {
+        normalizeClientCreateRequest(clientCreateForm);
+        ClientPojo clientToCreate = ClientHelper.convertFormToEntity(clientCreateForm);
+        ClientPojo createdClient = clientApi.add(clientToCreate);
+        return ClientHelper.convertFormToDto(createdClient);
     }
 
     public ClientData getByEmail(String email) throws ApiException {
-        String normalized = normalizeAndValidateEmail(email);
-        ClientPojo pojo = clientApi.getClientByEmail(normalized);
-        return ClientHelper.convertFormToDto(pojo);
+        String normalizedEmail = NormalizationUtil.normalizeEmail(email);
+        ClientPojo client = clientApi.getClientByEmail(normalizedEmail);
+        return ClientHelper.convertFormToDto(client);
     }
 
-    public Page<ClientData> getAllClients(PageForm form) throws ApiException {
-        ValidationUtil.validatePageForm(form);
-        Page<ClientPojo> page = clientApi.getAll(form.getPage(), form.getSize());
-        return page.map(ClientHelper::convertFormToDto);
-    }
-
-    public Page<ClientData> filter(ClientFilterForm form) throws ApiException {
-        normalizeClientFilter(form);
-        ValidationUtil.validateClientFilterForm(form);
-
-        Page<ClientPojo> page = clientApi.filter(
-                form.getName(),
-                form.getEmail(),
-                form.getPage(),
-                form.getSize()
+    public Page<ClientData> filter(ClientFilterForm clientFilterForm) throws ApiException {
+        normalizeClientFilterRequest(clientFilterForm);
+        Page<ClientPojo> clientPage = clientApi.filter(
+                clientFilterForm.getName(),
+                clientFilterForm.getEmail(),
+                clientFilterForm.getPage(),
+                clientFilterForm.getSize()
         );
-        return page.map(ClientHelper::convertFormToDto);
+        return clientPage.map(ClientHelper::convertFormToDto);
     }
 
-    public ClientData update(ClientUpdateForm form) throws ApiException {
-        normalizeClientUpdate(form);
-        ValidationUtil.validateClientUpdateForm(form);
-
-        ClientUpdatePojo pojo = ClientHelper.convertUpdateFormToEntity(form);
-        ClientPojo updated = clientApi.update(pojo);
-        return ClientHelper.convertFormToDto(updated);
+    public ClientData update(ClientUpdateForm clientUpdateForm) throws ApiException {
+        normalizeClientUpdateRequest(clientUpdateForm);
+        ClientUpdatePojo updateRequest = ClientHelper.convertUpdateFormToEntity(clientUpdateForm);
+        ClientPojo updatedClient = clientApi.update(updateRequest);
+        return ClientHelper.convertFormToDto(updatedClient);
     }
 
-    private void normalizeClientCreate(ClientForm form) {
-        NormalizationUtil.normalizeClientForm(form);
+    public Page<ClientData> getAllUsingFilter(PageForm pageForm) throws ApiException {
+        ClientFilterForm clientFilterForm = buildEmptyFilterFromPage(pageForm);
+        return filter(clientFilterForm);
     }
 
-    private void validateClientCreate(ClientForm form) throws ApiException {
-        ValidationUtil.validateClientForm(form);
+    private void normalizeClientCreateRequest(ClientForm clientCreateForm) {
+        NormalizationUtil.normalizeClientForm(clientCreateForm);
     }
 
-    private void normalizeClientUpdate(ClientUpdateForm form) {
-        NormalizationUtil.normalizeClientUpdateForm(form);
+    private void normalizeClientUpdateRequest(ClientUpdateForm clientUpdateForm) {
+        NormalizationUtil.normalizeClientUpdateForm(clientUpdateForm);
     }
 
-    private void normalizeClientFilter(ClientFilterForm form) {
-        NormalizationUtil.normalizeClientFilterForm(form);
+    private void normalizeClientFilterRequest(ClientFilterForm clientFilterForm) {
+        NormalizationUtil.normalizeClientFilterForm(clientFilterForm);
     }
 
-    private String normalizeAndValidateEmail(String email) throws ApiException {
-        String normalized = NormalizationUtil.normalizeEmail(email);
-        ValidationUtil.validateEmail(normalized);
-        return normalized;
+    private ClientFilterForm buildEmptyFilterFromPage(PageForm pageForm) {
+        ClientFilterForm clientFilterForm = new ClientFilterForm();
+        clientFilterForm.setPage(pageForm.getPage());
+        clientFilterForm.setSize(pageForm.getSize());
+        return clientFilterForm;
     }
 }

@@ -48,7 +48,6 @@ public class ClientApiTest extends AbstractUnitTest {
 
         assertNotNull(fetched);
         assertEquals("get@example.com", fetched.getEmail());
-        // ClientApi preserves name casing (no normalization)
         assertEquals("Get Client", fetched.getName());
     }
 
@@ -76,7 +75,7 @@ public class ClientApiTest extends AbstractUnitTest {
 
         ClientUpdatePojo upd = new ClientUpdatePojo();
         upd.setOldEmail("a@example.com");
-        upd.setNewEmail("b@example.com"); // belongs to other client
+        upd.setNewEmail("b@example.com");
         upd.setName("A Updated");
 
         assertThrows(ApiException.class, () -> clientApi.update(upd));
@@ -91,7 +90,7 @@ public class ClientApiTest extends AbstractUnitTest {
 
         ClientUpdatePojo upd = new ClientUpdatePojo();
         upd.setOldEmail("same@example.com");
-        upd.setNewEmail("same@example.com"); // same client, should be allowed
+        upd.setNewEmail("same@example.com");
         upd.setName("New Name");
 
         ClientPojo updated = clientApi.update(upd);
@@ -99,7 +98,6 @@ public class ClientApiTest extends AbstractUnitTest {
         assertNotNull(updated);
         assertEquals(saved.getId(), updated.getId());
         assertEquals("same@example.com", updated.getEmail());
-        // preserves casing
         assertEquals("New Name", updated.getName());
     }
 
@@ -119,7 +117,6 @@ public class ClientApiTest extends AbstractUnitTest {
 
         assertNotNull(updated);
         assertEquals("new@example.com", updated.getEmail());
-        // preserves casing
         assertEquals("Updated", updated.getName());
 
         assertThrows(ApiException.class, () -> clientApi.getClientByEmail("old@example.com"));

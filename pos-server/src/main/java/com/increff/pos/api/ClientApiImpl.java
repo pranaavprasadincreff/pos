@@ -18,87 +18,84 @@ import java.util.Set;
 @Service
 public class ClientApiImpl implements ClientApi {
     @Autowired
-    private ClientDao dao;
+    private ClientDao clientDao;
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public ClientPojo add(ClientPojo pojo) throws ApiException {
-        ensureEmailUnique(pojo.getEmail());
-        return dao.save(pojo);
+    public ClientPojo add(ClientPojo clientToCreate) throws ApiException {
+        validateClientEmailIsUnique(clientToCreate.getEmail());
+        return clientDao.save(clientToCreate);
     }
 
     @Override
     public ClientPojo getClientByEmail(String email) throws ApiException {
-        // TODO change name getByEmailOrThrow -> getCheckByEmail
-        return getByEmailOrThrow(email);
-    }
-
-    @Override
-    public Page<ClientPojo> getAll(int page, int size) {
-        PageRequest req = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return dao.findAll(req);
+        return fetchClientByEmail(email);
     }
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public ClientPojo update(ClientUpdatePojo update) throws ApiException {
-        ClientPojo existing = getByEmailOrThrow(update.getOldEmail());
-        ensureEmailUniqueForUpdate(update);
-        // TODO change applyUpdate name
-        applyUpdate(existing, update);
-        return dao.save(existing);
+    public ClientPojo update(ClientUpdatePojo updateRequest) throws ApiException {
+        ClientPojo existingClient = fetchClientByEmail(updateRequest.getOldEmail());
+        validateUpdatedEmailDoesNotConflict(existingClient, updateRequest.getNewEmail());
+        applyClientUpdate(existingClient, updateRequest);
+        return clientDao.save(existingClient);
     }
 
     @Override
     public Page<ClientPojo> filter(String name, String email, int page, int size) {
-        PageRequest req = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return dao.filter(name, email, req);
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return clientDao.filter(name, email, pageRequest);
     }
 
     @Override
     public void validateClientsExist(Set<String> emails) throws ApiException {
-        List<ClientPojo> clients = dao.findByEmails(new ArrayList<>(emails));
-
-        if (clients.size() != emails.size()) {
-            throw new ApiException("One or more client emails are invalid");
-        }
+        List<ClientPojo> clients = clientDao.findByEmails(new ArrayList<>(emails));
+        validateAllClientsExist(emails, clients);
     }
 
-    private ClientPojo getByEmailOrThrow(String email) throws ApiException {
-        ClientPojo pojo = dao.findByEmail(email);
-        if (pojo != null) {
-            return pojo;
+    private ClientPojo fetchClientByEmail(String email) throws ApiException {
+        ClientPojo client = clientDao.findByEmail(email);
+        if (client == null) {
+            throw new ApiException("Client not found with email: " + email);
         }
-        throw new ApiException("Client not found with email: " + email);
+        return client;
     }
 
-    private void ensureEmailUnique(String email) throws ApiException {
-        ClientPojo existing = dao.findByEmail(email);
-        if (existing == null) {
+    private void validateClientEmailIsUnique(String email) throws ApiException {
+        ClientPojo existingClient = clientDao.findByEmail(email);
+        if (existingClient == null) {
             return;
         }
         throw new ApiException("Client already exists with email: " + email);
     }
 
-    private void ensureEmailUniqueForUpdate(ClientUpdatePojo update) throws ApiException {
-        ClientPojo existing = dao.findByEmail(update.getNewEmail());
-        ClientPojo oldPojo = dao.findByEmail(update.getOldEmail());
-
-        if (existing == null) {
+    private void validateUpdatedEmailDoesNotConflict(ClientPojo existingClient, String newEmail) throws ApiException {
+        if (newEmail.equals(existingClient.getEmail())) {
             return;
         }
 
-        String existingId = existing.getId();
-        String oldId = oldPojo.getId();
-        boolean different = !existingId.equals(oldId);
-
-        if (different) {
-            throw new ApiException("Client already exists with email: " + update.getNewEmail());
+        ClientPojo clientWithNewEmail = clientDao.findByEmail(newEmail);
+        if (clientWithNewEmail == null) {
+            return;
         }
+
+        boolean updatedEmailBelongsToSameClient = clientWithNewEmail.getId().equals(existingClient.getId());
+        if (updatedEmailBelongsToSameClient) {
+            return;
+        }
+        throw new ApiException("Client already exists with email: " + newEmail);
     }
 
-    private void applyUpdate(ClientPojo pojo, ClientUpdatePojo update) {
-        pojo.setName(update.getName());
-        pojo.setEmail(update.getNewEmail());
+    private void applyClientUpdate(ClientPojo existingClient, ClientUpdatePojo updateRequest) {
+        existingClient.setName(updateRequest.getName());
+        existingClient.setEmail(updateRequest.getNewEmail());
+    }
+
+    private void validateAllClientsExist(Set<String> emails, List<ClientPojo> clients) throws ApiException {
+        boolean allExist = clients.size() == emails.size();
+        if (allExist) {
+            return;
+        }
+        throw new ApiException("One or more client emails are invalid");
     }
 }

@@ -10,7 +10,6 @@ import java.util.Set;
 public interface ClientApi {
     ClientPojo add(ClientPojo clientPojo) throws ApiException;
     ClientPojo getClientByEmail(String email) throws ApiException;
-    Page<ClientPojo> getAll(int page, int size);
     ClientPojo update(ClientUpdatePojo clientUpdatePojo) throws ApiException;
     Page<ClientPojo> filter(String name, String email, int page, int size);
     void validateClientsExist(Set<String> emails) throws ApiException;
