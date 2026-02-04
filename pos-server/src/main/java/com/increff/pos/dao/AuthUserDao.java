@@ -12,7 +12,6 @@ import java.util.List;
 
 @Repository
 public class AuthUserDao extends AbstractDao<AuthUserPojo> {
-
     public AuthUserDao(MongoOperations mongoOperations) {
         super(
                 new MongoRepositoryFactory(mongoOperations)

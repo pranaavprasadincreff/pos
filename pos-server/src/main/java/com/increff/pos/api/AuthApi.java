@@ -10,11 +10,8 @@ import java.util.List;
 public interface AuthApi {
     AuthUserPojo signupSupervisor(String email, String password) throws ApiException;
     AuthUserPojo login(String email, String password) throws ApiException;
-
     AuthUserPojo createOperator(String email, String password) throws ApiException;
     List<AuthUserPojo> listOperators();
-
     String issueToken(AuthUserPojo user);
-
     AuthUserData decodeToken(String token) throws ApiException;
 }

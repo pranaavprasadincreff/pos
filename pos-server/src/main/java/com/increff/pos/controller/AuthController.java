@@ -6,37 +6,50 @@ import com.increff.pos.model.data.AuthUserData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.LoginForm;
 import com.increff.pos.model.form.SignupForm;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+@Validated
 @CrossOrigin(origins = "http://localhost:3000")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-
     @Autowired
     private AuthDto authDto;
 
     @PostMapping("/signup")
-    public AuthTokenData signup(@RequestBody SignupForm form) throws ApiException {
+    public AuthTokenData signup(@Valid @RequestBody SignupForm form) throws ApiException {
         return authDto.signup(form);
     }
 
     @PostMapping("/login")
-    public AuthTokenData login(@RequestBody LoginForm form) throws ApiException {
+    public AuthTokenData login(@Valid @RequestBody LoginForm form) throws ApiException {
         return authDto.login(form);
     }
 
     @GetMapping("/me")
-    public AuthUserData me(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) throws ApiException {
-        return authDto.me(extractToken(authHeader));
+    public AuthUserData me(
+            @RequestHeader(HttpHeaders.AUTHORIZATION)
+            @NotBlank(message = "Missing Authorization header")
+            String authHeader
+    ) throws ApiException {
+        return authDto.me(extractBearerToken(authHeader));
     }
 
-    private String extractToken(String header) throws ApiException {
-        if (header == null || !header.startsWith("Bearer ")) {
+    private String extractBearerToken(String authHeader) throws ApiException {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             throw new ApiException("Missing Authorization header");
         }
-        return header.substring(7);
+
+        String token = authHeader.substring(7).trim();
+        if (token.isBlank()) {
+            throw new ApiException("Missing Authorization header");
+        }
+
+        return token;
     }
 }

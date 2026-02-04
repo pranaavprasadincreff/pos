@@ -2,6 +2,7 @@ package com.increff.pos.controller;
 
 import com.increff.pos.model.data.MessageData;
 import com.increff.pos.model.exception.ApiException;
+import jakarta.validation.ConstraintViolation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
@@ -21,44 +22,49 @@ public class AppRestControllerAdvice {
     private static final Logger log = LoggerFactory.getLogger(AppRestControllerAdvice.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<MessageData> handle(MethodArgumentNotValidException e) {
-        FieldError fieldError = e.getBindingResult().getFieldError();
+    public ResponseEntity<MessageData> handle(MethodArgumentNotValidException exception) {
+        FieldError fieldError = exception.getBindingResult().getFieldError();
         String message = fieldError != null ? fieldError.getDefaultMessage() : "Validation failed";
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new MessageData(message));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<MessageData> handle(ConstraintViolationException e) {
-        String message = e.getMessage() == null ? "Validation failed" : e.getMessage();
+    public ResponseEntity<MessageData> handle(ConstraintViolationException exception) {
+        String message = exception.getConstraintViolations()
+                .stream()
+                .findFirst()
+                .map(ConstraintViolation::getMessage)
+                .orElse("Validation failed");
+
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new MessageData(message));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<MessageData> handle(HttpMessageNotReadableException e) {
+    public ResponseEntity<MessageData> handle(HttpMessageNotReadableException exception) {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(new MessageData("Invalid request body"));
     }
 
     @ExceptionHandler(ApiException.class)
-    public ResponseEntity<MessageData> handle(ApiException e) {
+    public ResponseEntity<MessageData> handle(ApiException exception) {
         HttpStatus status = HttpStatus.BAD_REQUEST;
-        String msg = e.getMessage() == null ? "Bad request" : e.getMessage();
-        if (msg.toLowerCase().contains("service unavailable")) status = HttpStatus.SERVICE_UNAVAILABLE;
-        return ResponseEntity.status(status).body(new MessageData(msg));
+        String message = exception.getMessage() == null ? "Bad request" : exception.getMessage();
+        if (message.toLowerCase().contains("service unavailable")) status = HttpStatus.SERVICE_UNAVAILABLE;
+        return ResponseEntity.status(status).body(new MessageData(message));
     }
 
     @ExceptionHandler(DuplicateKeyException.class)
-    public ResponseEntity<MessageData> handle(DuplicateKeyException e) {
-        log.warn("DuplicateKeyException", e);
+    public ResponseEntity<MessageData> handle(DuplicateKeyException exception) {
+        log.warn("DuplicateKeyException", exception);
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(new MessageData("A record with this key already exists"));
     }
 
     @ExceptionHandler(Throwable.class)
-    public ResponseEntity<MessageData> handle(Throwable e) {
-        log.error("Unhandled exception", e);
+    public ResponseEntity<MessageData> handle(Throwable exception) {
+        log.error("Unhandled exception", exception);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new MessageData("An internal error occurred"));
