@@ -17,13 +17,13 @@ public class SalesReportController {
     @Autowired
     private SalesReportDto salesReportDto;
 
-    @Operation(summary = "Daily sales report (CLIENT rows if clientEmail absent, PRODUCT rows if present)")
+    @Operation(summary = "Daily sales report")
     @PostMapping("/daily")
-    public SalesReportResponseData daily(@RequestBody SalesReportForm form) throws ApiException {
+    public SalesReportResponseData daily(@RequestBody(required = false) SalesReportForm form) throws ApiException {
         return salesReportDto.getDailyReport(form);
     }
 
-    @Operation(summary = "Date-range sales report (CLIENT rows if clientEmail absent, PRODUCT rows if present)")
+    @Operation(summary = "Date-range sales report")
     @PostMapping("/range")
     public SalesReportResponseData range(@RequestBody SalesReportForm form) throws ApiException {
         return salesReportDto.getRangeReport(form);

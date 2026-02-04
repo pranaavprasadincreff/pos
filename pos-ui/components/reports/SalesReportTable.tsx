@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 import {
     Table,
     TableBody,
@@ -12,8 +12,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { SalesReportRowData, ReportRowType } from "@/services/salesReportService"
-import {formatINR} from "@/utils/currencyFormat";
+import type { SalesReportRowData, ReportRowType } from "@/services/reportService"
+import { formatINR } from "@/utils/currencyFormat"
 
 type ExpandFetch = (clientEmail: string) => Promise<SalesReportRowData[]>
 
@@ -22,26 +22,52 @@ export default function SalesReportTable({
                                              rows,
                                              loading,
                                              onExpandFetch,
+                                             cacheKey,
                                          }: {
     rowType: ReportRowType
     rows: SalesReportRowData[]
     loading: boolean
     onExpandFetch?: ExpandFetch // only used for CLIENT table
+    cacheKey: string // ✅ invalidates expansion cache when filters change
 }) {
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
     const [loadingClient, setLoadingClient] = useState<Record<string, boolean>>({})
-    const [childrenByClient, setChildrenByClient] = useState<Record<string, SalesReportRowData[]>>({})
+    const [childrenByClient, setChildrenByClient] = useState<
+        Record<string, SalesReportRowData[]>
+    >({})
+
+    // ✅ Critical: when filter context changes, clear expanded cache
+    useEffect(() => {
+        setExpanded(new Set())
+        setLoadingClient({})
+        setChildrenByClient({})
+    }, [cacheKey])
 
     const toggle = async (clientEmail: string) => {
+        if (!clientEmail) return
+
+        const wasOpen = expanded.has(clientEmail)
+        const willOpen = !wasOpen
+
         setExpanded((prev) => {
             const next = new Set(prev)
-            next.has(clientEmail) ? next.delete(clientEmail) : next.add(clientEmail)
+            if (next.has(clientEmail)) next.delete(clientEmail)
+            else next.add(clientEmail)
             return next
         })
 
-        // fetch only when opening and not already cached
-        const isOpenNow = !expanded.has(clientEmail)
-        if (!isOpenNow) return
+        // If closing, optionally drop cached rows for this client
+        // (keeps memory low; remove this block if you prefer keeping cache for same context)
+        if (!willOpen) {
+            setChildrenByClient((prev) => {
+                const next = { ...prev }
+                delete next[clientEmail]
+                return next
+            })
+            return
+        }
+
+        // opening: fetch if needed
         if (!onExpandFetch) return
         if (childrenByClient[clientEmail]) return
         if (loadingClient[clientEmail]) return
@@ -56,11 +82,19 @@ export default function SalesReportTable({
     }
 
     if (loading) {
-        return <div className="rounded-md border p-8 text-center text-muted-foreground">Loading report…</div>
+        return (
+            <div className="rounded-md border p-8 text-center text-muted-foreground">
+                Loading report…
+            </div>
+        )
     }
 
     if (!rows || rows.length === 0) {
-        return <div className="rounded-md border p-8 text-center text-muted-foreground">No data for selected filters</div>
+        return (
+            <div className="rounded-md border p-8 text-center text-muted-foreground">
+                No data for selected filters
+            </div>
+        )
     }
 
     const isClientTable = rowType === "CLIENT"
@@ -72,7 +106,11 @@ export default function SalesReportTable({
                     <TableRow>
                         {isClientTable ? <TableHead className="w-8" /> : null}
                         <TableHead>{isClientTable ? "Client Email" : "Product Barcode"}</TableHead>
-                        {isClientTable ? <TableHead className="w-[220px]"> </TableHead> : <TableHead>Client Email</TableHead>}
+                        {isClientTable ? (
+                            <TableHead className="w-[220px]"> </TableHead>
+                        ) : (
+                            <TableHead>Client Email</TableHead>
+                        )}
                         <TableHead className="text-right">Orders</TableHead>
                         <TableHead className="text-right">Items</TableHead>
                         <TableHead className="text-right">Revenue</TableHead>
@@ -90,7 +128,6 @@ export default function SalesReportTable({
                                 <TableRow
                                     className={cn(
                                         "hover:bg-muted/40",
-                                        // keep the “flowing” connected feel
                                         isClientTable && isOpen && "bg-indigo-50/40 border border-indigo-200 border-b-0"
                                     )}
                                 >
@@ -102,7 +139,11 @@ export default function SalesReportTable({
                                                 onClick={() => toggle(clientEmail)}
                                                 disabled={!clientEmail}
                                             >
-                                                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                {isOpen ? (
+                                                    <ChevronDown className="h-4 w-4" />
+                                                ) : (
+                                                    <ChevronRight className="h-4 w-4" />
+                                                )}
                                             </Button>
                                         </TableCell>
                                     ) : null}
@@ -128,9 +169,7 @@ export default function SalesReportTable({
 
                                     <TableCell className="text-right">{r.ordersCount}</TableCell>
                                     <TableCell className="text-right">{r.itemsCount}</TableCell>
-                                    <TableCell className="text-right font-medium">
-                                        ₹{formatINR(r.totalRevenue || 0)}
-                                    </TableCell>
+                                    <TableCell className="text-right font-medium">₹{formatINR(r.totalRevenue || 0)}</TableCell>
                                 </TableRow>
 
                                 {isClientTable && isOpen ? (
@@ -144,19 +183,14 @@ export default function SalesReportTable({
                         px-4 py-4
                       "
                                         >
-                                            {/* keep it connected to the expanded row; just make header more distinct */}
                                             <div className="rounded-md border border-indigo-200 bg-background overflow-hidden">
                                                 <Table>
                                                     <TableHeader>
                                                         <TableRow
                                                             className={cn(
-                                                                // distinct header
                                                                 "bg-muted/60",
-                                                                // separation from body
                                                                 "border-b border-indigo-200/70",
-                                                                // make header labels pop
                                                                 "[&>th]:py-3 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wider [&>th]:text-foreground",
-                                                                // subtle extra separation line (optional but nice)
                                                                 "shadow-[inset_0_-1px_0_0_rgba(99,102,241,0.25)]"
                                                             )}
                                                         >
@@ -179,13 +213,14 @@ export default function SalesReportTable({
                                                             </TableRow>
                                                         ))}
 
-                                                        {childrenByClient[clientEmail] && childrenByClient[clientEmail].length === 0 && (
-                                                            <TableRow>
-                                                                <TableCell colSpan={4} className="text-muted-foreground text-center py-6">
-                                                                    No product rows for this client
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        )}
+                                                        {childrenByClient[clientEmail] &&
+                                                            childrenByClient[clientEmail].length === 0 && (
+                                                                <TableRow>
+                                                                    <TableCell colSpan={4} className="text-muted-foreground text-center py-6">
+                                                                        No product rows for this client
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            )}
                                                     </TableBody>
                                                 </Table>
                                             </div>

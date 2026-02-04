@@ -17,23 +17,21 @@ public class SalesReportApiImpl implements SalesReportApi {
 
     @Override
     public List<SalesReportRowPojo> getDailyReport(LocalDate reportDate, String clientEmail, ReportRowType rowType) {
-        salesReportDao.ensureDailyNestedReportExists(reportDate);
-        return salesReportDao.fetchDailyRowsFromNestedReport(reportDate, clientEmail, rowType);
+        return salesReportDao.getDailyReportRows(reportDate, clientEmail, rowType);
     }
 
     @Override
     public List<SalesReportRowPojo> getRangeReport(LocalDate startDate, LocalDate endDate, String clientEmail, ReportRowType rowType) {
-        salesReportDao.ensureDailyNestedReportsExistForRange(startDate, endDate);
-        return salesReportDao.fetchRangeRowsFromNestedReports(startDate, endDate, clientEmail, rowType);
+        return salesReportDao.getRangeReportRows(startDate, endDate, clientEmail, rowType);
     }
 
     @Override
     public void generateAndStoreDailyNested(LocalDate reportDate) {
-        salesReportDao.generateAndStoreDailyNestedReport(reportDate);
+        salesReportDao.generateAndStoreDailyReportDocument(reportDate);
     }
 
     @Override
     public boolean existsDailyNested(LocalDate reportDate) {
-        return salesReportDao.existsDailyNestedReport(reportDate);
+        return salesReportDao.existsDailyReportDocument(reportDate);
     }
 }

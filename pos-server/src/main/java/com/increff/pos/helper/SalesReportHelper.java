@@ -7,9 +7,12 @@ import com.increff.pos.model.data.SalesReportRowData;
 
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 public class SalesReportHelper {
+
+    private SalesReportHelper() {}
 
     public static SalesReportResponseData toResponseData(
             String reportKind,
@@ -26,8 +29,18 @@ public class SalesReportHelper {
         data.setClientEmail(clientEmail);
         data.setRowType(rowType.name());
         data.setGeneratedAt(ZonedDateTime.now());
-        data.setRows(rows == null ? List.of() : rows.stream().map(SalesReportHelper::toRowData).toList());
+        data.setRows(mapRows(rows));
         return data;
+    }
+
+    private static List<SalesReportRowData> mapRows(List<SalesReportRowPojo> rows) {
+        if (rows == null || rows.isEmpty()) return List.of();
+
+        List<SalesReportRowData> out = new ArrayList<>();
+        for (SalesReportRowPojo row : rows) {
+            out.add(toRowData(row));
+        }
+        return out;
     }
 
     private static SalesReportRowData toRowData(SalesReportRowPojo p) {

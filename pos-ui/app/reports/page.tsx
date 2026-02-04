@@ -13,7 +13,7 @@ import {
     type SalesReportResponseData,
     type SalesReportRowData,
     type ReportRowType,
-} from "@/services/salesReportService"
+} from "@/services/reportService"
 import { Loader2, ArrowRight, Calendar as CalendarIcon } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -340,6 +340,16 @@ export default function ReportsPage() {
     const bottomOffset = `calc(env(safe-area-inset-bottom, 0px) + ${PAGINATION_LIFT_PX}px)`
     const scrollViewportHeight = `calc(100dvh - ${headerH}px - ${paginationH}px - ${PAGINATION_LIFT_PX}px - env(safe-area-inset-bottom, 0px))`
 
+    const tableCacheKey = useMemo(() => {
+        const viewMode = mode
+        const d1 = mode === "daily" ? dailyDate : startDate
+        const d2 = mode === "daily" ? dailyDate : endDate
+        // include debounced exact email (because backend drill-down depends on it)
+        const email = isExactClientEmail ? clientInput : ""
+        const rowType = report?.rowType ?? effectiveRowType
+        return `${viewMode}|${d1}|${d2}|${email}|${rowType}`
+    }, [mode, dailyDate, startDate, endDate, isExactClientEmail, clientInput, report?.rowType, effectiveRowType])
+
     return (
         <div className="h-[100dvh] overflow-hidden bg-background">
             <div className="h-full flex flex-col">
@@ -563,12 +573,11 @@ export default function ReportsPage() {
                     >
                         <div className="max-w-6xl mx-auto px-6 py-6">
                             <SalesReportTable
+                                cacheKey={tableCacheKey}
                                 rowType={report?.rowType ?? effectiveRowType}
                                 rows={pagedRows}
                                 loading={loading}
-                                onExpandFetch={
-                                    (report?.rowType ?? effectiveRowType) === "CLIENT" ? onExpandFetch : undefined
-                                }
+                                onExpandFetch={(report?.rowType ?? effectiveRowType) === "CLIENT" ? onExpandFetch : undefined}
                             />
                         </div>
                     </div>

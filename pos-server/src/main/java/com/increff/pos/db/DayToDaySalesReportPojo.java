@@ -13,10 +13,13 @@ import java.util.List;
 @NoArgsConstructor
 @Document(collection = "sales_report_daily")
 public class DayToDaySalesReportPojo extends AbstractPojo {
+
     private LocalDate date;
     private List<ClientBlock> clients;
 
-    @Getter @Setter @NoArgsConstructor
+    @Getter
+    @Setter
+    @NoArgsConstructor
     public static class ClientBlock {
         private String clientEmail;
         private Long ordersCount;
@@ -25,7 +28,9 @@ public class DayToDaySalesReportPojo extends AbstractPojo {
         private List<ProductBlock> products;
     }
 
-    @Getter @Setter @NoArgsConstructor
+    @Getter
+    @Setter
+    @NoArgsConstructor
     public static class ProductBlock {
         private String productBarcode;
         private Long ordersCount;

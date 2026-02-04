@@ -104,4 +104,9 @@ public class NormalizationUtil {
             form.setBarcode(form.getBarcode().trim().toUpperCase());
         }
     }
+
+    public static void normalizeSalesReportForm(SalesReportForm form) {
+        if (form == null) return;
+        form.setClientEmail(normalizeEmail(form.getClientEmail()));
+    }
 }

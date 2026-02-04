@@ -42,12 +42,12 @@ public class SalesReportAggregationHelper {
         AggregationResults<ClientAgg> results =
                 mongoOperations.aggregate(aggregation, ordersCollection, ClientAgg.class);
 
-        DayToDaySalesReportPojo reportDoc = new DayToDaySalesReportPojo();
-        reportDoc.setId(reportDate.toString());
-        reportDoc.setDate(reportDate);
-        reportDoc.setClients(mapClientBlocks(results.getMappedResults()));
+        DayToDaySalesReportPojo reportDocument = new DayToDaySalesReportPojo();
+        reportDocument.setId(reportDate.toString());
+        reportDocument.setDate(reportDate);
+        reportDocument.setClients(mapClientBlocks(results.getMappedResults()));
 
-        return reportDoc;
+        return reportDocument;
     }
 
     private static Aggregation buildNestedDailyAggregation(
@@ -58,14 +58,15 @@ public class SalesReportAggregationHelper {
             String productClientEmailPath,
             OrderStatus requiredOrderStatus
     ) {
-        DateRange range = getDayRange(reportDate, timezone);
+        ZonedDateTime start = reportDate.atStartOfDay(timezone);
+        ZonedDateTime endExclusive = reportDate.plusDays(1).atStartOfDay(timezone);
 
-        MatchOperation matchInvoicedOrdersInRange = match(new Criteria().andOperator(
-                Criteria.where("orderTime").gte(range.getStart()).lt(range.getEndExclusive()),
+        MatchOperation matchInvoicedOrders = match(new Criteria().andOperator(
+                Criteria.where("orderTime").gte(start).lt(endExclusive),
                 Criteria.where("status").is(requiredOrderStatus.name())
         ));
 
-        UnwindOperation unwindOrderItems = unwind("orderItems");
+        UnwindOperation unwindItems = unwind("orderItems");
 
         LookupOperation lookupProduct = LookupOperation.newLookup()
                 .from(productsCollection)
@@ -109,9 +110,7 @@ public class SalesReportAggregationHelper {
         AggregationExpression mergedOrderRefs =
                 ArrayOperators.Reduce.arrayOf("orderRefsArrays")
                         .withInitialValue(List.of())
-                        .reduce(
-                                SetOperators.SetUnion.arrayAsSet("$$value").union("$$this")
-                        );
+                        .reduce(SetOperators.SetUnion.arrayAsSet("$$value").union("$$this"));
 
         ProjectionOperation projectClientBlock = project()
                 .and("_id").as("clientEmail")
@@ -123,8 +122,8 @@ public class SalesReportAggregationHelper {
         SortOperation sortClientsByRevenue = sort(Sort.by(Sort.Direction.DESC, "totalRevenue"));
 
         return newAggregation(
-                matchInvoicedOrdersInRange,
-                unwindOrderItems,
+                matchInvoicedOrders,
+                unwindItems,
                 lookupProduct,
                 unwindProduct,
                 groupByClientAndProduct,
@@ -133,12 +132,6 @@ public class SalesReportAggregationHelper {
                 projectClientBlock,
                 sortClientsByRevenue
         );
-    }
-
-    private static DateRange getDayRange(LocalDate date, ZoneId timezone) {
-        ZonedDateTime start = date.atStartOfDay(timezone);
-        ZonedDateTime endExclusive = date.plusDays(1).atStartOfDay(timezone);
-        return new DateRange(start, endExclusive);
     }
 
     private static List<DayToDaySalesReportPojo.ClientBlock> mapClientBlocks(List<ClientAgg> clientAggs) {
@@ -207,19 +200,6 @@ public class SalesReportAggregationHelper {
         public void setItemsCount(Long itemsCount) { this.itemsCount = itemsCount; }
         public Double getTotalRevenue() { return totalRevenue; }
         public void setTotalRevenue(Double totalRevenue) { this.totalRevenue = totalRevenue; }
-    }
-
-    private static class DateRange {
-        private final ZonedDateTime start;
-        private final ZonedDateTime endExclusive;
-
-        private DateRange(ZonedDateTime start, ZonedDateTime endExclusive) {
-            this.start = start;
-            this.endExclusive = endExclusive;
-        }
-
-        private ZonedDateTime getStart() { return start; }
-        private ZonedDateTime getEndExclusive() { return endExclusive; }
     }
 
     private static long nullSafeLong(Long v) { return v == null ? 0L : v; }
