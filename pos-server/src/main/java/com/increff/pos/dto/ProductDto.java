@@ -44,14 +44,14 @@ public class ProductDto {
         return ProductHelper.convertToProductData(pair.getLeft(), pair.getRight());
     }
 
-    public Page<ProductData> getAllUsingFilter(PageForm form) throws ApiException {
+    public Page<ProductData> getAllUsingSearch(PageForm form) throws ApiException {
         return getAllProducts(form);
     }
 
-    public Page<ProductData> filter(ProductFilterForm form) throws ApiException {
-        NormalizationUtil.normalizeProductFilterForm(form);
+    public Page<ProductData> search(ProductSearchForm form) throws ApiException {
+        NormalizationUtil.normalizeProductSearchForm(form);
 
-        Page<Pair<ProductPojo, InventoryPojo>> page = productFlow.filter(form);
+        Page<Pair<ProductPojo, InventoryPojo>> page = productFlow.search(form);
         return convertToProductDataPage(page);
     }
 
@@ -79,9 +79,17 @@ public class ProductDto {
         List<ProductPojo> alignedProducts = new ArrayList<>(parsedFile.rows().size());
         Map<Integer, String> errorByRowIndex = new HashMap<>();
 
+        List<String> barcodesByRow = new ArrayList<>(parsedFile.rows().size());
+
         for (int rowIndex = 0; rowIndex < parsedFile.rows().size(); rowIndex++) {
+            String[] row = parsedFile.rows().get(rowIndex);
+
+            String rawBarcode = BulkUploadHelper.readCell(row, parsedFile.headers(), "barcode");
+            String normalizedBarcode = BulkUploadHelper.normalizeBarcode(rawBarcode);
+            barcodesByRow.add(normalizedBarcode);
+
             try {
-                alignedProducts.add(parseBulkProductRow(parsedFile.rows().get(rowIndex), parsedFile.headers()));
+                alignedProducts.add(parseBulkProductRow(row, parsedFile.headers()));
             } catch (ApiException exception) {
                 alignedProducts.add(null);
                 errorByRowIndex.put(rowIndex, exception.getMessage());
@@ -89,10 +97,13 @@ public class ProductDto {
         }
 
         List<String[]> flowResults = productFlow.bulkAddProducts(alignedProducts);
-        BulkUploadHelper.applyRowErrors(flowResults, errorByRowIndex);
 
+        forceBarcodeInResults(flowResults, barcodesByRow);
+
+        BulkUploadHelper.applyRowErrors(flowResults, errorByRowIndex);
         return new BulkUploadData(TsvHelper.encodeResult(flowResults));
     }
+
 
     public BulkUploadData bulkUpdateInventory(BulkUploadForm form) throws ApiException {
         ParsedBulkFile parsedFile = parseInventoryBulkFile(form);
@@ -100,9 +111,19 @@ public class ProductDto {
         List<InventoryPojo> alignedInventoryDeltas = new ArrayList<>(parsedFile.rows().size());
         Map<Integer, String> errorByRowIndex = new HashMap<>();
 
+        // NEW: capture barcode per row from raw TSV
+        List<String> barcodesByRow = new ArrayList<>(parsedFile.rows().size());
+
         for (int rowIndex = 0; rowIndex < parsedFile.rows().size(); rowIndex++) {
+            String[] row = parsedFile.rows().get(rowIndex);
+
+            // read barcode even if inventory is bad
+            String rawBarcode = BulkUploadHelper.readCell(row, parsedFile.headers(), "barcode");
+            String normalizedBarcode = BulkUploadHelper.normalizeBarcode(rawBarcode);
+            barcodesByRow.add(normalizedBarcode);
+
             try {
-                alignedInventoryDeltas.add(parseBulkInventoryRow(parsedFile.rows().get(rowIndex), parsedFile.headers()));
+                alignedInventoryDeltas.add(parseBulkInventoryRow(row, parsedFile.headers()));
             } catch (ApiException exception) {
                 alignedInventoryDeltas.add(null);
                 errorByRowIndex.put(rowIndex, exception.getMessage());
@@ -110,22 +131,25 @@ public class ProductDto {
         }
 
         List<String[]> flowResults = productFlow.bulkUpdateInventory(alignedInventoryDeltas);
-        BulkUploadHelper.applyRowErrors(flowResults, errorByRowIndex);
 
+        forceBarcodeInResults(flowResults, barcodesByRow);
+
+        BulkUploadHelper.applyRowErrors(flowResults, errorByRowIndex);
         return new BulkUploadData(TsvHelper.encodeResult(flowResults));
     }
+
 
     // -------------------- private helpers --------------------
 
     private Page<ProductData> getAllProducts(PageForm form) throws ApiException {
-        ProductFilterForm filterForm = new ProductFilterForm();
-        filterForm.setBarcode(null);
-        filterForm.setName(null);
-        filterForm.setClient(null);
-        filterForm.setPage(form.getPage());
-        filterForm.setSize(form.getSize());
+        ProductSearchForm searchFrom = new ProductSearchForm();
+        searchFrom.setBarcode(null);
+        searchFrom.setName(null);
+        searchFrom.setClient(null);
+        searchFrom.setPage(form.getPage());
+        searchFrom.setSize(form.getSize());
 
-        return filter(filterForm);
+        return search(searchFrom);
     }
 
     private ParsedBulkFile parseProductBulkFile(BulkUploadForm form) throws ApiException {
@@ -171,6 +195,14 @@ public class ProductDto {
                 .toList();
 
         return new PageImpl<>(data, page.getPageable(), page.getTotalElements());
+    }
+
+    private void forceBarcodeInResults(List<String[]> flowResults, List<String> barcodesByRow) {
+        for (int i = 0; i < flowResults.size() && i < barcodesByRow.size(); i++) {
+            String[] r = flowResults.get(i);
+            if (r == null || r.length < 3) continue;
+            r[0] = barcodesByRow.get(i) == null ? "" : barcodesByRow.get(i);
+        }
     }
 
     private record ParsedBulkFile(Map<String, Integer> headers, List<String[]> rows) {

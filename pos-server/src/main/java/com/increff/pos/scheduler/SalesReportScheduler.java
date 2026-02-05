@@ -16,19 +16,9 @@ public class SalesReportScheduler {
     @Autowired
     private SalesReportDto salesReportDto;
 
-    @PostConstruct
-    public void generateYesterdayReportOnStartupIfMissing() {
-        LocalDate reportDate = getYesterdayIstDate();
-        salesReportDto.generateAndStoreDailyNestedIfMissing(reportDate);
-    }
-
-    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Kolkata")
+    @Scheduled(cron = "0 * * * * *", zone = "Asia/Kolkata")
     public void generateYesterdayReportAtMidnight() {
-        LocalDate reportDate = getYesterdayIstDate();
+        LocalDate reportDate = LocalDate.now(IST_TIMEZONE).minusDays(1);
         salesReportDto.generateAndStoreDailyNested(reportDate);
-    }
-
-    private LocalDate getYesterdayIstDate() {
-        return LocalDate.now(IST_TIMEZONE).minusDays(1);
     }
 }

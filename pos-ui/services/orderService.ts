@@ -42,7 +42,7 @@ export async function getAllOrders(page: number, size: number): Promise<PageResp
 
 export async function filterOrders(form: OrderFilterForm): Promise<PageResponse<OrderData>> {
     try {
-        const res = await api.post(`/order/filter`, form)
+        const res = await api.post(`/order/search`, form)
         return res.data
     } catch (e) {
         extractApiError(e)

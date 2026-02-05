@@ -4,7 +4,7 @@ import com.increff.pos.dto.OrderDto;
 import com.increff.pos.model.data.OrderData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.OrderCreateForm;
-import com.increff.pos.model.form.OrderFilterForm;
+import com.increff.pos.model.form.OrderSearchForm;
 import com.increff.pos.model.form.PageForm;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -57,9 +57,9 @@ public class OrderController {
         return orderDto.getAllOrders(form);
     }
 
-    @Operation(summary = "Filter orders (paginated)")
-    @PostMapping("/filter")
-    public Page<OrderData> filter(@Valid @RequestBody OrderFilterForm form) throws ApiException {
-        return orderDto.filterOrders(form);
+    @Operation(summary = "Search orders (paginated)")
+    @PostMapping("/search")
+    public Page<OrderData> search(@Valid @RequestBody OrderSearchForm form) throws ApiException {
+        return orderDto.searchOrders(form);
     }
 }

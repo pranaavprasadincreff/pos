@@ -147,7 +147,7 @@ public class ValidationUtil {
         }
     }
 
-    public static void validateProductFilterForm(ProductFilterForm form) throws ApiException {
+    public static void validateProductFilterForm(ProductSearchForm form) throws ApiException {
         if (form == null) throw new ApiException("Filter form required");
 
         if (form.getBarcode() != null && form.getBarcode().length() > BARCODE_MAX)
@@ -192,7 +192,7 @@ public class ValidationUtil {
 
     // ---------------- ORDER FILTER ----------------
 
-    public static void validateOrderFilterForm(OrderFilterForm form) throws ApiException {
+    public static void validateOrderSearchForm(OrderSearchForm form) throws ApiException {
         if (form == null) throw new ApiException("Order filter form required");
         validatePageBounds(form.getPage(), form.getSize());
 

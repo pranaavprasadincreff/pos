@@ -20,7 +20,7 @@ public class NormalizationUtil {
         form.setName(normalizeName(form.getName()));
     }
 
-    public static void normalizeClientFilterForm(ClientFilterForm form) {
+    public static void normalizeClientSearchForm(ClientSearchForm form) {
         if (form == null) return;
         form.setName(normalizeName(form.getName()));
         form.setEmail(normalizeEmail(form.getEmail()));
@@ -41,7 +41,7 @@ public class NormalizationUtil {
         return value.trim().toUpperCase();
     }
 
-    public static void normalizeProductFilterForm(ProductFilterForm form) {
+    public static void normalizeProductSearchForm(ProductSearchForm form) {
         if (form == null) return;
         form.setBarcode(normalizeBarcode(form.getBarcode()));
         form.setName(normalizeName(form.getName()));
@@ -87,7 +87,7 @@ public class NormalizationUtil {
         form.getItems().forEach(i -> i.setProductBarcode(normalizeBarcode(i.getProductBarcode())));
     }
 
-    public static void normalizeOrderFilterForm(OrderFilterForm form) {
+    public static void normalizeOrderSearchForm(OrderSearchForm form) {
         if (form == null) return;
         if (StringUtils.hasText(form.getOrderReferenceId())) {
             form.setOrderReferenceId(form.getOrderReferenceId().trim().toUpperCase());

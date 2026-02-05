@@ -128,7 +128,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         pf.setPage(0);
         pf.setSize(101); // NOTE: DTO does not validate page size anymore
 
-        Page<ProductData> page = productDto.getAllUsingFilter(pf);
+        Page<ProductData> page = productDto.getAllUsingSearch(pf);
 
         assertNotNull(page);
         assertTrue(page.getTotalElements() >= 3);
@@ -147,7 +147,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         pf.setPage(0);
         pf.setSize(3);
 
-        Page<ProductData> page = productDto.getAllUsingFilter(pf);
+        Page<ProductData> page = productDto.getAllUsingSearch(pf);
 
         assertNotNull(page);
         assertTrue(page.getContent().size() <= 3);
@@ -156,19 +156,19 @@ public class ProductDtoTest extends AbstractUnitTest {
     }
 
     @Test
-    public void testFilterByBarcodePartialCaseInsensitive() throws ApiException {
+    public void testSearchByBarcodePartialCaseInsensitive() throws ApiException {
         createClient("c1@example.com", "Client One");
         productDto.addProduct(validProductForm("ABC-123", "c1@example.com"));
         productDto.addProduct(validProductForm("XYZ-999", "c1@example.com"));
 
-        ProductFilterForm ff = new ProductFilterForm();
+        ProductSearchForm ff = new ProductSearchForm();
         ff.setBarcode("abc");
         ff.setName(null);
         ff.setClient(null);
         ff.setPage(0);
         ff.setSize(10);
 
-        Page<ProductData> page = productDto.filter(ff);
+        Page<ProductData> page = productDto.search(ff);
 
         assertNotNull(page);
         assertEquals(1, page.getTotalElements());

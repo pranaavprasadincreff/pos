@@ -9,13 +9,16 @@ import jakarta.validation.constraints.Size;
 
 @Getter
 @Setter
-public class ClientFilterForm {
+public class ProductSearchForm {
+
+    @Size(max = 40, message = "Barcode filter too long")
+    private String barcode;
 
     @Size(max = 30, message = "Name filter too long")
     private String name;
 
-    @Size(max = 40, message = "Email filter too long")
-    private String email;
+    @Size(max = 40, message = "Client filter too long")
+    private String client;
 
     @Min(value = 0, message = "Page cannot be negative")
     private int page = 0;

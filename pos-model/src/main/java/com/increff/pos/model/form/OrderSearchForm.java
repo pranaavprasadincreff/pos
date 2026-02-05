@@ -9,7 +9,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class OrderFilterForm {
+public class OrderSearchForm {
 
     @Size(max = 50, message = "Order reference id filter too long")
     private String orderReferenceId;

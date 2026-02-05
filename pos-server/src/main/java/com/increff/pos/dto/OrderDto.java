@@ -8,7 +8,7 @@ import com.increff.pos.model.constants.OrderTimeframe;
 import com.increff.pos.model.data.OrderData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.OrderCreateForm;
-import com.increff.pos.model.form.OrderFilterForm;
+import com.increff.pos.model.form.OrderSearchForm;
 import com.increff.pos.model.form.PageForm;
 import com.increff.pos.util.NormalizationUtil;
 import com.increff.pos.util.ValidationUtil;
@@ -74,10 +74,10 @@ public class OrderDto {
         return page;
     }
 
-    public Page<OrderData> filterOrders(OrderFilterForm form) throws ApiException {
-        validateRawStatusFilter(form);
-        NormalizationUtil.normalizeOrderFilterForm(form);
-        ValidationUtil.validateOrderFilterForm(form);
+    public Page<OrderData> searchOrders(OrderSearchForm form) throws ApiException {
+        validateRawStatusSearch(form);
+        NormalizationUtil.normalizeOrderSearchForm(form);
+        ValidationUtil.validateOrderSearchForm(form);
 
         TimeRange timeRange = computeTimeRange(form.getTimeframe());
         Page<OrderPojo> orders = searchOrders(form, timeRange);
@@ -103,7 +103,7 @@ public class OrderDto {
         return page;
     }
 
-    private void validateRawStatusFilter(OrderFilterForm form) throws ApiException {
+    private void validateRawStatusSearch(OrderSearchForm form) throws ApiException {
         String rawStatus = form != null ? form.getStatus() : null;
 
         if (!StringUtils.hasText(rawStatus)) {
@@ -113,13 +113,13 @@ public class OrderDto {
         String normalized = rawStatus.trim().toUpperCase();
 
         if ("ALL".equals(normalized)) {
-            throw new ApiException("Invalid order status filter: " + rawStatus);
+            throw new ApiException("Invalid order status search: " + rawStatus);
         }
 
         try {
             OrderStatus.valueOf(normalized);
         } catch (IllegalArgumentException e) {
-            throw new ApiException("Invalid order status filter: " + rawStatus);
+            throw new ApiException("Invalid order status search: " + rawStatus);
         }
     }
 
@@ -193,7 +193,7 @@ public class OrderDto {
         };
     }
 
-    private Page<OrderPojo> searchOrders(OrderFilterForm form, TimeRange timeRange) {
+    private Page<OrderPojo> searchOrders(OrderSearchForm form, TimeRange timeRange) {
         return orderFlow.search(
                 form.getOrderReferenceId(),
                 form.getStatus(),

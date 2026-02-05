@@ -12,7 +12,7 @@ public interface ClientApi {
     ClientPojo add(ClientPojo clientPojo) throws ApiException;
     ClientPojo getClientByEmail(String email) throws ApiException;
     ClientPojo update(ClientUpdatePojo clientUpdatePojo) throws ApiException;
-    Page<ClientPojo> filter(String name, String email, int page, int size);
+    Page<ClientPojo> search(String name, String email, int page, int size);
     void validateClientsExist(Set<String> emails) throws ApiException;
     List<String> findClientEmailsByNameOrEmail(String query, int limit);
 }

@@ -2,8 +2,8 @@ package com.increff.pos.dto;
 
 import com.increff.pos.model.data.ClientData;
 import com.increff.pos.model.exception.ApiException;
-import com.increff.pos.model.form.ClientFilterForm;
 import com.increff.pos.model.form.ClientForm;
+import com.increff.pos.model.form.ClientSearchForm;
 import com.increff.pos.model.form.ClientUpdateForm;
 import com.increff.pos.model.form.PageForm;
 import com.increff.pos.test.AbstractUnitTest;
@@ -148,7 +148,7 @@ public class ClientDtoTest extends AbstractUnitTest {
     }
 
     // ------------------------
-    // GET ALL (via filter compatibility)
+    // GET ALL (via search compatibility)
     // ------------------------
 
     @Test
@@ -174,7 +174,7 @@ public class ClientDtoTest extends AbstractUnitTest {
     }
 
     @Test
-    public void testGetAllUsingFilterValidParams() throws ApiException {
+    public void testGetAllUsingSearchValidParams() throws ApiException {
         for (int i = 0; i < 5; i++) {
             ClientForm form = new ClientForm();
             form.setEmail("test" + i + "@example.com");
@@ -186,7 +186,7 @@ public class ClientDtoTest extends AbstractUnitTest {
         pageForm.setPage(0);
         pageForm.setSize(3);
 
-        Page<ClientData> page = clientDto.getAllUsingFilter(pageForm);
+        Page<ClientData> page = clientDto.getAllUsingSearch(pageForm);
 
         assertNotNull(page);
         assertTrue(page.getContent().size() <= 3);
@@ -198,7 +198,7 @@ public class ClientDtoTest extends AbstractUnitTest {
     // ------------------------
 
     @Test
-    public void testFilterValidByNameCaseInsensitive() throws ApiException {
+    public void testSearchValidByNameCaseInsensitive() throws ApiException {
         ClientForm alice = new ClientForm();
         alice.setEmail("alice@example.com");
         alice.setName("Alice Johnson");
@@ -209,16 +209,16 @@ public class ClientDtoTest extends AbstractUnitTest {
         bob.setName("Bob Smith");
         clientDto.create(bob);
 
-        ClientFilterForm filter = new ClientFilterForm();
-        filter.setName("aLiCe");
-        filter.setEmail(null);
-        filter.setPage(0);
-        filter.setSize(10);
+        ClientSearchForm search = new ClientSearchForm();
+        search.setName("aLiCe");
+        search.setEmail(null);
+        search.setPage(0);
+        search.setSize(10);
 
-        Set<ConstraintViolation<ClientFilterForm>> violations = validator.validate(filter);
+        Set<ConstraintViolation<ClientSearchForm>> violations = validator.validate(search);
         assertTrue(violations.isEmpty());
 
-        Page<ClientData> page = clientDto.filter(filter);
+        Page<ClientData> page = clientDto.search(search);
 
         assertNotNull(page);
         assertEquals(1, page.getTotalElements());
@@ -226,7 +226,7 @@ public class ClientDtoTest extends AbstractUnitTest {
     }
 
     @Test
-    public void testFilterValidByEmailCaseInsensitivePartial() throws ApiException {
+    public void testSearchValidByEmailCaseInsensitivePartial() throws ApiException {
         ClientForm first = new ClientForm();
         first.setEmail("first.user@example.com");
         first.setName("First User");
@@ -237,16 +237,16 @@ public class ClientDtoTest extends AbstractUnitTest {
         second.setName("Second User");
         clientDto.create(second);
 
-        ClientFilterForm filter = new ClientFilterForm();
-        filter.setName(null);
-        filter.setEmail("SECOND.USER");
-        filter.setPage(0);
-        filter.setSize(10);
+        ClientSearchForm search = new ClientSearchForm();
+        search.setName(null);
+        search.setEmail("SECOND.USER");
+        search.setPage(0);
+        search.setSize(10);
 
-        Set<ConstraintViolation<ClientFilterForm>> violations = validator.validate(filter);
+        Set<ConstraintViolation<ClientSearchForm>> violations = validator.validate(search);
         assertTrue(violations.isEmpty());
 
-        Page<ClientData> page = clientDto.filter(filter);
+        Page<ClientData> page = clientDto.search(search);
 
         assertNotNull(page);
         assertEquals(1, page.getTotalElements());
@@ -254,14 +254,14 @@ public class ClientDtoTest extends AbstractUnitTest {
     }
 
     @Test
-    public void testFilterFormValidationInvalidPaginationParams() {
-        ClientFilterForm filter = new ClientFilterForm();
-        filter.setName("x");
-        filter.setEmail("y@example.com");
-        filter.setPage(-1);
-        filter.setSize(10);
+    public void testSearchFormValidationInvalidPaginationParams() {
+        ClientSearchForm search = new ClientSearchForm();
+        search.setName("x");
+        search.setEmail("y@example.com");
+        search.setPage(-1);
+        search.setSize(10);
 
-        Set<ConstraintViolation<ClientFilterForm>> violations = validator.validate(filter);
+        Set<ConstraintViolation<ClientSearchForm>> violations = validator.validate(search);
         assertFalse(violations.isEmpty());
         assertHasViolationForField(violations, "page");
     }

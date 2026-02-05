@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 @Service
 public class OrderFlow {
     private static final int MAX_REF_GENERATION_ATTEMPTS = 10;
-
     @Autowired
     private OrderApi orderApi;
 

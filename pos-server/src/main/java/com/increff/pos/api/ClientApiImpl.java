@@ -43,9 +43,9 @@ public class ClientApiImpl implements ClientApi {
     }
 
     @Override
-    public Page<ClientPojo> filter(String name, String email, int page, int size) {
+    public Page<ClientPojo> search(String name, String email, int page, int size) {
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return clientDao.filter(name, email, pageRequest);
+        return clientDao.search(name, email, pageRequest);
     }
 
     @Override

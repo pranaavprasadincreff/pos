@@ -28,7 +28,7 @@ public class ClientDao extends AbstractDao<ClientPojo> {
         return mongoOperations.findOne(query, ClientPojo.class);
     }
 
-    public Page<ClientPojo> filter(String name, String email, Pageable pageable) {
+    public Page<ClientPojo> search(String name, String email, Pageable pageable) {
         List<Criteria> list = new ArrayList<>();
 
         if (name != null && !name.isBlank()) {

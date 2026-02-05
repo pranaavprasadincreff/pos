@@ -1,7 +1,7 @@
 package com.increff.pos.dao;
 
 import com.increff.pos.db.ProductPojo;
-import com.increff.pos.model.form.ProductFilterForm;
+import com.increff.pos.model.form.ProductSearchForm;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -41,23 +41,23 @@ public class ProductDao extends AbstractDao<ProductPojo> {
         return mongoOperations.find(query, ProductPojo.class);
     }
 
-    public Page<ProductPojo> filter(ProductFilterForm filterForm, List<String> clientEmails) {
-        Query query = buildFilterQuery(filterForm, clientEmails);
-        Pageable pageable = buildPageRequest(filterForm);
+    public Page<ProductPojo> search(ProductSearchForm searchForm, List<String> clientEmails) {
+        Query query = buildSearchQuery(searchForm, clientEmails);
+        Pageable pageable = buildPageRequest(searchForm);
         return pageableQuery(query, pageable);
     }
 
     // -------------------- private helpers --------------------
 
-    private Query buildFilterQuery(ProductFilterForm filterForm, List<String> clientEmails) {
+    private Query buildSearchQuery(ProductSearchForm searchForm, List<String> clientEmails) {
         List<Criteria> criteria = new ArrayList<>();
 
-        if (StringUtils.hasText(filterForm.getBarcode())) {
-            criteria.add(buildContainsIgnoreCaseCriteria("barcode", filterForm.getBarcode()));
+        if (StringUtils.hasText(searchForm.getBarcode())) {
+            criteria.add(buildContainsIgnoreCaseCriteria("barcode", searchForm.getBarcode()));
         }
 
-        if (StringUtils.hasText(filterForm.getName())) {
-            criteria.add(buildContainsIgnoreCaseCriteria("name", filterForm.getName()));
+        if (StringUtils.hasText(searchForm.getName())) {
+            criteria.add(buildContainsIgnoreCaseCriteria("name", searchForm.getName()));
         }
 
         if (clientEmails != null && !clientEmails.isEmpty()) {
@@ -72,10 +72,10 @@ public class ProductDao extends AbstractDao<ProductPojo> {
         return query;
     }
 
-    private Pageable buildPageRequest(ProductFilterForm filterForm) {
+    private Pageable buildPageRequest(ProductSearchForm searchForm) {
         return PageRequest.of(
-                filterForm.getPage(),
-                filterForm.getSize(),
+                searchForm.getPage(),
+                searchForm.getSize(),
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
     }

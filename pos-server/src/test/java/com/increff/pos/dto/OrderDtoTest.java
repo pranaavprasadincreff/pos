@@ -7,7 +7,7 @@ import com.increff.pos.model.constants.OrderStatus;
 import com.increff.pos.model.constants.OrderTimeframe;
 import com.increff.pos.model.data.OrderData;
 import com.increff.pos.model.exception.ApiException;
-import com.increff.pos.model.form.OrderFilterForm;
+import com.increff.pos.model.form.OrderSearchForm;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -34,8 +34,8 @@ class OrderDtoTest {
     private OrderDto orderDto;
 
     @Test
-    void filterOrders_happyPath_normalizesInputs_andDelegatesToFlow() throws Exception {
-        OrderFilterForm form = new OrderFilterForm();
+    void searchOrders_happyPath_normalizesInputs_andDelegatesToFlow() throws Exception {
+        OrderSearchForm form = new OrderSearchForm();
         form.setOrderReferenceId(" ord-12 ");
         form.setStatus("fulfillable");
         form.setTimeframe(OrderTimeframe.LAST_DAY);
@@ -58,7 +58,7 @@ class OrderDtoTest {
         when(orderFlow.search(anyString(), anyString(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(returned);
 
-        Page<OrderData> page = orderDto.filterOrders(form);
+        Page<OrderData> page = orderDto.searchOrders(form);
 
         assertEquals(1, page.getTotalElements());
         assertEquals("ORD-0000-0000", page.getContent().getFirst().getOrderReferenceId());
@@ -80,28 +80,28 @@ class OrderDtoTest {
     }
 
     @Test
-    void filterOrders_invalidStatus_throws_andDoesNotCallFlow() {
-        OrderFilterForm form = new OrderFilterForm();
+    void searchOrders_invalidStatus_throws_andDoesNotCallFlow() {
+        OrderSearchForm form = new OrderSearchForm();
         form.setStatus("NOT_A_STATUS");
         form.setTimeframe(OrderTimeframe.LAST_DAY);
         form.setPage(0);
         form.setSize(10);
 
-        ApiException ex = assertThrows(ApiException.class, () -> orderDto.filterOrders(form));
+        ApiException ex = assertThrows(ApiException.class, () -> orderDto.searchOrders(form));
         assertTrue(ex.getMessage().toLowerCase().contains("invalid order status"));
 
         verifyNoInteractions(orderFlow);
     }
 
     @Test
-    void filterOrders_invalidPage_throws_andDoesNotCallFlow() {
-        OrderFilterForm form = new OrderFilterForm();
+    void searchOrders_invalidPage_throws_andDoesNotCallFlow() {
+        OrderSearchForm form = new OrderSearchForm();
         form.setStatus(OrderStatus.FULFILLABLE.name());
         form.setTimeframe(OrderTimeframe.LAST_DAY);
         form.setPage(-1);
         form.setSize(10);
 
-        assertThrows(ApiException.class, () -> orderDto.filterOrders(form));
+        assertThrows(ApiException.class, () -> orderDto.searchOrders(form));
         verifyNoInteractions(orderFlow);
     }
 }

@@ -4,7 +4,7 @@ import com.increff.pos.dao.ProductDao;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
-import com.increff.pos.model.form.ProductFilterForm;
+import com.increff.pos.model.form.ProductSearchForm;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -40,8 +40,8 @@ public class ProductApiImpl implements ProductApi {
     }
 
     @Override
-    public Page<ProductPojo> filter(ProductFilterForm form, List<String> clientEmails) {
-        return productDao.filter(form, clientEmails);
+    public Page<ProductPojo> search(ProductSearchForm form, List<String> clientEmails) {
+        return productDao.search(form, clientEmails);
     }
 
     @Override

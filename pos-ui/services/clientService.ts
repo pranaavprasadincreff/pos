@@ -12,7 +12,7 @@ export async function filterClients(params: {
     name?: string
     email?: string
 }): Promise<PageResponse<Client>> {
-    const res = await api.post(`/client/filter`, params)
+    const res = await api.post(`/client/search`, params)
     return res.data
 }
 

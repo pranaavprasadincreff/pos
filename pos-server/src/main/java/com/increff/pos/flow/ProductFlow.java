@@ -9,7 +9,7 @@ import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.PageForm;
-import com.increff.pos.model.form.ProductFilterForm;
+import com.increff.pos.model.form.ProductSearchForm;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -28,10 +28,8 @@ public class ProductFlow {
 
     @Autowired
     private ProductApi productApi;
-
     @Autowired
     private InventoryApi inventoryApi;
-
     @Autowired
     private ClientApi clientApi;
 
@@ -78,15 +76,18 @@ public class ProductFlow {
         return Pair.of(product, updatedInventory);
     }
 
-    public Page<Pair<ProductPojo, InventoryPojo>> filter(ProductFilterForm filterForm) throws ApiException {
-        List<String> matchedClientEmails = resolveClientEmailsForClientFilter(filterForm);
+    public Page<Pair<ProductPojo, InventoryPojo>> search(ProductSearchForm searchForm) throws ApiException {
+        List<String> matchedClientEmails = resolveClientEmailsForClientSearch(searchForm);
 
-        Page<ProductPojo> productPage = productApi.filter(filterForm, matchedClientEmails);
+        Page<ProductPojo> productPage = productApi.search(searchForm, matchedClientEmails);
         return attachInventoryToProductPage(productPage);
     }
 
+
     public List<String[]> bulkAddProducts(List<ProductPojo> incomingProducts) {
-        List<String[]> resultRows = initializeBulkProductResultRows(incomingProducts);
+        List<String> barcodeByRowIndex = extractProductBarcodesByRowIndex(incomingProducts);
+
+        List<String[]> resultRows = initializeBulkProductResultRows(barcodeByRowIndex);
         if (incomingProducts == null || incomingProducts.isEmpty()) {
             return resultRows;
         }
@@ -108,17 +109,22 @@ public class ProductFlow {
         Map<String, ProductPojo> savedProductByBarcode = saveProductsAndCreateInventories(savePlan.productsToSave());
         markSavedProductRowsSuccessful(resultRows, incomingProducts, savePlan.rowIndicesToSave(), savedProductByBarcode);
 
+        enforceBarcodeColumn(resultRows, barcodeByRowIndex);
+
         return resultRows;
     }
 
     public List<String[]> bulkUpdateInventory(List<InventoryPojo> incomingInventoryRows) {
-        List<String[]> resultRows = initializeBulkInventoryResultRows(incomingInventoryRows);
+        List<String> barcodeByRowIndex = extractInventoryBarcodesByRowIndex(incomingInventoryRows);
+
+        List<String[]> resultRows = initializeBulkInventoryResultRows(barcodeByRowIndex);
         if (incomingInventoryRows == null || incomingInventoryRows.isEmpty()) {
             return resultRows;
         }
 
         AggregatedInventoryInput aggregatedInput = aggregateInventoryDeltasByBarcode(incomingInventoryRows, resultRows);
         if (aggregatedInput.totalDeltaByBarcode().isEmpty()) {
+            enforceBarcodeColumn(resultRows, barcodeByRowIndex);
             return resultRows;
         }
 
@@ -138,6 +144,8 @@ public class ProductFlow {
             inventoryApi.saveAll(inventoriesToSave);
         }
 
+        enforceBarcodeColumn(resultRows, barcodeByRowIndex);
+
         return resultRows;
     }
 
@@ -152,12 +160,12 @@ public class ProductFlow {
         return inventoryApi.getByProductId(productId);
     }
 
-    private List<String> resolveClientEmailsForClientFilter(ProductFilterForm filterForm) {
-        String clientFilter = filterForm.getClient();
-        if (clientFilter == null || clientFilter.isBlank()) {
+    private List<String> resolveClientEmailsForClientSearch(ProductSearchForm searchForm) {
+        String clientSearch = searchForm.getClient();
+        if (clientSearch == null || clientSearch.isBlank()) {
             return null;
         }
-        return clientApi.findClientEmailsByNameOrEmail(clientFilter, CLIENT_MATCH_LIMIT);
+        return clientApi.findClientEmailsByNameOrEmail(clientSearch, CLIENT_MATCH_LIMIT);
     }
 
     private Set<String> fetchExistingClientEmails(List<ProductPojo> incomingProducts) {
@@ -278,6 +286,8 @@ public class ProductFlow {
         for (int rowIndex = 0; rowIndex < incomingInventoryRows.size(); rowIndex++) {
             InventoryPojo incomingRow = incomingInventoryRows.get(rowIndex);
 
+            // NOTE: For bulk inventory input, productId is being used as barcode carrier.
+            // We keep this behavior for now but always enforce barcode column separately in output.
             String barcode = incomingRow == null ? null : incomingRow.getProductId();
             Integer delta = incomingRow == null ? null : incomingRow.getQuantity();
 
@@ -391,30 +401,66 @@ public class ProductFlow {
         return new PageImpl<>(combined, productPage.getPageable(), productPage.getTotalElements());
     }
 
-    private List<String[]> initializeBulkProductResultRows(List<ProductPojo> incomingProducts) {
-        if (incomingProducts == null) {
-            return new ArrayList<>();
-        }
+    // -------------------- barcode-preserving bulk result helpers --------------------
 
-        List<String[]> resultRows = new ArrayList<>(incomingProducts.size());
-        for (ProductPojo incomingProduct : incomingProducts) {
-            String barcode = incomingProduct == null ? "" : safeString(incomingProduct.getBarcode());
-            resultRows.add(new String[]{barcode, "ERROR", ""});
+    /**
+     * Extracts a per-row barcode list for product bulk where some rows may be null.
+     * This preserves the barcode column in the result TSV.
+     */
+    private List<String> extractProductBarcodesByRowIndex(List<ProductPojo> incomingProducts) {
+        if (incomingProducts == null) return new ArrayList<>();
+        List<String> barcodes = new ArrayList<>(incomingProducts.size());
+        for (ProductPojo p : incomingProducts) {
+            barcodes.add(p == null ? "" : safeString(p.getBarcode()));
+        }
+        return barcodes;
+    }
+
+    /**
+     * Extracts a per-row barcode list for inventory bulk where some rows may be null.
+     * Current bulk inventory input uses InventoryPojo.productId as barcode carrier.
+     */
+    private List<String> extractInventoryBarcodesByRowIndex(List<InventoryPojo> incomingInventoryRows) {
+        if (incomingInventoryRows == null) return new ArrayList<>();
+        List<String> barcodes = new ArrayList<>(incomingInventoryRows.size());
+        for (InventoryPojo r : incomingInventoryRows) {
+            barcodes.add(r == null ? "" : safeString(r.getProductId()));
+        }
+        return barcodes;
+    }
+
+    /**
+     * Initializes product bulk result rows using the captured barcode-by-row list.
+     */
+    private List<String[]> initializeBulkProductResultRows(List<String> barcodeByRowIndex) {
+        if (barcodeByRowIndex == null) return new ArrayList<>();
+        List<String[]> resultRows = new ArrayList<>(barcodeByRowIndex.size());
+        for (String barcode : barcodeByRowIndex) {
+            resultRows.add(new String[]{safeString(barcode), "ERROR", ""});
         }
         return resultRows;
     }
 
-    private List<String[]> initializeBulkInventoryResultRows(List<InventoryPojo> incomingInventoryRows) {
-        if (incomingInventoryRows == null) {
-            return new ArrayList<>();
-        }
-
-        List<String[]> resultRows = new ArrayList<>(incomingInventoryRows.size());
-        for (InventoryPojo incomingRow : incomingInventoryRows) {
-            String barcode = incomingRow == null ? "" : safeString(incomingRow.getProductId());
-            resultRows.add(new String[]{barcode, "ERROR", ""});
+    /**
+     * Initializes inventory bulk result rows using the captured barcode-by-row list.
+     */
+    private List<String[]> initializeBulkInventoryResultRows(List<String> barcodeByRowIndex) {
+        if (barcodeByRowIndex == null) return new ArrayList<>();
+        List<String[]> resultRows = new ArrayList<>(barcodeByRowIndex.size());
+        for (String barcode : barcodeByRowIndex) {
+            resultRows.add(new String[]{safeString(barcode), "ERROR", ""});
         }
         return resultRows;
+    }
+
+    private void enforceBarcodeColumn(List<String[]> resultRows, List<String> barcodeByRowIndex) {
+        if (resultRows == null || barcodeByRowIndex == null) return;
+        int n = Math.min(resultRows.size(), barcodeByRowIndex.size());
+        for (int i = 0; i < n; i++) {
+            String[] row = resultRows.get(i);
+            if (row == null || row.length == 0) continue;
+            row[0] = safeString(barcodeByRowIndex.get(i));
+        }
     }
 
     private String safeString(String value) {

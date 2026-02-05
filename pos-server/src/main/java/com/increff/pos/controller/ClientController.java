@@ -3,8 +3,8 @@ package com.increff.pos.controller;
 import com.increff.pos.dto.ClientDto;
 import com.increff.pos.model.data.ClientData;
 import com.increff.pos.model.exception.ApiException;
-import com.increff.pos.model.form.ClientFilterForm;
 import com.increff.pos.model.form.ClientForm;
+import com.increff.pos.model.form.ClientSearchForm;
 import com.increff.pos.model.form.ClientUpdateForm;
 import com.increff.pos.model.form.PageForm;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,7 +37,7 @@ public class ClientController {
     @Operation(summary = "Get all clients with pagination")
     @RequestMapping(path = "/get-all-paginated", method = RequestMethod.POST)
     public Page<ClientData> getAllClients(@Valid @RequestBody PageForm pageForm) throws ApiException {
-        return clientDto.getAllUsingFilter(pageForm);
+        return clientDto.getAllUsingSearch(pageForm);
     }
 
     @Operation(summary = "Get client by email")
@@ -58,9 +58,9 @@ public class ClientController {
         return clientDto.update(form);
     }
 
-    @Operation(summary = "Filter clients")
-    @RequestMapping(path = "/filter", method = RequestMethod.POST)
-    public Page<ClientData> filter(@Valid @RequestBody ClientFilterForm form) throws ApiException {
-        return clientDto.filter(form);
+    @Operation(summary = "Search clients")
+    @RequestMapping(path = "/search", method = RequestMethod.POST)
+    public Page<ClientData> search(@Valid @RequestBody ClientSearchForm form) throws ApiException {
+        return clientDto.search(form);
     }
 }

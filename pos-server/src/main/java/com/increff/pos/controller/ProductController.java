@@ -47,13 +47,13 @@ public class ProductController {
     @Operation(summary = "Get paginated")
     @PostMapping("/get-all-paginated")
     public Page<ProductData> getAll(@Valid @RequestBody PageForm form) throws ApiException {
-        return productDto.getAllUsingFilter(form);
+        return productDto.getAllUsingSearch(form);
     }
 
-    @Operation(summary = "Filter products")
-    @PostMapping("/filter")
-    public Page<ProductData> filter(@Valid @RequestBody ProductFilterForm form) throws ApiException {
-        return productDto.filter(form);
+    @Operation(summary = "Search products")
+    @PostMapping("/search")
+    public Page<ProductData> search(@Valid @RequestBody ProductSearchForm form) throws ApiException {
+        return productDto.search(form);
     }
 
     @Operation(summary = "Update product")

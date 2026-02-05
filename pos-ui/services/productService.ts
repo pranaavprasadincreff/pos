@@ -13,12 +13,7 @@ function extractApiError(err: unknown): never {
     )
 }
 
-/**
- * ✅ Normalize backend product payloads so `id` is always present for frontend usage.
- * Many backends return `productId` (not `id`) — this keeps UI + inventory update stable.
- */
 function normalizeProduct(p: any): ProductData {
-    // Prefer explicit `id`, otherwise fall back to `productId`
     const normalizedId = p?.id ?? p?.productId ?? ""
 
     return {
@@ -52,7 +47,7 @@ export async function filterProducts(params: {
     client?: string
 }): Promise<PageResponse<ProductData>> {
     try {
-        const res = await api.post(`/product/filter`, params)
+        const res = await api.post(`/product/search`, params)
         return normalizePage(res.data)
     } catch (e) {
         extractApiError(e)

@@ -9,7 +9,7 @@ import com.increff.pos.db.InventoryUpdatePojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.PageForm;
-import com.increff.pos.model.form.ProductFilterForm;
+import com.increff.pos.model.form.ProductSearchForm;
 import com.increff.pos.test.AbstractUnitTest;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
@@ -106,14 +106,14 @@ public class ProductFlowTest extends AbstractUnitTest {
         productFlow.addProduct(product("p-alice", "alice@example.com"));
         productFlow.addProduct(product("p-bob", "bob@example.com"));
 
-        ProductFilterForm ff = new ProductFilterForm();
+        ProductSearchForm ff = new ProductSearchForm();
         ff.setClient("ALICE");
         ff.setBarcode(null);
         ff.setName(null);
         ff.setPage(0);
         ff.setSize(10);
 
-        Page<Pair<ProductPojo, InventoryPojo>> page = productFlow.filter(ff);
+        Page<Pair<ProductPojo, InventoryPojo>> page = productFlow.search(ff);
         assertNotNull(page);
         assertEquals(1, page.getTotalElements());
         assertEquals("p-alice", page.getContent().get(0).getLeft().getBarcode());

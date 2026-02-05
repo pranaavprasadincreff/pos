@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 @Service
 public class InvoiceFlow {
     @Autowired
+    // TODO move to dto
     private InvoiceClientWrapper invoiceClientWrapper;
     @Autowired
     private OrderApi orderApi;

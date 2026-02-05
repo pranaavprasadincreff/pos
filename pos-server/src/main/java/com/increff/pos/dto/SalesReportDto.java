@@ -67,13 +67,6 @@ public class SalesReportDto {
         if (shouldSkipReportGeneration(reportDate)) {
             return;
         }
-        generateDailyNestedReport(reportDate);
-    }
-
-    public void generateAndStoreDailyNestedIfMissing(LocalDate reportDate) {
-        if (shouldSkipReportGeneration(reportDate)) {
-            return;
-        }
         if (salesReportApi.existsDailyNested(reportDate)) {
             return;
         }

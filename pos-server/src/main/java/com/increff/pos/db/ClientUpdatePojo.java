@@ -9,7 +9,7 @@ import lombok.Data;
 
 @Getter
 @Setter
-@Document(collection = "users")
+// TODO remove all update pojos
 public class ClientUpdatePojo extends AbstractPojo {
     @Indexed(unique = true)
     private String oldEmail;

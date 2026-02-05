@@ -112,7 +112,6 @@ public class InventoryApiImpl implements InventoryApi {
         if (next > INVENTORY_MAX) {
             throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
         }
-
         return next;
     }
 
