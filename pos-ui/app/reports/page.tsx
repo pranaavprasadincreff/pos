@@ -14,11 +14,12 @@ import {
     type SalesReportRowData,
     type ReportRowType,
 } from "@/services/reportService"
-import { Loader2, ArrowRight, Calendar as CalendarIcon } from "lucide-react"
+import { Loader2, ArrowRight, Calendar as CalendarIcon, RefreshCcw } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
 import Pagination from "@/components/shared/Pagination"
+import axios from "axios"
 
 type Mode = "daily" | "range"
 
@@ -27,10 +28,10 @@ const EMAIL_RE = /^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$/
 
 const PAGE_SIZE = 9
 const PAGINATION_LIFT_PX = 64
-const EXPAND_CONCURRENCY = 4
 const MAX_RANGE_DAYS = 92
 const IST_TZ = "Asia/Kolkata"
 
+// ---------- IST helpers ----------
 function startOfTodayIST(): Date {
     const now = new Date()
     const ist = new Date(now.toLocaleString("en-US", { timeZone: IST_TZ }))
@@ -75,22 +76,6 @@ function isoDaysBetweenInclusive(start: string, end: string) {
     return diff + 1
 }
 
-function addDaysISO(iso: string, days: number) {
-    const d = new Date(iso + "T00:00:00")
-    d.setDate(d.getDate() + days)
-    return dateToISO(d)
-}
-
-function listISOInclusive(start: string, end: string) {
-    const out: string[] = []
-    let cur = start
-    while (cur <= end) {
-        out.push(cur)
-        cur = addDaysISO(cur, 1)
-    }
-    return out
-}
-
 function useDebouncedValue<T>(value: T, delayMs: number) {
     const [debounced, setDebounced] = useState(value)
     useEffect(() => {
@@ -98,43 +83,6 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
         return () => clearTimeout(t)
     }, [value, delayMs])
     return debounced
-}
-
-function mergeProductRows(rows: SalesReportRowData[]) {
-    const keyOf = (r: any) =>
-        String(
-            r.productId ??
-            r.productSku ??
-            r.sku ??
-            r.barcode ??
-            r.productBarcode ??
-            r.productName ??
-            r.name ??
-            r.id
-        )
-
-    const merged = new Map<string, any>()
-
-    for (const r of rows as any[]) {
-        const k = keyOf(r)
-        const existing = merged.get(k)
-        if (!existing) {
-            merged.set(k, { ...r })
-            continue
-        }
-
-        for (const [field, val] of Object.entries(r)) {
-            if (typeof val === "number" && Number.isFinite(val)) {
-                const prev = existing[field]
-                existing[field] =
-                    typeof prev === "number" && Number.isFinite(prev) ? prev + val : val
-            } else if (existing[field] == null) {
-                existing[field] = val
-            }
-        }
-    }
-
-    return Array.from(merged.values()) as SalesReportRowData[]
 }
 
 export default function ReportsPage() {
@@ -153,14 +101,8 @@ export default function ReportsPage() {
     const [searchError, setSearchError] = useState<string | null>(null)
     const debouncedClientEmail = useDebouncedValue(clientEmail, 500)
 
-    const clientInputImmediate = useMemo(
-        () => clientEmail.trim().toLowerCase(),
-        [clientEmail]
-    )
-    const clientInput = useMemo(
-        () => debouncedClientEmail.trim().toLowerCase(),
-        [debouncedClientEmail]
-    )
+    const clientInputImmediate = useMemo(() => clientEmail.trim().toLowerCase(), [clientEmail])
+    const clientInput = useMemo(() => debouncedClientEmail.trim().toLowerCase(), [debouncedClientEmail])
 
     const isExactClientEmailImmediate = useMemo(
         () => Boolean(clientInputImmediate) && EMAIL_RE.test(clientInputImmediate),
@@ -171,6 +113,7 @@ export default function ReportsPage() {
         [clientInput]
     )
 
+    // If user typed an exact email (immediate), UI shows PRODUCT rows (no expand)
     const effectiveRowType: ReportRowType = useMemo(() => {
         return isExactClientEmailImmediate ? "PRODUCT" : "CLIENT"
     }, [isExactClientEmailImmediate])
@@ -236,11 +179,18 @@ export default function ReportsPage() {
 
             setReport(res)
             setPage(0)
+        } catch (e) {
+            const msg =
+                axios.isAxiosError(e)
+                    ? (e.response?.data?.message ?? e.response?.data ?? e.message)
+                    : "Failed to fetch report"
+            toast.error(String(msg))
         } finally {
             setLoading(false)
         }
     }, [validateInputs, mode, dailyDate, startDate, endDate, clientInput, isExactClientEmail])
 
+    // initial + filters/email debounce refresh
     useEffect(() => {
         fetchReport()
     }, [fetchReport])
@@ -254,9 +204,7 @@ export default function ReportsPage() {
         if (!clientInputImmediate) return report.rows
         if (isExactClientEmailImmediate) return report.rows
 
-        return report.rows.filter((r) =>
-            (r.clientEmail || "").toLowerCase().includes(clientInputImmediate)
-        )
+        return report.rows.filter((r) => (r.clientEmail || "").toLowerCase().includes(clientInputImmediate))
     }, [report, effectiveRowType, clientInputImmediate, isExactClientEmailImmediate])
 
     const totalPages = useMemo(
@@ -274,30 +222,29 @@ export default function ReportsPage() {
         if (scrollViewportRef.current) scrollViewportRef.current.scrollTop = 0
     }, [mode, dailyDate, startDate, endDate, clientInputImmediate, isExactClientEmailImmediate])
 
+    // ✅ Expand fetch:
+    // - daily mode: fetch daily rows for that client/date
+    // - range mode: call RANGE endpoint for that client/date-range (NO daily loops, NO merges)
     const onExpandFetch = useCallback(
         async (email: string): Promise<SalesReportRowData[]> => {
             if (!email) return []
 
-            if (mode === "daily") {
-                const res = await getDailySalesReport({ date: dailyDate, clientEmail: email })
-                return res.rows || []
-            }
-
-            const days = listISOInclusive(startDate, endDate)
-
-            let idx = 0
-            const collected: SalesReportRowData[] = []
-
-            const workers = Array.from({ length: EXPAND_CONCURRENCY }).map(async () => {
-                while (idx < days.length) {
-                    const d = days[idx++]
-                    const res = await getDailySalesReport({ date: d, clientEmail: email })
-                    if (res.rows?.length) collected.push(...res.rows)
+            try {
+                if (mode === "daily") {
+                    const res = await getDailySalesReport({ date: dailyDate, clientEmail: email })
+                    return res.rows || []
                 }
-            })
 
-            await Promise.all(workers)
-            return mergeProductRows(collected)
+                const res = await getRangeSalesReport({ startDate, endDate, clientEmail: email })
+                return res.rows || []
+            } catch (e) {
+                const msg =
+                    axios.isAxiosError(e)
+                        ? (e.response?.data?.message ?? e.response?.data ?? e.message)
+                        : "Failed to load product rows"
+                toast.error(String(msg))
+                return []
+            }
         },
         [mode, dailyDate, startDate, endDate]
     )
@@ -306,7 +253,6 @@ export default function ReportsPage() {
         if (next === mode) return
 
         if (next === "daily") {
-            // if switching into daily, never allow today; snap to yesterday
             if (!dailyDate || dailyDate >= todayISO) {
                 setDailyDate(yesterdayISO_IST())
             }
@@ -357,6 +303,7 @@ export default function ReportsPage() {
     const bottomOffset = `calc(env(safe-area-inset-bottom, 0px) + ${PAGINATION_LIFT_PX}px)`
     const scrollViewportHeight = `calc(100dvh - ${headerH}px - ${paginationH}px - ${PAGINATION_LIFT_PX}px - env(safe-area-inset-bottom, 0px))`
 
+    // ✅ include report.generatedAt so expanding cache resets after each refresh
     const tableCacheKey = useMemo(() => {
         const viewMode = mode
         const d1 = mode === "daily" ? dailyDate : startDate
@@ -364,7 +311,22 @@ export default function ReportsPage() {
         const email = isExactClientEmail ? clientInput : ""
         const rowType = report?.rowType ?? effectiveRowType
         return `${viewMode}|${d1}|${d2}|${email}|${rowType}`
-    }, [mode, dailyDate, startDate, endDate, isExactClientEmail, clientInput, report?.rowType, effectiveRowType])
+    }, [
+        mode,
+        dailyDate,
+        startDate,
+        endDate,
+        isExactClientEmail,
+        clientInput,
+        report?.rowType,
+        effectiveRowType,
+    ])
+
+    const expandContextKey = useMemo(() => {
+        const d1 = mode === "daily" ? dailyDate : startDate
+        const d2 = mode === "daily" ? dailyDate : endDate
+        return `${mode}|${d1}|${d2}`
+    }, [mode, dailyDate, startDate, endDate])
 
     return (
         <div className="h-[100dvh] overflow-hidden bg-background">
@@ -381,6 +343,13 @@ export default function ReportsPage() {
                                     Track sales by client and product (invoiced orders only)
                                 </p>
                             </div>
+
+                            <Hint text="Refresh now">
+                                <Button variant="outline" disabled={loading} onClick={fetchReport}>
+                                    <RefreshCcw className="h-4 w-4 mr-2" />
+                                    Refresh
+                                </Button>
+                            </Hint>
                         </div>
 
                         <div className="relative inline-flex bg-muted rounded-full p-1 w-full max-w-md">
@@ -392,20 +361,14 @@ export default function ReportsPage() {
                             />
                             <button
                                 type="button"
-                                className={cn(
-                                    "relative z-10 flex-1 py-2 font-medium text-sm",
-                                    mode === "daily" ? "text-white" : "text-muted-foreground"
-                                )}
+                                className={cn("relative z-10 flex-1 py-2 font-medium text-sm", mode === "daily" ? "text-white" : "text-muted-foreground")}
                                 onClick={() => switchMode("daily")}
                             >
                                 Day-to-day
                             </button>
                             <button
                                 type="button"
-                                className={cn(
-                                    "relative z-10 flex-1 py-2 font-medium text-sm",
-                                    mode === "range" ? "text-white" : "text-muted-foreground"
-                                )}
+                                className={cn("relative z-10 flex-1 py-2 font-medium text-sm", mode === "range" ? "text-white" : "text-muted-foreground")}
                                 onClick={() => switchMode("range")}
                             >
                                 Sales report
@@ -420,12 +383,7 @@ export default function ReportsPage() {
                                     <Hint text="Select a completed day (IST). Today is not available. Auto-refreshes on change.">
                                         <Popover open={openDaily} onOpenChange={setOpenDaily}>
                                             <PopoverTrigger asChild>
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    disabled={loading}
-                                                    className="w-44 justify-start text-left font-normal"
-                                                >
+                                                <Button type="button" variant="outline" disabled={loading} className="w-44 justify-start text-left font-normal">
                                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                                     {dailySelected ? format(dailySelected, "dd MMM yyyy") : "Select date"}
                                                 </Button>
@@ -435,7 +393,6 @@ export default function ReportsPage() {
                                                 <Calendar
                                                     mode="single"
                                                     selected={dailySelected}
-                                                    // ✅ disable today + future (IST)
                                                     disabled={(d) => d >= todayISTDate}
                                                     captionLayout="dropdown"
                                                     fromYear={2000}
@@ -463,12 +420,7 @@ export default function ReportsPage() {
                                     <Hint text="Start date (IST).">
                                         <Popover open={openFrom} onOpenChange={setOpenFrom}>
                                             <PopoverTrigger asChild>
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    disabled={loading}
-                                                    className="w-44 justify-start text-left font-normal"
-                                                >
+                                                <Button type="button" variant="outline" disabled={loading} className="w-44 justify-start text-left font-normal">
                                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                                     {fromSelected ? format(fromSelected, "dd MMM yyyy") : "Start date"}
                                                 </Button>
@@ -506,12 +458,7 @@ export default function ReportsPage() {
                                     <Hint text="End date (IST).">
                                         <Popover open={openTo} onOpenChange={setOpenTo}>
                                             <PopoverTrigger asChild>
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    disabled={loading}
-                                                    className="w-44 justify-start text-left font-normal"
-                                                >
+                                                <Button type="button" variant="outline" disabled={loading} className="w-44 justify-start text-left font-normal">
                                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                                     {toSelected ? format(toSelected, "dd MMM yyyy") : "End date"}
                                                 </Button>
@@ -562,12 +509,7 @@ export default function ReportsPage() {
                             />
 
                             <Hint text="Reset filters">
-                                <Button
-                                    variant="outline"
-                                    className="transition focus-visible:ring-2 focus-visible:ring-indigo-500"
-                                    onClick={clearFilters}
-                                    disabled={loading}
-                                >
+                                <Button variant="outline" className="transition focus-visible:ring-2 focus-visible:ring-indigo-500" onClick={clearFilters} disabled={loading}>
                                     Clear
                                 </Button>
                             </Hint>
@@ -578,14 +520,11 @@ export default function ReportsPage() {
                 </div>
 
                 <div className="flex-1 min-h-0 relative">
-                    <div
-                        ref={scrollViewportRef}
-                        style={{ height: scrollViewportHeight }}
-                        className="w-full overflow-y-auto overscroll-none"
-                    >
+                    <div ref={scrollViewportRef} style={{ height: scrollViewportHeight }} className="w-full overflow-y-auto overscroll-none">
                         <div className="max-w-6xl mx-auto px-6 py-6">
                             <SalesReportTable
                                 cacheKey={tableCacheKey}
+                                expandContextKey={expandContextKey}
                                 rowType={report?.rowType ?? effectiveRowType}
                                 rows={pagedRows}
                                 loading={loading}
@@ -594,11 +533,7 @@ export default function ReportsPage() {
                         </div>
                     </div>
 
-                    <div
-                        ref={paginationRef}
-                        className="absolute left-0 right-0 z-20 bg-background border-t"
-                        style={{ bottom: bottomOffset }}
-                    >
+                    <div ref={paginationRef} className="absolute left-0 right-0 z-20 bg-background border-t" style={{ bottom: bottomOffset }}>
                         <div className="max-w-6xl mx-auto px-6 py-3">
                             <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
                         </div>

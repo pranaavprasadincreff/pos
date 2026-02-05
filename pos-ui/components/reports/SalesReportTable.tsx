@@ -14,6 +14,8 @@ import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SalesReportRowData, ReportRowType } from "@/services/reportService"
 import { formatINR } from "@/utils/currencyFormat"
+import { toast } from "sonner"
+import axios from "axios"
 
 type ExpandFetch = (clientEmail: string) => Promise<SalesReportRowData[]>
 
@@ -23,25 +25,39 @@ export default function SalesReportTable({
                                              loading,
                                              onExpandFetch,
                                              cacheKey,
+                                             expandContextKey,
                                          }: {
     rowType: ReportRowType
     rows: SalesReportRowData[]
     loading: boolean
-    onExpandFetch?: ExpandFetch // only used for CLIENT table
-    cacheKey: string // ✅ invalidates expansion cache when filters change
+    onExpandFetch?: ExpandFetch
+    cacheKey: string
+    expandContextKey: string
 }) {
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
     const [loadingClient, setLoadingClient] = useState<Record<string, boolean>>({})
-    const [childrenByClient, setChildrenByClient] = useState<
-        Record<string, SalesReportRowData[]>
-    >({})
+    const [childrenByClient, setChildrenByClient] = useState<Record<string, SalesReportRowData[]>>({})
 
-    // ✅ Critical: when filter context changes, clear expanded cache
     useEffect(() => {
         setExpanded(new Set())
         setLoadingClient({})
         setChildrenByClient({})
-    }, [cacheKey])
+    }, [expandContextKey])
+
+    const explainError = (e: unknown) => {
+        if (axios.isAxiosError(e)) {
+            const status = e.response?.status
+            const data = e.response?.data
+            const msg =
+                (data && typeof data === "object" && "message" in data && (data as any).message) ||
+                (typeof data === "string" ? data : "") ||
+                e.message
+
+            return `Expand failed${status ? ` (${status})` : ""}: ${String(msg)}`
+        }
+        if (e instanceof Error) return `Expand failed: ${e.message}`
+        return "Expand failed: Unknown error"
+    }
 
     const toggle = async (clientEmail: string) => {
         if (!clientEmail) return
@@ -56,8 +72,6 @@ export default function SalesReportTable({
             return next
         })
 
-        // If closing, optionally drop cached rows for this client
-        // (keeps memory low; remove this block if you prefer keeping cache for same context)
         if (!willOpen) {
             setChildrenByClient((prev) => {
                 const next = { ...prev }
@@ -67,15 +81,36 @@ export default function SalesReportTable({
             return
         }
 
-        // opening: fetch if needed
-        if (!onExpandFetch) return
+        if (!onExpandFetch) {
+            toast.error("Expand handler missing (onExpandFetch not provided).")
+            return
+        }
         if (childrenByClient[clientEmail]) return
         if (loadingClient[clientEmail]) return
 
         setLoadingClient((prev) => ({ ...prev, [clientEmail]: true }))
+
         try {
+            // 🔎 DIAGNOSTIC: confirm exact key being sent
+            console.log("[SalesReportTable] Expanding client:", clientEmail)
+
             const childRows = await onExpandFetch(clientEmail)
+
+            // 🔎 DIAGNOSTIC: confirm response
+            console.log("[SalesReportTable] Expand rows:", childRows)
+
             setChildrenByClient((prev) => ({ ...prev, [clientEmail]: childRows }))
+        } catch (e) {
+            const msg = explainError(e)
+            console.error("[SalesReportTable] Expand error:", e)
+            toast.error(msg)
+
+            // if expand failed, collapse row (optional but avoids “open with empty content”)
+            setExpanded((prev) => {
+                const next = new Set(prev)
+                next.delete(clientEmail)
+                return next
+            })
         } finally {
             setLoadingClient((prev) => ({ ...prev, [clientEmail]: false }))
         }
@@ -139,11 +174,7 @@ export default function SalesReportTable({
                                                 onClick={() => toggle(clientEmail)}
                                                 disabled={!clientEmail}
                                             >
-                                                {isOpen ? (
-                                                    <ChevronDown className="h-4 w-4" />
-                                                ) : (
-                                                    <ChevronRight className="h-4 w-4" />
-                                                )}
+                                                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                             </Button>
                                         </TableCell>
                                     ) : null}
@@ -169,19 +200,16 @@ export default function SalesReportTable({
 
                                     <TableCell className="text-right">{r.ordersCount}</TableCell>
                                     <TableCell className="text-right">{r.itemsCount}</TableCell>
-                                    <TableCell className="text-right font-medium">₹{formatINR(r.totalRevenue || 0)}</TableCell>
+                                    <TableCell className="text-right font-medium">
+                                        ₹{formatINR(r.totalRevenue || 0)}
+                                    </TableCell>
                                 </TableRow>
 
                                 {isClientTable && isOpen ? (
                                     <TableRow>
                                         <TableCell
                                             colSpan={6}
-                                            className="
-                        border border-t-0 border-indigo-200
-                        bg-indigo-50/40
-                        rounded-b-md
-                        px-4 py-4
-                      "
+                                            className="border border-t-0 border-indigo-200 bg-indigo-50/40 rounded-b-md px-4 py-4"
                                         >
                                             <div className="rounded-md border border-indigo-200 bg-background overflow-hidden">
                                                 <Table>
@@ -213,14 +241,13 @@ export default function SalesReportTable({
                                                             </TableRow>
                                                         ))}
 
-                                                        {childrenByClient[clientEmail] &&
-                                                            childrenByClient[clientEmail].length === 0 && (
-                                                                <TableRow>
-                                                                    <TableCell colSpan={4} className="text-muted-foreground text-center py-6">
-                                                                        No product rows for this client
-                                                                    </TableCell>
-                                                                </TableRow>
-                                                            )}
+                                                        {childrenByClient[clientEmail] && childrenByClient[clientEmail].length === 0 && (
+                                                            <TableRow>
+                                                                <TableCell colSpan={4} className="text-muted-foreground text-center py-6">
+                                                                    No product rows for this client
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        )}
                                                     </TableBody>
                                                 </Table>
                                             </div>
