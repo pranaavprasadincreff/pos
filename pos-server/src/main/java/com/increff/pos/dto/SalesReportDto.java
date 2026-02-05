@@ -6,177 +6,160 @@ import com.increff.pos.helper.SalesReportHelper;
 import com.increff.pos.model.constants.ReportRowType;
 import com.increff.pos.model.data.SalesReportResponseData;
 import com.increff.pos.model.exception.ApiException;
-import com.increff.pos.model.form.SalesReportForm;
+import com.increff.pos.model.form.DailySalesReportForm;
+import com.increff.pos.model.form.RangeSalesReportForm;
+import com.increff.pos.util.NormalizationUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.regex.Pattern;
 
 @Component
 public class SalesReportDto {
     private static final ZoneId IST_TIMEZONE = ZoneId.of("Asia/Kolkata");
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
+    private static final int MAX_RANGE_DAYS = 92;
 
     @Autowired
     private SalesReportApi salesReportApi;
 
-    public SalesReportResponseData getDailyReport(SalesReportForm requestForm) throws ApiException {
-        SalesReportForm validatedForm = normalizeAndValidateDailyRequest(requestForm);
-
-        LocalDate reportDate = validatedForm.getStartDate();
-        String clientEmail = validatedForm.getClientEmail();
-        ReportRowType rowType = computeRowType(clientEmail);
-        List<SalesReportRowPojo> dailyReport =
-                salesReportApi.getDailyReport(reportDate, clientEmail, rowType);
+    public SalesReportResponseData getDailyReport(DailySalesReportForm requestForm) throws ApiException {
+        DailySalesReportForm validatedRequest = normalizeAndValidateDailyRequest(requestForm);
+        LocalDate reportDate = validatedRequest.getDate();
+        String clientEmail = validatedRequest.getClientEmail();
+        ReportRowType reportRowType = computeReportRowType(clientEmail);
+        List<SalesReportRowPojo> reportRows =
+                salesReportApi.getDailyReport(reportDate, clientEmail, reportRowType);
 
         return SalesReportHelper.toResponseData(
                 "DAILY",
                 reportDate,
                 reportDate,
                 clientEmail,
-                rowType,
-                dailyReport
+                reportRowType,
+                reportRows
         );
     }
 
-    public SalesReportResponseData getRangeReport(SalesReportForm requestForm) throws ApiException {
-        SalesReportForm validatedForm = normalizeAndValidateRangeRequest(requestForm);
-
-        LocalDate startDate = validatedForm.getStartDate();
-        LocalDate endDate = validatedForm.getEndDate();
-        String clientEmail = validatedForm.getClientEmail();
-        ReportRowType rowType = computeRowType(clientEmail);
-        List<SalesReportRowPojo> rangeReport =
-                salesReportApi.getRangeReport(startDate, endDate, clientEmail, rowType);
+    public SalesReportResponseData getRangeReport(RangeSalesReportForm requestForm) throws ApiException {
+        RangeSalesReportForm validatedRequest = normalizeAndValidateRangeRequest(requestForm);
+        LocalDate startDate = validatedRequest.getStartDate();
+        LocalDate endDate = validatedRequest.getEndDate();
+        String clientEmail = validatedRequest.getClientEmail();
+        ReportRowType reportRowType = computeReportRowType(clientEmail);
+        List<SalesReportRowPojo> reportRows =
+                salesReportApi.getRangeReport(startDate, endDate, clientEmail, reportRowType);
 
         return SalesReportHelper.toResponseData(
                 "RANGE",
                 startDate,
                 endDate,
                 clientEmail,
-                rowType,
-                rangeReport
+                reportRowType,
+                reportRows
         );
     }
 
     public void generateAndStoreDailyNested(LocalDate reportDate) {
-        if (isNotEligibleReportDate(reportDate)) return;
-        generateAndStoreNestedDailyReportSafely(reportDate);
+        if (shouldSkipReportGeneration(reportDate)) {
+            return;
+        }
+        generateDailyNestedReport(reportDate);
     }
 
     public void generateAndStoreDailyNestedIfMissing(LocalDate reportDate) {
-        if (isNotEligibleReportDate(reportDate)) return;
-        if (salesReportApi.existsDailyNested(reportDate)) return;
-        generateAndStoreNestedDailyReportSafely(reportDate);
+        if (shouldSkipReportGeneration(reportDate)) {
+            return;
+        }
+        if (salesReportApi.existsDailyNested(reportDate)) {
+            return;
+        }
+        generateDailyNestedReport(reportDate);
     }
 
-    // -------------------- Validation + Normalization --------------------
-
-    private SalesReportForm normalizeAndValidateDailyRequest(SalesReportForm requestForm) throws ApiException {
-        SalesReportForm normalizedForm = normalizeRequestForm(requestForm);
+    private DailySalesReportForm normalizeAndValidateDailyRequest(DailySalesReportForm requestForm) throws ApiException {
+        DailySalesReportForm normalizedForm = normalizeDailyRequest(requestForm);
+        applyDefaultReportDate(normalizedForm);
         validateDailyRequest(normalizedForm);
         return normalizedForm;
     }
 
-    private SalesReportForm normalizeAndValidateRangeRequest(SalesReportForm requestForm) throws ApiException {
-        SalesReportForm normalizedForm = normalizeRequestForm(requestForm);
+    private DailySalesReportForm normalizeDailyRequest(DailySalesReportForm requestForm) {
+        DailySalesReportForm normalizedForm;
+        if (requestForm == null) {
+            normalizedForm = new DailySalesReportForm();
+        } else {
+            normalizedForm = requestForm;
+        }
+
+        normalizedForm.setClientEmail(normalizeClientEmail(normalizedForm.getClientEmail()));
+        return normalizedForm;
+    }
+
+    private void applyDefaultReportDate(DailySalesReportForm form) {
+        if (form.getDate() != null) {
+            return;
+        }
+        form.setDate(getYesterdayIstDate());
+    }
+
+    private void validateDailyRequest(DailySalesReportForm form) throws ApiException {
+        if (form.getDate() == null) {
+            throw new ApiException("reportDate is required for daily report");
+        }
+        ensureDateNotInFuture(form.getDate(), "Daily report date cannot be in the future");
+    }
+
+    private RangeSalesReportForm normalizeAndValidateRangeRequest(RangeSalesReportForm requestForm) throws ApiException {
+        RangeSalesReportForm normalizedForm = normalizeRangeRequest(requestForm);
         validateRangeRequest(normalizedForm);
         return normalizedForm;
     }
 
-    private SalesReportForm normalizeRequestForm(SalesReportForm requestForm) {
-        SalesReportForm normalizedForm = (requestForm == null) ? new SalesReportForm() : requestForm;
-
-        normalizedForm.setClientEmail(normalizeEmail(normalizedForm.getClientEmail()));
-        applyDefaultDailyDateIfMissing(normalizedForm);
-
-        return normalizedForm;
-    }
-
-    private String normalizeEmail(String email) {
-        if (!StringUtils.hasText(email)) return null;
-        return email.trim().toLowerCase();
-    }
-
-    private void applyDefaultDailyDateIfMissing(SalesReportForm form) {
-        if (form.getStartDate() == null && form.getEndDate() == null) {
-            form.setStartDate(getYesterdayIstDate());
+    private RangeSalesReportForm normalizeRangeRequest(RangeSalesReportForm requestForm) throws ApiException {
+        if (requestForm == null) {
+            throw new ApiException("Invalid request");
         }
+        requestForm.setClientEmail(normalizeClientEmail(requestForm.getClientEmail()));
+        return requestForm;
     }
 
-    private void validateDailyRequest(SalesReportForm form) throws ApiException {
-        validateFormPresent(form);
-        validateDailyDates(form);
-        validateClientEmail(form.getClientEmail());
-        validateNotFutureDate(form.getStartDate());
-    }
-
-    private void validateRangeRequest(SalesReportForm form) throws ApiException {
-        validateFormPresent(form);
-        validateRangeDates(form);
-        validateClientEmail(form.getClientEmail());
-        validateRangeWithinLimit(form);
-    }
-
-    private void validateFormPresent(SalesReportForm form) throws ApiException {
-        if (form == null) throw new ApiException("Invalid request");
-    }
-
-    private void validateDailyDates(SalesReportForm form) throws ApiException {
-        if (form.getStartDate() == null) {
-            throw new ApiException("startDate is required for daily report");
-        }
-
-        if (form.getEndDate() != null && !form.getEndDate().equals(form.getStartDate())) {
-            throw new ApiException("For daily report, endDate must be null or equal to startDate");
-        }
-    }
-
-    private void validateRangeDates(SalesReportForm form) throws ApiException {
-        if (form.getStartDate() == null || form.getEndDate() == null) {
-            throw new ApiException("startDate and endDate are required for range report");
-        }
-
+    private void validateRangeRequest(RangeSalesReportForm form) throws ApiException {
         if (form.getStartDate().isAfter(form.getEndDate())) {
             throw new ApiException("startDate cannot be after endDate");
         }
-    }
 
-    private void validateNotFutureDate(LocalDate date) throws ApiException {
-        LocalDate todayIst = LocalDate.now(IST_TIMEZONE);
-        if (date.isAfter(todayIst)) {
-            throw new ApiException("Daily report date cannot be in the future");
+        ensureDateNotInFuture(form.getStartDate(), "startDate cannot be in the future");
+        ensureDateNotInFuture(form.getEndDate(), "endDate cannot be in the future");
+
+        long inclusiveDays = ChronoUnit.DAYS.between(form.getStartDate(), form.getEndDate()) + 1;
+        if (inclusiveDays > MAX_RANGE_DAYS) {
+            throw new ApiException("Date range too large (max 92 days)");
         }
     }
 
-    private void validateClientEmail(String email) throws ApiException {
-        if (!StringUtils.hasText(email)) return;
-        if (email.length() > 120) throw new ApiException("clientEmail too long");
-        if (!EMAIL_PATTERN.matcher(email).matches()) throw new ApiException("Invalid clientEmail");
+    private void ensureDateNotInFuture(LocalDate date, String message) throws ApiException {
+        LocalDate todayInIst = LocalDate.now(IST_TIMEZONE);
+        if (date.isAfter(todayInIst)) {
+            throw new ApiException(message);
+        }
     }
 
-    private void validateRangeWithinLimit(SalesReportForm form) throws ApiException {
-        long days = java.time.temporal.ChronoUnit.DAYS.between(form.getStartDate(), form.getEndDate()) + 1;
-        if (days > 92) throw new ApiException("Date range too large (max 92 days)");
+    private boolean shouldSkipReportGeneration(LocalDate reportDate) {
+        if (reportDate == null) {
+            return true;
+        }
+        LocalDate todayInIst = LocalDate.now(IST_TIMEZONE);
+        if (reportDate.isAfter(todayInIst)) {
+            return true;
+        }
+        return false;
     }
 
-    // -------------------- Nested daily generation helpers --------------------
-
-    private boolean isNotEligibleReportDate(LocalDate reportDate) {
-        if (reportDate == null) return true;
-        LocalDate todayIst = LocalDate.now(IST_TIMEZONE);
-        return reportDate.isAfter(todayIst);
-    }
-
-    private LocalDate getYesterdayIstDate() {
-        return LocalDate.now(IST_TIMEZONE).minusDays(1);
-    }
-
-    private void generateAndStoreNestedDailyReportSafely(LocalDate reportDate) {
+    private void generateDailyNestedReport(LocalDate reportDate) {
         try {
             salesReportApi.generateAndStoreDailyNested(reportDate);
         } catch (Exception ignored) {
@@ -184,7 +167,21 @@ public class SalesReportDto {
         }
     }
 
-    private ReportRowType computeRowType(String clientEmail) {
-        return StringUtils.hasText(clientEmail) ? ReportRowType.PRODUCT : ReportRowType.CLIENT;
+    private LocalDate getYesterdayIstDate() {
+        return LocalDate.now(IST_TIMEZONE).minusDays(1);
+    }
+
+    private String normalizeClientEmail(String clientEmail) {
+        if (!StringUtils.hasText(clientEmail)) {
+            return null;
+        }
+        return NormalizationUtil.normalizeEmail(clientEmail);
+    }
+
+    private ReportRowType computeReportRowType(String clientEmail) {
+        if (StringUtils.hasText(clientEmail)) {
+            return ReportRowType.PRODUCT;
+        }
+        return ReportRowType.CLIENT;
     }
 }

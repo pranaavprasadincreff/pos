@@ -212,29 +212,6 @@ public class ValidationUtil {
 
     // ---------------- COMMON ----------------
 
-    public static void validateEmail(String email) throws ApiException {
-        if (!StringUtils.hasText(email)) throw new ApiException("Email required");
-        if (email.length() > EMAIL_MAX) throw new ApiException("Email too long");
-
-        String emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
-        if (!email.matches(emailRegex)) throw new ApiException("Invalid email format");
-    }
-
-    private static void validateName(String name) throws ApiException {
-        if (!StringUtils.hasText(name)) throw new ApiException("Name required");
-        if (name.length() > NAME_MAX) throw new ApiException("Name too long");
-    }
-
-    private static void validateOptionalName(String name) throws ApiException {
-        if (name != null && name.length() > NAME_MAX)
-            throw new ApiException("Name filter too long");
-    }
-
-    private static void validateOptionalEmail(String email) throws ApiException {
-        if (email != null && email.length() > EMAIL_MAX)
-            throw new ApiException("Email filter too long");
-    }
-
     private static void validateOptionalImageUrl(String url) throws ApiException {
         if (url == null || url.isBlank()) return;
         if (url.length() > 500) throw new ApiException("Image URL too long");
@@ -296,30 +273,10 @@ public class ValidationUtil {
     private static void validateBulkRowLimit(List<String[]> rows) throws ApiException {
         if (rows == null) throw new ApiException("File is empty");
 
-        int dataRows = countDataRows(rows);
+        int dataRows = rows.size();
         if (dataRows > BULK_MAX_ROWS) {
             throw new ApiException("Bulk upload supports at most " + BULK_MAX_ROWS + " rows");
         }
-    }
-
-    private static int countDataRows(List<String[]> rows) {
-        int count = 0;
-        for (String[] row : rows) {
-            if (row == null || row.length == 0) continue;
-            // TODO: rows won't have header and don't iterate -> use rows.length
-            if ("barcode".equalsIgnoreCase(row[0])) continue; // header
-            count++;
-        }
-        return count;
-    }
-
-    private static final int PASSWORD_MIN = 6;
-    private static final int PASSWORD_MAX = 60;
-
-    public static void validatePassword(String password) throws ApiException {
-        if (!StringUtils.hasText(password)) throw new ApiException("Password required");
-        if (password.length() < PASSWORD_MIN) throw new ApiException("Password must be at least " + PASSWORD_MIN + " characters");
-        if (password.length() > PASSWORD_MAX) throw new ApiException("Password too long");
     }
 
 }

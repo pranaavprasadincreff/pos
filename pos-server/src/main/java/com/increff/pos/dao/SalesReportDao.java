@@ -3,11 +3,10 @@ package com.increff.pos.dao;
 import com.increff.pos.db.DayToDaySalesReportPojo;
 import com.increff.pos.db.SalesReportRowPojo;
 import com.increff.pos.helper.SalesReportAggregationHelper;
+import com.increff.pos.helper.SalesReportRangeAccumulator;
 import com.increff.pos.model.constants.OrderStatus;
 import com.increff.pos.model.constants.ReportRowType;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoOperations;
-import org.springframework.data.mongodb.core.aggregation.*;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Repository;
@@ -17,8 +16,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
 
-import static org.springframework.data.mongodb.core.aggregation.Aggregation.*;
-
 @Repository
 public class SalesReportDao {
 
@@ -27,6 +24,7 @@ public class SalesReportDao {
     private static final String DAILY_REPORT_COLLECTION = "sales_report_daily";
     private static final String ORDERS_COLLECTION = "orders";
     private static final String PRODUCTS_COLLECTION = "products";
+
     private static final String PRODUCT_BARCODE_FIELD = "barcode";
     private static final String PRODUCT_CLIENT_EMAIL_PATH = "product.clientEmail";
 
@@ -37,16 +35,25 @@ public class SalesReportDao {
     }
 
     public boolean existsDailyReportDocument(LocalDate reportDate) {
-        Query query = Query.query(Criteria.where("_id").is(toDocumentId(reportDate)));
+        if (reportDate == null) {
+            return false;
+        }
+        Query query = Query.query(Criteria.where("_id").is(getDailyDocumentId(reportDate)));
         return mongoOperations.exists(query, DayToDaySalesReportPojo.class, DAILY_REPORT_COLLECTION);
     }
 
     public void generateAndStoreDailyReportDocument(LocalDate reportDate) {
+        if (reportDate == null) {
+            return;
+        }
         DayToDaySalesReportPojo reportDocument = buildDailyReportDocumentFromOrders(reportDate);
         saveDailyReportDocument(reportDocument);
     }
 
     public List<SalesReportRowPojo> getDailyReportRows(LocalDate reportDate, String clientEmail, ReportRowType rowType) {
+        if (reportDate == null) {
+            return List.of();
+        }
         DayToDaySalesReportPojo reportDocument = fetchOrCreateDailyReportDocument(reportDate);
         return mapDailyDocumentToRows(reportDocument, clientEmail, rowType);
     }
@@ -57,77 +64,94 @@ public class SalesReportDao {
             String clientEmail,
             ReportRowType rowType
     ) {
-        Map<LocalDate, DayToDaySalesReportPojo> existingDocuments = fetchDailyReportDocumentsInRange(startDate, endDate);
-        List<DayToDaySalesReportPojo> completeDocuments = ensureMissingDailyDocuments(startDate, endDate, existingDocuments);
-
-        if (rowType == ReportRowType.CLIENT) {
-            return computeClientRangeRowsInMemory(completeDocuments);
+        if (startDate == null || endDate == null) {
+            return List.of();
         }
 
-        return computeProductRangeRowsInMemory(completeDocuments, clientEmail);
+        Map<LocalDate, DayToDaySalesReportPojo> existingDocumentsByDate =
+                fetchDailyReportDocumentsInRange(startDate, endDate);
+
+        List<DayToDaySalesReportPojo> completeDocuments =
+                fetchOrGenerateMissingDocuments(startDate, endDate, existingDocumentsByDate);
+
+        if (rowType == ReportRowType.CLIENT) {
+            return SalesReportRangeAccumulator.accumulateClientRows(completeDocuments);
+        }
+
+        return SalesReportRangeAccumulator.accumulateProductRows(completeDocuments, clientEmail);
     }
 
     // -------------------- Fetch / Create strategy --------------------
 
     private DayToDaySalesReportPojo fetchOrCreateDailyReportDocument(LocalDate reportDate) {
         DayToDaySalesReportPojo existingDocument = fetchDailyReportDocument(reportDate);
-        if (existingDocument != null) return existingDocument;
+        if (existingDocument != null) {
+            return existingDocument;
+        }
 
         DayToDaySalesReportPojo generatedDocument = buildDailyReportDocumentFromOrders(reportDate);
         saveDailyReportDocument(generatedDocument);
+
         return generatedDocument;
     }
 
     private DayToDaySalesReportPojo fetchDailyReportDocument(LocalDate reportDate) {
-        Query query = Query.query(Criteria.where("_id").is(toDocumentId(reportDate)));
+        Query query = Query.query(Criteria.where("_id").is(getDailyDocumentId(reportDate)));
         return mongoOperations.findOne(query, DayToDaySalesReportPojo.class, DAILY_REPORT_COLLECTION);
     }
 
     private void saveDailyReportDocument(DayToDaySalesReportPojo reportDocument) {
+        if (reportDocument == null) {
+            return;
+        }
         mongoOperations.save(reportDocument, DAILY_REPORT_COLLECTION);
     }
 
     private Map<LocalDate, DayToDaySalesReportPojo> fetchDailyReportDocumentsInRange(LocalDate startDate, LocalDate endDate) {
         Query query = Query.query(Criteria.where("_id")
-                .gte(toDocumentId(startDate))
-                .lte(toDocumentId(endDate))
+                .gte(getDailyDocumentId(startDate))
+                .lte(getDailyDocumentId(endDate))
         );
 
-        List<DayToDaySalesReportPojo> docs =
+        List<DayToDaySalesReportPojo> documents =
                 mongoOperations.find(query, DayToDaySalesReportPojo.class, DAILY_REPORT_COLLECTION);
 
-        Map<LocalDate, DayToDaySalesReportPojo> byDate = new HashMap<>();
-        if (docs == null) return byDate;
-
-        for (DayToDaySalesReportPojo doc : docs) {
-            if (doc == null || doc.getDate() == null) continue;
-            byDate.put(doc.getDate(), doc);
+        Map<LocalDate, DayToDaySalesReportPojo> documentsByDate = new HashMap<>();
+        if (documents == null) {
+            return documentsByDate;
         }
 
-        return byDate;
+        for (DayToDaySalesReportPojo document : documents) {
+            if (document == null || document.getDate() == null) {
+                continue;
+            }
+            documentsByDate.put(document.getDate(), document);
+        }
+
+        return documentsByDate;
     }
 
-    private List<DayToDaySalesReportPojo> ensureMissingDailyDocuments(
+    private List<DayToDaySalesReportPojo> fetchOrGenerateMissingDocuments(
             LocalDate startDate,
             LocalDate endDate,
-            Map<LocalDate, DayToDaySalesReportPojo> existingByDate
+            Map<LocalDate, DayToDaySalesReportPojo> existingDocumentsByDate
     ) {
         List<DayToDaySalesReportPojo> completeDocuments = new ArrayList<>();
-        LocalDate cursor = startDate;
 
-        while (!cursor.isAfter(endDate)) {
-            DayToDaySalesReportPojo existing = existingByDate.get(cursor);
-            if (existing != null) {
-                completeDocuments.add(existing);
-                cursor = cursor.plusDays(1);
+        LocalDate currentDate = startDate;
+        while (!currentDate.isAfter(endDate)) {
+            DayToDaySalesReportPojo existingDocument = existingDocumentsByDate.get(currentDate);
+            if (existingDocument != null) {
+                completeDocuments.add(existingDocument);
+                currentDate = currentDate.plusDays(1);
                 continue;
             }
 
-            DayToDaySalesReportPojo generated = buildDailyReportDocumentFromOrders(cursor);
-            saveDailyReportDocument(generated);
-            completeDocuments.add(generated);
+            DayToDaySalesReportPojo generatedDocument = buildDailyReportDocumentFromOrders(currentDate);
+            saveDailyReportDocument(generatedDocument);
+            completeDocuments.add(generatedDocument);
 
-            cursor = cursor.plusDays(1);
+            currentDate = currentDate.plusDays(1);
         }
 
         return completeDocuments;
@@ -146,7 +170,7 @@ public class SalesReportDao {
         );
     }
 
-    private String toDocumentId(LocalDate reportDate) {
+    private String getDailyDocumentId(LocalDate reportDate) {
         return reportDate.toString();
     }
 
@@ -157,7 +181,9 @@ public class SalesReportDao {
             String clientEmail,
             ReportRowType rowType
     ) {
-        if (reportDocument == null || reportDocument.getClients() == null) return List.of();
+        if (reportDocument == null || reportDocument.getClients() == null) {
+            return List.of();
+        }
 
         if (rowType == ReportRowType.CLIENT) {
             return mapClientRows(reportDocument.getClients());
@@ -166,18 +192,23 @@ public class SalesReportDao {
         return mapProductRowsForClient(reportDocument.getClients(), clientEmail);
     }
 
-    private List<SalesReportRowPojo> mapClientRows(List<DayToDaySalesReportPojo.ClientBlock> clients) {
+    private List<SalesReportRowPojo> mapClientRows(List<DayToDaySalesReportPojo.ClientBlock> clientBlocks) {
         List<SalesReportRowPojo> rows = new ArrayList<>();
+        if (clientBlocks == null) {
+            return rows;
+        }
 
-        for (DayToDaySalesReportPojo.ClientBlock client : clients) {
-            if (client == null) continue;
+        for (DayToDaySalesReportPojo.ClientBlock clientBlock : clientBlocks) {
+            if (clientBlock == null) {
+                continue;
+            }
 
             SalesReportRowPojo row = new SalesReportRowPojo();
-            row.setClientEmail(client.getClientEmail());
+            row.setClientEmail(clientBlock.getClientEmail());
             row.setProductBarcode(null);
-            row.setOrdersCount(nullSafeLong(client.getOrdersCount()));
-            row.setItemsCount(nullSafeLong(client.getItemsCount()));
-            row.setTotalRevenue(nullSafeDouble(client.getTotalRevenue()));
+            row.setOrdersCount(nullSafeLong(clientBlock.getOrdersCount()));
+            row.setItemsCount(nullSafeLong(clientBlock.getItemsCount()));
+            row.setTotalRevenue(nullSafeDouble(clientBlock.getTotalRevenue()));
             rows.add(row);
         }
 
@@ -186,25 +217,30 @@ public class SalesReportDao {
     }
 
     private List<SalesReportRowPojo> mapProductRowsForClient(
-            List<DayToDaySalesReportPojo.ClientBlock> clients,
+            List<DayToDaySalesReportPojo.ClientBlock> clientBlocks,
             String clientEmail
     ) {
-        if (!StringUtils.hasText(clientEmail)) return List.of();
+        if (!StringUtils.hasText(clientEmail)) {
+            return List.of();
+        }
 
-        DayToDaySalesReportPojo.ClientBlock clientBlock = findClientBlock(clients, clientEmail);
-        if (clientBlock == null || clientBlock.getProducts() == null) return List.of();
+        DayToDaySalesReportPojo.ClientBlock clientBlock = findClientBlock(clientBlocks, clientEmail);
+        if (clientBlock == null || clientBlock.getProducts() == null) {
+            return List.of();
+        }
 
         List<SalesReportRowPojo> rows = new ArrayList<>();
-
-        for (DayToDaySalesReportPojo.ProductBlock product : clientBlock.getProducts()) {
-            if (product == null) continue;
+        for (DayToDaySalesReportPojo.ProductBlock productBlock : clientBlock.getProducts()) {
+            if (productBlock == null) {
+                continue;
+            }
 
             SalesReportRowPojo row = new SalesReportRowPojo();
             row.setClientEmail(clientBlock.getClientEmail());
-            row.setProductBarcode(product.getProductBarcode());
-            row.setOrdersCount(nullSafeLong(product.getOrdersCount()));
-            row.setItemsCount(nullSafeLong(product.getItemsCount()));
-            row.setTotalRevenue(nullSafeDouble(product.getTotalRevenue()));
+            row.setProductBarcode(productBlock.getProductBarcode());
+            row.setOrdersCount(nullSafeLong(productBlock.getOrdersCount()));
+            row.setItemsCount(nullSafeLong(productBlock.getItemsCount()));
+            row.setTotalRevenue(nullSafeDouble(productBlock.getTotalRevenue()));
             rows.add(row);
         }
 
@@ -213,92 +249,36 @@ public class SalesReportDao {
     }
 
     private DayToDaySalesReportPojo.ClientBlock findClientBlock(
-            List<DayToDaySalesReportPojo.ClientBlock> clients,
+            List<DayToDaySalesReportPojo.ClientBlock> clientBlocks,
             String clientEmail
     ) {
-        for (DayToDaySalesReportPojo.ClientBlock client : clients) {
-            if (client == null) continue;
-            if (clientEmail.equals(client.getClientEmail())) return client;
+        if (clientBlocks == null || !StringUtils.hasText(clientEmail)) {
+            return null;
         }
+
+        for (DayToDaySalesReportPojo.ClientBlock clientBlock : clientBlocks) {
+            if (clientBlock == null) {
+                continue;
+            }
+            if (clientEmail.equals(clientBlock.getClientEmail())) {
+                return clientBlock;
+            }
+        }
+
         return null;
     }
 
-    // -------------------- Range rows computed in-memory (minimizes DB calls) --------------------
-
-    private List<SalesReportRowPojo> computeClientRangeRowsInMemory(List<DayToDaySalesReportPojo> documents) {
-        Map<String, SalesReportRowPojo> byClient = new HashMap<>();
-
-        for (DayToDaySalesReportPojo doc : documents) {
-            if (doc == null || doc.getClients() == null) continue;
-
-            for (DayToDaySalesReportPojo.ClientBlock client : doc.getClients()) {
-                if (client == null || !StringUtils.hasText(client.getClientEmail())) continue;
-
-                SalesReportRowPojo accumulator = byClient.computeIfAbsent(client.getClientEmail(), k -> createClientAccumulator(k));
-                accumulator.setOrdersCount(accumulator.getOrdersCount() + nullSafeLong(client.getOrdersCount()));
-                accumulator.setItemsCount(accumulator.getItemsCount() + nullSafeLong(client.getItemsCount()));
-                accumulator.setTotalRevenue(accumulator.getTotalRevenue() + nullSafeDouble(client.getTotalRevenue()));
-            }
+    private long nullSafeLong(Long value) {
+        if (value == null) {
+            return 0L;
         }
-
-        List<SalesReportRowPojo> rows = new ArrayList<>(byClient.values());
-        rows.sort(Comparator.comparingDouble(SalesReportRowPojo::getTotalRevenue).reversed());
-        return rows;
+        return value;
     }
 
-    private List<SalesReportRowPojo> computeProductRangeRowsInMemory(
-            List<DayToDaySalesReportPojo> documents,
-            String clientEmail
-    ) {
-        if (!StringUtils.hasText(clientEmail)) return List.of();
-
-        Map<String, SalesReportRowPojo> byBarcode = new HashMap<>();
-
-        for (DayToDaySalesReportPojo doc : documents) {
-            if (doc == null || doc.getClients() == null) continue;
-
-            DayToDaySalesReportPojo.ClientBlock client = findClientBlock(doc.getClients(), clientEmail);
-            if (client == null || client.getProducts() == null) continue;
-
-            for (DayToDaySalesReportPojo.ProductBlock product : client.getProducts()) {
-                if (product == null || !StringUtils.hasText(product.getProductBarcode())) continue;
-
-                SalesReportRowPojo accumulator = byBarcode.computeIfAbsent(
-                        product.getProductBarcode(),
-                        k -> createProductAccumulator(clientEmail, k)
-                );
-
-                accumulator.setOrdersCount(accumulator.getOrdersCount() + nullSafeLong(product.getOrdersCount()));
-                accumulator.setItemsCount(accumulator.getItemsCount() + nullSafeLong(product.getItemsCount()));
-                accumulator.setTotalRevenue(accumulator.getTotalRevenue() + nullSafeDouble(product.getTotalRevenue()));
-            }
+    private double nullSafeDouble(Double value) {
+        if (value == null) {
+            return 0.0;
         }
-
-        List<SalesReportRowPojo> rows = new ArrayList<>(byBarcode.values());
-        rows.sort(Comparator.comparingDouble(SalesReportRowPojo::getTotalRevenue).reversed());
-        return rows;
+        return value;
     }
-
-    private SalesReportRowPojo createClientAccumulator(String clientEmail) {
-        SalesReportRowPojo row = new SalesReportRowPojo();
-        row.setClientEmail(clientEmail);
-        row.setProductBarcode(null);
-        row.setOrdersCount(0);
-        row.setItemsCount(0);
-        row.setTotalRevenue(0.0);
-        return row;
-    }
-
-    private SalesReportRowPojo createProductAccumulator(String clientEmail, String productBarcode) {
-        SalesReportRowPojo row = new SalesReportRowPojo();
-        row.setClientEmail(clientEmail);
-        row.setProductBarcode(productBarcode);
-        row.setOrdersCount(0);
-        row.setItemsCount(0);
-        row.setTotalRevenue(0.0);
-        return row;
-    }
-
-    private long nullSafeLong(Long v) { return v == null ? 0L : v; }
-    private double nullSafeDouble(Double v) { return v == null ? 0.0 : v; }
 }

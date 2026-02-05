@@ -11,7 +11,6 @@ import java.util.List;
 
 @Service
 public class SalesReportApiImpl implements SalesReportApi {
-
     @Autowired
     private SalesReportDao salesReportDao;
 

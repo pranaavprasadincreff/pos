@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/inventory")
 public class InventoryController {
-
     @Autowired
     private ProductDto productDto;
 
