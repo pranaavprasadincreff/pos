@@ -1,7 +1,6 @@
 package com.increff.pos.dao;
 
 import com.increff.pos.db.InventoryPojo;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -13,10 +12,10 @@ import java.util.List;
 
 @Repository
 public class InventoryDao extends AbstractDao<InventoryPojo> {
+
     public InventoryDao(MongoOperations mongoOperations) {
         super(
-                new MongoRepositoryFactory(mongoOperations)
-                        .getEntityInformation(InventoryPojo.class),
+                new MongoRepositoryFactory(mongoOperations).getEntityInformation(InventoryPojo.class),
                 mongoOperations
         );
     }
@@ -31,17 +30,15 @@ public class InventoryDao extends AbstractDao<InventoryPojo> {
                 Criteria.where("productId").is(productId)
                         .and("quantity").gte(quantity)
         );
+
         Update update = new Update().inc("quantity", -quantity);
-        InventoryPojo updated = mongoOperations.findAndModify(
-                query,
-                update,
-                InventoryPojo.class
-        );
+
+        InventoryPojo updated = mongoOperations.findAndModify(query, update, InventoryPojo.class);
         return updated != null;
     }
 
-    public List<InventoryPojo> findByProductIds(List<String> ids) {
-        Query q = Query.query(Criteria.where("productId").in(ids));
-        return mongoOperations.find(q, InventoryPojo.class);
+    public List<InventoryPojo> findByProductIds(List<String> productIds) {
+        Query query = Query.query(Criteria.where("productId").in(productIds));
+        return mongoOperations.find(query, InventoryPojo.class);
     }
 }

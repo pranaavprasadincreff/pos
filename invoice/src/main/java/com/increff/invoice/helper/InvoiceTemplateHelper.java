@@ -9,67 +9,34 @@ import java.time.format.DateTimeFormatter;
 
 public class InvoiceTemplateHelper {
 
-    private static final DecimalFormat df = new DecimalFormat("#0.00");
+    private static final DecimalFormat moneyFormat = new DecimalFormat("#0.00");
 
     public static String createInvoiceXslFo(InvoiceGenerateForm form) {
 
-        // -------- Items table rows ----------
         StringBuilder itemsTable = new StringBuilder();
-
-        int sno = 1;
-        double totalAmount = 0.0;
+        int serialNumber = 1;
+        double invoiceTotalAmount = 0.0;
 
         for (InvoiceItemForm item : form.getItems()) {
             double lineTotal = item.getQuantity() * item.getSellingPrice();
-            totalAmount += lineTotal;
+            invoiceTotalAmount += lineTotal;
 
             itemsTable.append("<fo:table-row>")
-                    .append(cell(String.valueOf(sno++), "center"))
+                    .append(cell(String.valueOf(serialNumber++), "center"))
                     .append(cell(escape(item.getBarcode()), "left"))
                     .append(cell(escape(item.getProductName()), "left"))
                     .append(cell(String.valueOf(item.getQuantity()), "right"))
-                    .append(cell(df.format(item.getSellingPrice()), "right"))
-                    .append(cell(df.format(lineTotal), "right"))
+                    .append(cell(moneyFormat.format(item.getSellingPrice()), "right"))
+                    .append(cell(moneyFormat.format(lineTotal), "right"))
                     .append("</fo:table-row>");
         }
 
-        // -------- Date format: "16:49, 26th March 2022" ----------
         ZonedDateTime now = ZonedDateTime.now();
+        String orderDate = formatInvoiceDate(now);
 
-        int day = now.getDayOfMonth();
-        String daySuffix;
-        if (day >= 11 && day <= 13) {
-            daySuffix = "th";
-        } else {
-            switch (day % 10) {
-                case 1:
-                    daySuffix = "st";
-                    break;
-                case 2:
-                    daySuffix = "nd";
-                    break;
-                case 3:
-                    daySuffix = "rd";
-                    break;
-                default:
-                    daySuffix = "th";
-            }
-        }
-
-        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
-        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("MMMM yyyy");
-
-        String orderDate =
-                timeFormatter.format(now) +
-                        ", " +
-                        day + daySuffix +
-                        " " +
-                        dateFormatter.format(now);
-
-        // This is order reference number
         String orderReferenceNumber = safe(form.getOrderReferenceId());
 
-        // -------- XSL-FO ----------
+        // -------- XSL-FO (UNCHANGED LAYOUT) ----------
         String xslFo =
                 "<?xml version='1.0' encoding='UTF-8'?>\n" +
                         "<fo:root xmlns:fo='http://www.w3.org/1999/XSL/Format'>\n" +
@@ -150,7 +117,7 @@ public class InvoiceTemplateHelper {
                         "                  <fo:table-column column-width='60%'/>\n" +
                         "                  <fo:table-column column-width='40%'/>\n" +
                         "                  <fo:table-body>\n" +
-                        totalsRowOnly("TOTAL", df.format(totalAmount)) +
+                        totalsRowOnly("TOTAL", moneyFormat.format(invoiceTotalAmount)) +
                         "                  </fo:table-body>\n" +
                         "                </fo:table>\n" +
                         "              </fo:table-cell>\n" +
@@ -166,7 +133,29 @@ public class InvoiceTemplateHelper {
         return xslFo;
     }
 
-    // ---------- Helpers ----------
+    private static String formatInvoiceDate(ZonedDateTime now) {
+        int day = now.getDayOfMonth();
+        String daySuffix = calculateDaySuffix(day);
+
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("MMMM yyyy");
+
+        return timeFormatter.format(now) + ", " + day + daySuffix + " " + dateFormatter.format(now);
+    }
+
+    private static String calculateDaySuffix(int day) {
+        if (day >= 11 && day <= 13) {
+            return "th";
+        }
+        return switch (day % 10) {
+            case 1 -> "st";
+            case 2 -> "nd";
+            case 3 -> "rd";
+            default -> "th";
+        };
+    }
+
+    // ---------- Helpers (unchanged markup) ----------
     private static String headerCell(String text, String align) {
         return "<fo:table-cell border='0.5pt solid #BDBDBD' padding='6pt'>" +
                 "<fo:block font-size='9pt' text-align='" + align + "'>" + escape(text) + "</fo:block>" +

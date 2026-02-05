@@ -75,7 +75,6 @@ public class ProductFlowTest extends AbstractUnitTest {
         createClient("c1@example.com", "client one");
         Pair<ProductPojo, InventoryPojo> pair = productFlow.addProduct(product("p1", "c1@example.com"));
 
-        // ✅ NEW: updateInventory takes InventoryUpdatePojo (barcode + quantity)
         InventoryUpdatePojo invUpdate = new InventoryUpdatePojo();
         invUpdate.setBarcode(pair.getLeft().getBarcode());
         invUpdate.setQuantity(1001);
@@ -121,9 +120,9 @@ public class ProductFlowTest extends AbstractUnitTest {
     }
 
     @Test
-    public void testBulkUpdateInventoryAppliesDeltaAndCap() throws ApiException {
+    public void testBulkUpdateInventoryAggregatesAndCapsAllRows() throws ApiException {
         createClient("c1@example.com", "client one");
-        Pair<ProductPojo, InventoryPojo> p = productFlow.addProduct(product("p1", "c1@example.com"));
+        Pair<ProductPojo, InventoryPojo> created = productFlow.addProduct(product("p1", "c1@example.com"));
 
         InventoryPojo inc900 = new InventoryPojo();
         inc900.setProductId("p1"); // barcode carrier
@@ -136,11 +135,35 @@ public class ProductFlowTest extends AbstractUnitTest {
         List<String[]> results = productFlow.bulkUpdateInventory(List.of(inc900, inc200));
         assertEquals(2, results.size());
 
-        assertEquals("SUCCESS", results.get(0)[1]);
+        assertEquals("ERROR", results.get(0)[1]);
         assertEquals("ERROR", results.get(1)[1]);
+        assertTrue(results.get(0)[2].toLowerCase().contains("cannot exceed"));
         assertTrue(results.get(1)[2].toLowerCase().contains("cannot exceed"));
 
-        InventoryPojo inv = inventoryApi.getByProductId(p.getLeft().getId());
-        assertEquals(900, inv.getQuantity().intValue());
+        InventoryPojo inv = inventoryApi.getByProductId(created.getLeft().getId());
+        assertEquals(0, inv.getQuantity().intValue());
+    }
+
+    @Test
+    public void testBulkUpdateInventorySuccessWhenWithinCap() throws ApiException {
+        createClient("c1@example.com", "client one");
+        Pair<ProductPojo, InventoryPojo> created = productFlow.addProduct(product("p1", "c1@example.com"));
+
+        InventoryPojo inc400 = new InventoryPojo();
+        inc400.setProductId("p1");
+        inc400.setQuantity(400);
+
+        InventoryPojo inc200 = new InventoryPojo();
+        inc200.setProductId("p1");
+        inc200.setQuantity(200);
+
+        List<String[]> results = productFlow.bulkUpdateInventory(List.of(inc400, inc200));
+        assertEquals(2, results.size());
+
+        assertEquals("SUCCESS", results.get(0)[1]);
+        assertEquals("SUCCESS", results.get(1)[1]);
+
+        InventoryPojo inv = inventoryApi.getByProductId(created.getLeft().getId());
+        assertEquals(600, inv.getQuantity().intValue());
     }
 }

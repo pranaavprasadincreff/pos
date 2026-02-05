@@ -52,7 +52,10 @@ public class ProductBulkUploadDtoJumbledTest extends AbstractUnitTest {
                 .thenAnswer(inv -> {
                     List<ProductPojo> pojos = inv.getArgument(0);
                     List<String[]> res = new ArrayList<>();
-                    for (ProductPojo p : pojos) res.add(new String[]{p.getBarcode(), "SUCCESS", ""});
+                    for (ProductPojo p : pojos) {
+                        if (p == null) res.add(new String[]{"", "ERROR", "Invalid row"});
+                        else res.add(new String[]{p.getBarcode(), "SUCCESS", ""});
+                    }
                     return res;
                 });
 
@@ -92,7 +95,10 @@ public class ProductBulkUploadDtoJumbledTest extends AbstractUnitTest {
                 .thenAnswer(inv -> {
                     List<InventoryPojo> pojos = inv.getArgument(0);
                     List<String[]> res = new ArrayList<>();
-                    for (InventoryPojo p : pojos) res.add(new String[]{p.getProductId(), "SUCCESS", ""});
+                    for (InventoryPojo p : pojos) {
+                        if (p == null) res.add(new String[]{"", "ERROR", "Invalid row"});
+                        else res.add(new String[]{p.getProductId(), "SUCCESS", ""});
+                    }
                     return res;
                 });
 

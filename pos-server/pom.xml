@@ -1,12 +1,17 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
     <modelVersion>4.0.0</modelVersion>
+
     <parent>
         <groupId>com.increff</groupId>
         <artifactId>POS</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
+
     <artifactId>pos-server</artifactId>
+
     <dependencies>
         <dependency>
             <groupId>com.increff</groupId>
@@ -14,6 +19,14 @@
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
+
+        <!-- MUST be normal jar dependency for reactor compile -->
+        <dependency>
+            <groupId>com.increff</groupId>
+            <artifactId>invoice</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-spring-boot3</artifactId>
@@ -26,14 +39,17 @@
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-retry</artifactId>
         </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
+
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
@@ -50,10 +66,6 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>0.11.5</version>
             <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
     </dependencies>
 </project>

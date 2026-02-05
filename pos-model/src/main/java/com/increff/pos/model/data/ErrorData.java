@@ -1,4 +1,4 @@
-package com.increff.invoice.modal.data;
+package com.increff.pos.model.data;
 
 public record ErrorData(String message) {}
 

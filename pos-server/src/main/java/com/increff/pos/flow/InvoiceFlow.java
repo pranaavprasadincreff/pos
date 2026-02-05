@@ -1,7 +1,7 @@
 package com.increff.pos.flow;
 
+import com.increff.pos.api.OrderApi;
 import com.increff.pos.api.ProductApi;
-import com.increff.pos.wrapper.InvoiceClientWrapper;
 import com.increff.pos.db.OrderItemPojo;
 import com.increff.pos.db.OrderPojo;
 import com.increff.pos.db.ProductPojo;
@@ -10,12 +10,12 @@ import com.increff.pos.model.data.InvoiceData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.InvoiceGenerateForm;
 import com.increff.pos.model.form.InvoiceItemForm;
+import com.increff.pos.wrapper.InvoiceClientWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -24,93 +24,122 @@ public class InvoiceFlow {
     @Autowired
     private InvoiceClientWrapper invoiceClientWrapper;
     @Autowired
-    private OrderFlow orderFlow;
+    private OrderApi orderApi;
     @Autowired
     private ProductApi productApi;
 
     public InvoiceData generateInvoice(String orderReferenceId) throws ApiException {
-        OrderPojo order = orderFlow.getByRef(orderReferenceId);
-        InvoiceData existing = tryReturnExistingInvoice(order);
-        if (existing != null) return existing;
-        validateInvoiceAllowed(order);
-        InvoiceGenerateForm form = buildInvoiceForm(order);
-        InvoiceData data = invoiceClientWrapper.generateInvoice(form);
-        orderFlow.markInvoiced(orderReferenceId);
-        return data;
+        OrderPojo order = orderApi.getByOrderReferenceId(orderReferenceId);
+        InvoiceData existingInvoice = fetchInvoiceForInvoicedOrder(order);
+        if (existingInvoice != null) {
+            return existingInvoice;
+        }
+        validateOrderEligibleForInvoicing(order);
+        InvoiceGenerateForm invoiceRequest = buildInvoiceRequest(order);
+        InvoiceData generatedInvoice = invoiceClientWrapper.generateInvoice(invoiceRequest);
+        markOrderInvoiced(order);
+        return generatedInvoice;
     }
 
     public InvoiceData getInvoice(String orderReferenceId) throws ApiException {
         return invoiceClientWrapper.getInvoice(orderReferenceId);
     }
 
-    private InvoiceData tryReturnExistingInvoice(OrderPojo order) throws ApiException {
-        if (!isInvoiced(order)) return null;
+    private InvoiceData fetchInvoiceForInvoicedOrder(OrderPojo order) throws ApiException {
+        if (!isOrderInvoiced(order)) {
+            return null;
+        }
         return invoiceClientWrapper.getInvoice(order.getOrderReferenceId());
     }
 
-    private void validateInvoiceAllowed(OrderPojo order) throws ApiException {
-        if (!isFulfillable(order)) {
+    private void validateOrderEligibleForInvoicing(OrderPojo order) throws ApiException {
+        if (order == null) {
+            throw new ApiException("Order not found");
+        }
+        if (!isOrderFulfillable(order)) {
             throw new ApiException("Only fulfillable orders can be invoiced");
         }
     }
 
-    private InvoiceGenerateForm buildInvoiceForm(OrderPojo order) throws ApiException {
-        Map<String, ProductPojo> productByBarcode = loadProducts(order);
-        List<InvoiceItemForm> items = order.getOrderItems()
+    private InvoiceGenerateForm buildInvoiceRequest(OrderPojo order) throws ApiException {
+        Map<String, ProductPojo> productByBarcode = loadProductsByBarcode(order);
+        List<InvoiceItemForm> invoiceItems = order.getOrderItems()
                 .stream()
-                .map(i -> toInvoiceItem(i, productByBarcode))
+                .map(orderItem -> buildInvoiceItem(orderItem, productByBarcode))
                 .toList();
 
-        InvoiceGenerateForm form = new InvoiceGenerateForm();
-        form.setOrderReferenceId(order.getOrderReferenceId());
-        form.setItems(items);
-        return form;
+        InvoiceGenerateForm invoiceRequest = new InvoiceGenerateForm();
+        invoiceRequest.setOrderReferenceId(order.getOrderReferenceId());
+        invoiceRequest.setItems(invoiceItems);
+        return invoiceRequest;
     }
 
-    private Map<String, ProductPojo> loadProducts(OrderPojo order) throws ApiException {
-        List<String> barcodes = order.getOrderItems()
+    private Map<String, ProductPojo> loadProductsByBarcode(OrderPojo order) throws ApiException {
+        List<String> orderedBarcodes = getDistinctOrderedBarcodes(order);
+        List<ProductPojo> products = productApi.findByBarcodes(orderedBarcodes);
+        Map<String, ProductPojo> productByBarcode = products.stream()
+                .collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
+
+        validateAllProductsPresent(orderedBarcodes, productByBarcode);
+        return productByBarcode;
+    }
+
+    private List<String> getDistinctOrderedBarcodes(OrderPojo order) {
+        if (order == null || order.getOrderItems() == null) {
+            return List.of();
+        }
+        return order.getOrderItems()
                 .stream()
                 .map(OrderItemPojo::getProductBarcode)
+                .filter(StringUtils::hasText)
                 .distinct()
                 .toList();
-
-        Map<String, ProductPojo> map = productApi.findByBarcodes(barcodes)
-                .stream()
-                .collect(Collectors.toMap(ProductPojo::getBarcode, Function.identity()));
-        validateAllProductsFound(barcodes, map);
-        return map;
     }
 
-    private void validateAllProductsFound(List<String> barcodes, Map<String, ProductPojo> map)
-            throws ApiException {
-        Set<String> missing = barcodes.stream()
-                .filter(b -> !map.containsKey(b))
-                .collect(Collectors.toSet());
+    private void validateAllProductsPresent(List<String> orderedBarcodes, Map<String, ProductPojo> productByBarcode) throws ApiException {
+        Set<String> missingBarcodes = new LinkedHashSet<>();
+        for (String barcode : orderedBarcodes) {
+            if (!productByBarcode.containsKey(barcode)) {
+                missingBarcodes.add(barcode);
+            }
+        }
 
-        if (!missing.isEmpty()) {
-            throw new ApiException("Missing product data for barcodes: " + String.join(", ", missing));
+        if (!missingBarcodes.isEmpty()) {
+            throw new ApiException("Missing product data for barcodes: " + String.join(", ", missingBarcodes));
         }
     }
 
-    private InvoiceItemForm toInvoiceItem(
-            com.increff.pos.db.OrderItemPojo item,
-            Map<String, ProductPojo> productByBarcode
-    ) {
-        ProductPojo p = productByBarcode.get(item.getProductBarcode());
+    private InvoiceItemForm buildInvoiceItem(OrderItemPojo orderItem, Map<String, ProductPojo> productByBarcode) {
+        ProductPojo product = productByBarcode.get(orderItem.getProductBarcode());
 
-        InvoiceItemForm f = new InvoiceItemForm();
-        f.setBarcode(p.getBarcode());
-        f.setProductName(p.getName());
-        f.setQuantity(item.getOrderedQuantity());
-        f.setSellingPrice(item.getSellingPrice());
-        return f;
+        InvoiceItemForm invoiceItem = new InvoiceItemForm();
+        invoiceItem.setBarcode(product.getBarcode());
+        invoiceItem.setProductName(product.getName());
+        invoiceItem.setQuantity(orderItem.getOrderedQuantity());
+        invoiceItem.setSellingPrice(orderItem.getSellingPrice());
+        return invoiceItem;
     }
 
-    private boolean isInvoiced(OrderPojo order) {
-        return OrderStatus.INVOICED.name().equals(order.getStatus());
+    private void markOrderInvoiced(OrderPojo order) throws ApiException {
+        validateInvoicingAllowed(order);
+        order.setStatus(OrderStatus.INVOICED.name());
+        orderApi.updateOrder(order);
     }
 
-    private boolean isFulfillable(OrderPojo order) {
-        return OrderStatus.FULFILLABLE.name().equals(order.getStatus());
+    private void validateInvoicingAllowed(OrderPojo order) throws ApiException {
+        if (isOrderInvoiced(order)) {
+            throw new ApiException("Order already invoiced");
+        }
+        if (!isOrderFulfillable(order)) {
+            throw new ApiException("Only fulfillable orders can be invoiced");
+        }
+    }
+
+    private boolean isOrderInvoiced(OrderPojo order) {
+        return order != null && OrderStatus.INVOICED.name().equals(order.getStatus());
+    }
+
+    private boolean isOrderFulfillable(OrderPojo order) {
+        return order != null && OrderStatus.FULFILLABLE.name().equals(order.getStatus());
     }
 }

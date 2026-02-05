@@ -1,9 +1,11 @@
 package com.increff.pos.db;
 
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.data.mongodb.core.index.Indexed;
 
-@Data
+@Getter
+@Setter
 public class OrderItemPojo extends AbstractPojo{
     @Indexed
     private String productBarcode;

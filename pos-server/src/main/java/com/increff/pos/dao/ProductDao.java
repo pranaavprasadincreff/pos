@@ -36,40 +36,53 @@ public class ProductDao extends AbstractDao<ProductPojo> {
         if (barcodes == null || barcodes.isEmpty()) {
             return List.of();
         }
+
         Query query = Query.query(Criteria.where("barcode").in(barcodes));
         return mongoOperations.find(query, ProductPojo.class);
     }
 
-    public Page<ProductPojo> filter(ProductFilterForm form, List<String> clientEmails) {
-        List<Criteria> criteriaList = new ArrayList<>();
-
-        if (StringUtils.hasText(form.getBarcode())) {
-            criteriaList.add(regexContainsIgnoreCase("barcode", form.getBarcode()));
-        }
-        if (StringUtils.hasText(form.getName())) {
-            criteriaList.add(regexContainsIgnoreCase("name", form.getName()));
-        }
-        if (clientEmails != null && !clientEmails.isEmpty()) {
-            criteriaList.add(Criteria.where("clientEmail").in(clientEmails));
-        }
-
-        Query query = new Query();
-        if (!criteriaList.isEmpty()) {
-            query.addCriteria(new Criteria().andOperator(criteriaList));
-        }
-
-        Pageable pageable = PageRequest.of(
-                form.getPage(),
-                form.getSize(),
-                Sort.by(Sort.Direction.DESC, "createdAt")
-        );
-
+    public Page<ProductPojo> filter(ProductFilterForm filterForm, List<String> clientEmails) {
+        Query query = buildFilterQuery(filterForm, clientEmails);
+        Pageable pageable = buildPageRequest(filterForm);
         return pageableQuery(query, pageable);
     }
 
-    private Criteria regexContainsIgnoreCase(String fieldName, String rawValue) {
-        String safe = Pattern.quote(rawValue.trim());
-        Pattern pattern = Pattern.compile(".*" + safe + ".*", Pattern.CASE_INSENSITIVE);
+    // -------------------- private helpers --------------------
+
+    private Query buildFilterQuery(ProductFilterForm filterForm, List<String> clientEmails) {
+        List<Criteria> criteria = new ArrayList<>();
+
+        if (StringUtils.hasText(filterForm.getBarcode())) {
+            criteria.add(buildContainsIgnoreCaseCriteria("barcode", filterForm.getBarcode()));
+        }
+
+        if (StringUtils.hasText(filterForm.getName())) {
+            criteria.add(buildContainsIgnoreCaseCriteria("name", filterForm.getName()));
+        }
+
+        if (clientEmails != null && !clientEmails.isEmpty()) {
+            criteria.add(Criteria.where("clientEmail").in(clientEmails));
+        }
+
+        Query query = new Query();
+        if (!criteria.isEmpty()) {
+            query.addCriteria(new Criteria().andOperator(criteria));
+        }
+
+        return query;
+    }
+
+    private Pageable buildPageRequest(ProductFilterForm filterForm) {
+        return PageRequest.of(
+                filterForm.getPage(),
+                filterForm.getSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+    }
+
+    private Criteria buildContainsIgnoreCaseCriteria(String fieldName, String rawValue) {
+        String safeValue = Pattern.quote(rawValue.trim());
+        Pattern pattern = Pattern.compile(".*" + safeValue + ".*", Pattern.CASE_INSENSITIVE);
         return Criteria.where(fieldName).regex(pattern);
     }
 }

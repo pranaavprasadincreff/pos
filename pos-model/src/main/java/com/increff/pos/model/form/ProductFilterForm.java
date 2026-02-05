@@ -17,7 +17,6 @@ public class ProductFilterForm {
     @Size(max = 30, message = "Name filter too long")
     private String name;
 
-    // this is "client" filter text, not necessarily email
     @Size(max = 40, message = "Client filter too long")
     private String client;
 

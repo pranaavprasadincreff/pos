@@ -10,43 +10,36 @@ import org.springframework.web.client.RestTemplate;
 
 @Component
 public class InvoiceClient {
-
     private final RestTemplate restTemplate;
 
-    @Value("${invoice.self.url}")
-    private String selfUrl;
+    @Value("${invoice.self.url}") // keep your current property name
+    private String invoiceServiceBaseUrl;
 
     public InvoiceClient(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
     }
 
-    public InvoiceData generateInvoice(InvoiceGenerateForm form)
-            throws ApiException {
+    public InvoiceData generateInvoice(InvoiceGenerateForm invoiceRequest) throws ApiException {
+        String url = invoiceServiceBaseUrl + "/api/invoices/generate";
+
         try {
-            return restTemplate.postForObject(
-                    selfUrl + "/api/invoices/generate",
-                    form,
-                    InvoiceData.class
-            );
+            return restTemplate.postForObject(url, invoiceRequest, InvoiceData.class);
         } catch (HttpStatusCodeException e) {
             throw new ApiException(e.getResponseBodyAsString());
         } catch (Exception e) {
-            throw new ApiException("Invoice generation failed");
+            throw new ApiException("Invoice generation failed: " + e.getMessage());
         }
     }
 
-    public InvoiceData getInvoice(String orderReferenceId)
-            throws ApiException {
+    public InvoiceData getInvoice(String orderReferenceId) throws ApiException {
+        String url = invoiceServiceBaseUrl + "/api/invoices/get/{orderReferenceId}";
+
         try {
-            return restTemplate.getForObject(
-                    selfUrl + "/api/invoices/get/{id}",
-                    InvoiceData.class,
-                    orderReferenceId
-            );
+            return restTemplate.getForObject(url, InvoiceData.class, orderReferenceId);
         } catch (HttpStatusCodeException e) {
             throw new ApiException(e.getResponseBodyAsString());
         } catch (Exception e) {
-            throw new ApiException("Invoice fetch failed");
+            throw new ApiException("Invoice fetch failed: " + e.getMessage());
         }
     }
 }

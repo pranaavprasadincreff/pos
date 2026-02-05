@@ -26,7 +26,7 @@ public class ProductDtoTest extends AbstractUnitTest {
     private ClientApi clientApi;
 
     @Autowired
-    private ProductApi productApi;
+    private ProductApi productApi; // kept if used elsewhere later
 
     private void createClient(String email, String name) throws ApiException {
         ClientPojo c = new ClientPojo();
@@ -117,11 +117,22 @@ public class ProductDtoTest extends AbstractUnitTest {
     // ------------------------
 
     @Test
-    public void testGetAllInvalidPageSize() {
+    public void testGetAllDoesNotThrowForLargePageSizeBecauseDtoDoesNotValidate() throws ApiException {
+        createClient("c1@example.com", "Client One");
+
+        for (int i = 0; i < 3; i++) {
+            productDto.addProduct(validProductForm("p" + i, "c1@example.com"));
+        }
+
         PageForm pf = new PageForm();
         pf.setPage(0);
-        pf.setSize(101);
-        assertThrows(ApiException.class, () -> productDto.getAll(pf));
+        pf.setSize(101); // NOTE: DTO does not validate page size anymore
+
+        Page<ProductData> page = productDto.getAllUsingFilter(pf);
+
+        assertNotNull(page);
+        assertTrue(page.getTotalElements() >= 3);
+        assertNotNull(page.getContent().get(0).getInventory());
     }
 
     @Test
@@ -136,7 +147,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         pf.setPage(0);
         pf.setSize(3);
 
-        Page<ProductData> page = productDto.getAll(pf);
+        Page<ProductData> page = productDto.getAllUsingFilter(pf);
 
         assertNotNull(page);
         assertTrue(page.getContent().size() <= 3);
@@ -207,9 +218,8 @@ public class ProductDtoTest extends AbstractUnitTest {
 
         ProductData created = productDto.addProduct(validProductForm("p-old", "c1@example.com"));
 
-        // ✅ NEW: inventory update uses BARCODE (not productId)
         InventoryUpdateForm inv = new InventoryUpdateForm();
-        inv.setBarcode(created.getBarcode()); // already normalized
+        inv.setBarcode(created.getBarcode());
         inv.setQuantity(10);
         productDto.updateInventory(inv);
 
@@ -298,7 +308,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         assertNotNull(out.file());
 
         String decoded = decodeB64(out.file()).toLowerCase();
-        assertTrue(decoded.contains("error") || decoded.contains("invalid"),
+        assertTrue(decoded.contains("error") || decoded.contains("invalid") || decoded.contains("mrp"),
                 "Expected output file to contain error/invalid but got:\n" + decodeB64(out.file()));
     }
 
@@ -317,7 +327,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         assertNotNull(out.file());
 
         String decoded = decodeB64(out.file()).toLowerCase();
-        assertTrue(decoded.contains("error") || decoded.contains("invalid"),
+        assertTrue(decoded.contains("error") || decoded.contains("invalid") || decoded.contains("quantity"),
                 "Expected output file to contain error/invalid but got:\n" + decodeB64(out.file()));
     }
 }

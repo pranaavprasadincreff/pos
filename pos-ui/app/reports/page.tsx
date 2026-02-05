@@ -22,25 +22,37 @@ import Pagination from "@/components/shared/Pagination"
 
 type Mode = "daily" | "range"
 
-const CLIENT_EMAIL_MAX = 120
+const CLIENT_EMAIL_MAX = 40
 const EMAIL_RE = /^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$/
 
 const PAGE_SIZE = 9
 const PAGINATION_LIFT_PX = 64
 const EXPAND_CONCURRENCY = 4
+const MAX_RANGE_DAYS = 92
+const IST_TZ = "Asia/Kolkata"
 
-function todayISO() {
-    const d = new Date()
+function startOfTodayIST(): Date {
+    const now = new Date()
+    const ist = new Date(now.toLocaleString("en-US", { timeZone: IST_TZ }))
+    ist.setHours(0, 0, 0, 0)
+    return ist
+}
+
+function isoDateInIST(offsetDays = 0): string {
+    const d = startOfTodayIST()
+    d.setDate(d.getDate() + offsetDays)
     const yyyy = d.getFullYear()
     const mm = String(d.getMonth() + 1).padStart(2, "0")
     const dd = String(d.getDate()).padStart(2, "0")
     return `${yyyy}-${mm}-${dd}`
 }
 
-function startOfTodayLocal() {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    return d
+function todayISO_IST() {
+    return isoDateInIST(0)
+}
+
+function yesterdayISO_IST() {
+    return isoDateInIST(-1)
 }
 
 function isoToDate(iso?: string) {
@@ -128,15 +140,15 @@ function mergeProductRows(rows: SalesReportRowData[]) {
 export default function ReportsPage() {
     const [mode, setMode] = useState<Mode>("daily")
 
-    const [dailyDate, setDailyDate] = useState<string>(() => todayISO())
-    const [startDate, setStartDate] = useState<string>(() => todayISO())
-    const [endDate, setEndDate] = useState<string>(() => todayISO())
+    // ✅ Daily defaults to yesterday (IST). Daily is a completed-day snapshot.
+    const [dailyDate, setDailyDate] = useState<string>(() => yesterdayISO_IST())
+    const [startDate, setStartDate] = useState<string>(() => todayISO_IST())
+    const [endDate, setEndDate] = useState<string>(() => todayISO_IST())
 
     const [openDaily, setOpenDaily] = useState(false)
     const [openFrom, setOpenFrom] = useState(false)
     const [openTo, setOpenTo] = useState(false)
 
-    // ✅ EXACT ClientsPage-style search
     const [clientEmail, setClientEmail] = useState<string>("")
     const [searchError, setSearchError] = useState<string | null>(null)
     const debouncedClientEmail = useDebouncedValue(clientEmail, 500)
@@ -163,7 +175,8 @@ export default function ReportsPage() {
         return isExactClientEmailImmediate ? "PRODUCT" : "CLIENT"
     }, [isExactClientEmailImmediate])
 
-    const today = useMemo(() => startOfTodayLocal(), [])
+    const todayISTDate = useMemo(() => startOfTodayIST(), [])
+    const todayISO = useMemo(() => todayISO_IST(), [])
 
     const [loading, setLoading] = useState(false)
     const [report, setReport] = useState<SalesReportResponseData | null>(null)
@@ -177,27 +190,25 @@ export default function ReportsPage() {
     const [headerH, setHeaderH] = useState(0)
     const [paginationH, setPaginationH] = useState(56)
 
-    // ✅ validate filters WITHOUT tying to keystrokes (debounced + dates only)
     const validateInputs = useCallback((): string | null => {
         if (searchError) return searchError
 
-        const t = todayISO()
-
         if (mode === "daily") {
             if (!dailyDate) return "Date is required"
-            if (dailyDate > t) return "Daily report date cannot be in the future"
+            // ✅ block today (daily is completed-day snapshot)
+            if (dailyDate >= todayISO) return "Daily report date must be before today (IST)"
             return null
         }
 
         if (!startDate || !endDate) return "Start and end date are required"
         if (startDate > endDate) return "Start date cannot be after end date"
-        if (startDate > t) return "Start date cannot be in the future"
-        if (endDate > t) return "End date cannot be in the future"
+        if (startDate > todayISO) return "Start date cannot be in the future"
+        if (endDate > todayISO) return "End date cannot be in the future"
 
         const days = isoDaysBetweenInclusive(startDate, endDate)
-        if (days > 92) return "Date range too large (max 92 days)"
+        if (days > MAX_RANGE_DAYS) return `Date range too large (max ${MAX_RANGE_DAYS} days)`
         return null
-    }, [searchError, mode, dailyDate, startDate, endDate])
+    }, [searchError, mode, dailyDate, startDate, endDate, todayISO])
 
     const fetchReport = useCallback(async () => {
         const err = validateInputs()
@@ -206,7 +217,6 @@ export default function ReportsPage() {
             return
         }
 
-        // ✅ backend ONLY receives DEBOUNCED email if it's an exact email
         const backendClientEmail = isExactClientEmail ? clientInput : undefined
 
         try {
@@ -215,7 +225,7 @@ export default function ReportsPage() {
             const res =
                 mode === "daily"
                     ? await getDailySalesReport({
-                        startDate: dailyDate,
+                        date: dailyDate,
                         clientEmail: backendClientEmail,
                     })
                     : await getRangeSalesReport({
@@ -231,7 +241,6 @@ export default function ReportsPage() {
         }
     }, [validateInputs, mode, dailyDate, startDate, endDate, clientInput, isExactClientEmail])
 
-    // ✅ This will now only run after 500ms pause (because it depends on clientInput)
     useEffect(() => {
         fetchReport()
     }, [fetchReport])
@@ -270,7 +279,7 @@ export default function ReportsPage() {
             if (!email) return []
 
             if (mode === "daily") {
-                const res = await getDailySalesReport({ startDate: dailyDate, clientEmail: email })
+                const res = await getDailySalesReport({ date: dailyDate, clientEmail: email })
                 return res.rows || []
             }
 
@@ -282,7 +291,7 @@ export default function ReportsPage() {
             const workers = Array.from({ length: EXPAND_CONCURRENCY }).map(async () => {
                 while (idx < days.length) {
                     const d = days[idx++]
-                    const res = await getDailySalesReport({ startDate: d, clientEmail: email })
+                    const res = await getDailySalesReport({ date: d, clientEmail: email })
                     if (res.rows?.length) collected.push(...res.rows)
                 }
             })
@@ -295,16 +304,24 @@ export default function ReportsPage() {
 
     function switchMode(next: Mode) {
         if (next === mode) return
+
+        if (next === "daily") {
+            // if switching into daily, never allow today; snap to yesterday
+            if (!dailyDate || dailyDate >= todayISO) {
+                setDailyDate(yesterdayISO_IST())
+            }
+        }
+
         setMode(next)
         setReport(null)
         setPage(0)
     }
 
     function clearFilters() {
-        const t = todayISO()
+        const t = todayISO_IST()
         setClientEmail("")
         setSearchError(null)
-        setDailyDate(t)
+        setDailyDate(yesterdayISO_IST())
         setStartDate(t)
         setEndDate(t)
         setPage(0)
@@ -344,7 +361,6 @@ export default function ReportsPage() {
         const viewMode = mode
         const d1 = mode === "daily" ? dailyDate : startDate
         const d2 = mode === "daily" ? dailyDate : endDate
-        // include debounced exact email (because backend drill-down depends on it)
         const email = isExactClientEmail ? clientInput : ""
         const rowType = report?.rowType ?? effectiveRowType
         return `${viewMode}|${d1}|${d2}|${email}|${rowType}`
@@ -401,7 +417,7 @@ export default function ReportsPage() {
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm text-muted-foreground">Date</span>
 
-                                    <Hint text="Select a day (IST). Auto-refreshes on change.">
+                                    <Hint text="Select a completed day (IST). Today is not available. Auto-refreshes on change.">
                                         <Popover open={openDaily} onOpenChange={setOpenDaily}>
                                             <PopoverTrigger asChild>
                                                 <Button
@@ -419,16 +435,16 @@ export default function ReportsPage() {
                                                 <Calendar
                                                     mode="single"
                                                     selected={dailySelected}
-                                                    disabled={{ after: today }}
+                                                    // ✅ disable today + future (IST)
+                                                    disabled={(d) => d >= todayISTDate}
                                                     captionLayout="dropdown"
                                                     fromYear={2000}
-                                                    toYear={today.getFullYear()}
+                                                    toYear={todayISTDate.getFullYear()}
                                                     onSelect={(d) => {
                                                         if (!d) return
                                                         const iso = dateToISO(d)
-                                                        const t = todayISO()
-                                                        if (iso > t) {
-                                                            toast.error("Daily report date cannot be in the future")
+                                                        if (iso >= todayISO) {
+                                                            toast.error("Daily report date must be before today (IST)")
                                                             return
                                                         }
                                                         setDailyDate(iso)
@@ -462,15 +478,14 @@ export default function ReportsPage() {
                                                 <Calendar
                                                     mode="single"
                                                     selected={fromSelected}
-                                                    disabled={{ after: today }}
+                                                    disabled={{ after: todayISTDate }}
                                                     captionLayout="dropdown"
                                                     fromYear={2000}
-                                                    toYear={today.getFullYear()}
+                                                    toYear={todayISTDate.getFullYear()}
                                                     onSelect={(d) => {
                                                         if (!d) return
                                                         const iso = dateToISO(d)
-                                                        const t = todayISO()
-                                                        if (iso > t) {
+                                                        if (iso > todayISO) {
                                                             toast.error("Start date cannot be in the future")
                                                             return
                                                         }
@@ -506,15 +521,14 @@ export default function ReportsPage() {
                                                 <Calendar
                                                     mode="single"
                                                     selected={toSelected}
-                                                    disabled={{ after: today }}
+                                                    disabled={{ after: todayISTDate }}
                                                     captionLayout="dropdown"
                                                     fromYear={2000}
-                                                    toYear={today.getFullYear()}
+                                                    toYear={todayISTDate.getFullYear()}
                                                     onSelect={(d) => {
                                                         if (!d) return
                                                         const iso = dateToISO(d)
-                                                        const t = todayISO()
-                                                        if (iso > t) {
+                                                        if (iso > todayISO) {
                                                             toast.error("End date cannot be in the future")
                                                             return
                                                         }
@@ -529,7 +543,6 @@ export default function ReportsPage() {
                                 </div>
                             )}
 
-                            {/* ✅ Not disabled while loading, AND debounce triggers API calls */}
                             <Input
                                 className="w-72 transition focus-visible:ring-2 focus-visible:ring-indigo-500"
                                 placeholder="Filter by Client Email"
@@ -540,7 +553,6 @@ export default function ReportsPage() {
                                     setClientEmail(v)
                                     setPage(0)
 
-                                    // ✅ immediate validation (like ClientsPage)
                                     if (v.trim().length > CLIENT_EMAIL_MAX) {
                                         setSearchError(`clientEmail cannot exceed ${CLIENT_EMAIL_MAX} characters`)
                                     } else {

@@ -27,8 +27,6 @@ public class ProductApiTest extends AbstractUnitTest {
     @Test
     public void testAddDuplicateBarcodeShouldFail() throws ApiException {
         productApi.addProduct(product("dup"));
-        // barcode uniqueness effectively should behave case-insensitively after normalization in stack,
-        // but api itself may not normalize; still, same exact string must fail.
         assertThrows(ApiException.class, () -> productApi.addProduct(product("dup")));
     }
 

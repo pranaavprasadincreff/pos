@@ -54,7 +54,7 @@ public class SalesReportDao {
         if (reportDate == null) {
             return List.of();
         }
-        DayToDaySalesReportPojo reportDocument = fetchOrCreateDailyReportDocument(reportDate);
+        DayToDaySalesReportPojo reportDocument = fetchDailyReportDocument(reportDate);
         return mapDailyDocumentToRows(reportDocument, clientEmail, rowType);
     }
 
@@ -82,18 +82,6 @@ public class SalesReportDao {
     }
 
     // -------------------- Fetch / Create strategy --------------------
-
-    private DayToDaySalesReportPojo fetchOrCreateDailyReportDocument(LocalDate reportDate) {
-        DayToDaySalesReportPojo existingDocument = fetchDailyReportDocument(reportDate);
-        if (existingDocument != null) {
-            return existingDocument;
-        }
-
-        DayToDaySalesReportPojo generatedDocument = buildDailyReportDocumentFromOrders(reportDate);
-        saveDailyReportDocument(generatedDocument);
-
-        return generatedDocument;
-    }
 
     private DayToDaySalesReportPojo fetchDailyReportDocument(LocalDate reportDate) {
         Query query = Query.query(Criteria.where("_id").is(getDailyDocumentId(reportDate)));

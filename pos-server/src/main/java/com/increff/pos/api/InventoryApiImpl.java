@@ -11,100 +11,138 @@ import java.util.List;
 
 @Service
 public class InventoryApiImpl implements InventoryApi {
+
     private static final int INVENTORY_MAX = 1000;
 
     @Autowired
-    private InventoryDao dao;
+    private InventoryDao inventoryDao;
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public void createInventoryIfAbsent(String productId) {
-        if (dao.findByProductId(productId) != null) return;
+        InventoryPojo existingInventory = inventoryDao.findByProductId(productId);
+        if (existingInventory != null) {
+            return;
+        }
 
-        InventoryPojo inv = new InventoryPojo();
-        inv.setProductId(productId);
-        inv.setQuantity(0);
-        dao.save(inv);
+        InventoryPojo inventoryToCreate = new InventoryPojo();
+        inventoryToCreate.setProductId(productId);
+        inventoryToCreate.setQuantity(0);
+        inventoryDao.save(inventoryToCreate);
     }
 
     @Override
     public InventoryPojo getByProductId(String productId) throws ApiException {
-        InventoryPojo inv = dao.findByProductId(productId);
-        if (inv == null) {
-            throw new ApiException("Inventory not found for productId: " + productId);
-        }
-        return inv;
+        return loadInventoryByProductId(productId);
     }
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public InventoryPojo updateInventory(InventoryPojo input) throws ApiException {
-        validateUpdateInput(input);
+    public InventoryPojo updateInventory(InventoryPojo inventoryUpdate) throws ApiException {
+        validateInventoryUpdate(inventoryUpdate);
 
-        InventoryPojo existing = getByProductId(input.getProductId());
-        existing.setQuantity(input.getQuantity());
+        InventoryPojo existingInventory = loadInventoryByProductId(inventoryUpdate.getProductId());
+        existingInventory.setQuantity(inventoryUpdate.getQuantity());
 
-        return dao.save(existing);
+        return inventoryDao.save(existingInventory);
     }
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public void incrementInventory(String productId, int delta) throws ApiException {
-        if (delta < 0) throw new ApiException("Delta cannot be negative");
+        validateNonNegativeDelta(delta);
 
-        InventoryPojo inv = getByProductId(productId);
-        int current = inv.getQuantity() == null ? 0 : inv.getQuantity();
-        int next = current + delta;
+        InventoryPojo existingInventory = loadInventoryByProductId(productId);
+        int nextQuantity = calculateNextQuantity(existingInventory.getQuantity(), delta);
 
-        if (next > INVENTORY_MAX) {
-            throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
-        }
-
-        inv.setQuantity(next);
-        dao.save(inv);
+        existingInventory.setQuantity(nextQuantity);
+        inventoryDao.save(existingInventory);
     }
 
     @Override
     public void deductInventory(String productId, int quantity) throws ApiException {
-        boolean success = dao.deductInventoryAtomically(productId, quantity);
-        if (!success) {
+        boolean updated = inventoryDao.deductInventoryAtomically(productId, quantity);
+        if (!updated) {
             throw new ApiException("Insufficient inventory");
         }
     }
 
     @Override
     public List<InventoryPojo> getByProductIds(List<String> ids) {
-        if (ids == null || ids.isEmpty()) return List.of();
-        return dao.findByProductIds(ids);
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        return inventoryDao.findByProductIds(ids);
     }
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public List<InventoryPojo> saveAll(List<InventoryPojo> list) {
-        if (list == null || list.isEmpty()) return List.of();
-        for (InventoryPojo p : list) {
-            if (p == null || p.getProductId() == null) {
-                throw new RuntimeException("Invalid inventory input");
-            }
-            if (p.getQuantity() == null || p.getQuantity() < 0) {
-                throw new RuntimeException("Inventory cannot be negative");
-            }
-            if (p.getQuantity() > INVENTORY_MAX) {
-                throw new RuntimeException("Inventory cannot exceed " + INVENTORY_MAX);
-            }
+    public List<InventoryPojo> saveAll(List<InventoryPojo> inventoriesToSave) {
+        if (inventoriesToSave == null || inventoriesToSave.isEmpty()) {
+            return List.of();
         }
-        return dao.saveAll(list);
+
+        for (InventoryPojo inventory : inventoriesToSave) {
+            validateInventoryForBulkSave(inventory);
+        }
+
+        return inventoryDao.saveAll(inventoriesToSave);
     }
 
-    private void validateUpdateInput(InventoryPojo input) throws ApiException {
-        if (input == null || input.getProductId() == null) {
+    // -------------------- private helpers --------------------
+
+    private InventoryPojo loadInventoryByProductId(String productId) throws ApiException {
+        InventoryPojo inventory = inventoryDao.findByProductId(productId);
+        if (inventory == null) {
+            throw new ApiException("Inventory not found for productId: " + productId);
+        }
+        return inventory;
+    }
+
+    private void validateNonNegativeDelta(int delta) throws ApiException {
+        if (delta < 0) {
+            throw new ApiException("Delta cannot be negative");
+        }
+    }
+
+    private int calculateNextQuantity(Integer currentQuantity, int delta) throws ApiException {
+        int current = currentQuantity == null ? 0 : currentQuantity;
+        int next = current + delta;
+
+        if (next > INVENTORY_MAX) {
+            throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
+        }
+
+        return next;
+    }
+
+    private void validateInventoryUpdate(InventoryPojo inventoryUpdate) throws ApiException {
+        if (inventoryUpdate == null || inventoryUpdate.getProductId() == null) {
             throw new ApiException("Invalid inventory input");
         }
-        if (input.getQuantity() == null || input.getQuantity() < 0) {
+
+        Integer quantity = inventoryUpdate.getQuantity();
+        if (quantity == null || quantity < 0) {
             throw new ApiException("Inventory cannot be negative");
         }
-        if (input.getQuantity() > INVENTORY_MAX) {
+
+        if (quantity > INVENTORY_MAX) {
             throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
+        }
+    }
+
+    private void validateInventoryForBulkSave(InventoryPojo inventory) {
+        if (inventory == null || inventory.getProductId() == null) {
+            throw new RuntimeException("Invalid inventory input");
+        }
+
+        Integer quantity = inventory.getQuantity();
+        if (quantity == null || quantity < 0) {
+            throw new RuntimeException("Inventory cannot be negative");
+        }
+
+        if (quantity > INVENTORY_MAX) {
+            throw new RuntimeException("Inventory cannot exceed " + INVENTORY_MAX);
         }
     }
 }

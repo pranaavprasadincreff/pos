@@ -12,6 +12,9 @@ import com.increff.pos.model.form.ProductUpdateForm;
 
 public class ProductHelper {
 
+    private ProductHelper() {
+    }
+
     public static ProductPojo convertProductFormToEntity(ProductForm productCreateForm) {
         ProductPojo productToCreate = new ProductPojo();
         productToCreate.setBarcode(productCreateForm.getBarcode());
@@ -49,6 +52,23 @@ public class ProductHelper {
         productData.setImageUrl(product.getImageUrl());
         productData.setInventory(inventory == null ? null : inventory.getQuantity());
         return productData;
+    }
+
+    public static ProductPojo createProductPojo(String barcode, String clientEmail, String name, Double mrp, String imageUrl) {
+        ProductPojo productPojo = new ProductPojo();
+        productPojo.setBarcode(barcode);
+        productPojo.setClientEmail(clientEmail);
+        productPojo.setName(name);
+        productPojo.setMrp(mrp);
+        productPojo.setImageUrl(imageUrl);
+        return productPojo;
+    }
+
+    public static InventoryPojo createInventoryDeltaPojo(String barcode, Integer delta) {
+        InventoryPojo inventoryPojo = new InventoryPojo();
+        inventoryPojo.setProductId(barcode); // barcode carrier
+        inventoryPojo.setQuantity(delta);
+        return inventoryPojo;
     }
 
     /**

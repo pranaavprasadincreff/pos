@@ -2,7 +2,6 @@ package com.increff.pos.dto;
 
 import com.increff.pos.flow.InvoiceFlow;
 import com.increff.pos.model.data.InvoiceData;
-import com.increff.pos.model.exception.ApiException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -45,13 +44,5 @@ class InvoiceDtoTest {
 
         assertEquals("ORD-99", result.getOrderReferenceId());
         verify(invoiceFlow).getInvoice("ORD-99");
-    }
-
-    @Test
-    void generateInvoice_blankReference_throws_andDoesNotCallFlow() {
-        ApiException ex = assertThrows(ApiException.class, () -> invoiceDto.generateInvoice("   "));
-        assertTrue(ex.getMessage().toLowerCase().contains("cannot be empty"));
-
-        verifyNoInteractions(invoiceFlow);
     }
 }
