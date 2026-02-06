@@ -13,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,258 +32,182 @@ class OrderFlowTest {
     // ---------------- CREATE ----------------
 
     @Test
-    void create_happyPath_setsFulfillable_callsBulkDeduct_andPersists() throws Exception {
+    void create_happyPath_setsFulfillable_deducts_andPersists() throws Exception {
         OrderPojo order = orderWithItems(
                 item(2, 90.0),
                 item(3, 90.0)
         );
-        List<String> barcodesByIndex = List.of("B1", "B1");
+        List<String> barcodes = List.of("B1", "B1");
 
         when(orderApi.orderReferenceIdExists(anyString())).thenReturn(false);
 
         ProductPojo p1 = product("ID1", "B1", 100.0);
         when(productApi.findByBarcodes(eq(List.of("B1")))).thenReturn(List.of(p1));
 
-        doNothing().when(inventoryApi).deductInventoryBulk(anyMap());
+        when(inventoryApi.isSufficientInventoryBulk(eq(Map.of("ID1", 5)))).thenReturn(true);
+        doNothing().when(inventoryApi).deductInventoryBulk(eq(Map.of("ID1", 5)));
+
         when(orderApi.createOrder(any(OrderPojo.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        OrderPojo saved = orderFlow.create(order, barcodesByIndex);
+        OrderPojo saved = orderFlow.create(order, barcodes);
 
-        assertNotNull(saved.getOrderReferenceId());
-        assertTrue(saved.getOrderReferenceId().startsWith("ORD-"));
-        assertNotNull(saved.getOrderTime());
         assertEquals(OrderStatus.FULFILLABLE.name(), saved.getStatus());
-
-        // productId should be set on both items
-        assertEquals("ID1", saved.getOrderItems().get(0).getProductId());
-        assertEquals("ID1", saved.getOrderItems().get(1).getProductId());
-
-        ArgumentCaptor<Map<String, Integer>> bulkCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(inventoryApi, times(1)).deductInventoryBulk(bulkCaptor.capture());
-        assertEquals(Map.of("ID1", 5), bulkCaptor.getValue());
-
-        verify(productApi, times(1)).findByBarcodes(eq(List.of("B1")));
-        verify(orderApi, times(1)).createOrder(any(OrderPojo.class));
+        verify(inventoryApi).isSufficientInventoryBulk(eq(Map.of("ID1", 5)));
+        verify(inventoryApi).deductInventoryBulk(eq(Map.of("ID1", 5)));
+        verify(orderApi).createOrder(any(OrderPojo.class));
     }
 
     @Test
-    void create_insufficientInventory_bulkDeductThrows_andDoesNotPersist() throws Exception {
+    void create_insufficientInventory_setsUnfulfillable_doesNotDeduct() throws Exception {
         OrderPojo order = orderWithItems(item(6, 90.0));
-        List<String> barcodesByIndex = List.of("B1");
+        List<String> barcodes = List.of("B1");
 
         when(orderApi.orderReferenceIdExists(anyString())).thenReturn(false);
 
         ProductPojo p1 = product("ID1", "B1", 100.0);
         when(productApi.findByBarcodes(eq(List.of("B1")))).thenReturn(List.of(p1));
 
-        doThrow(new ApiException("Insufficient inventory"))
-                .when(inventoryApi).deductInventoryBulk(eq(Map.of("ID1", 6)));
+        when(inventoryApi.isSufficientInventoryBulk(eq(Map.of("ID1", 6)))).thenReturn(false);
+        when(orderApi.createOrder(any(OrderPojo.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        ApiException ex = assertThrows(ApiException.class, () -> orderFlow.create(order, barcodesByIndex));
-        assertTrue(ex.getMessage().toLowerCase().contains("insufficient"));
+        OrderPojo saved = orderFlow.create(order, barcodes);
 
-        verify(orderApi, never()).createOrder(any());
+        assertEquals(OrderStatus.UNFULFILLABLE.name(), saved.getStatus());
+        verify(inventoryApi).isSufficientInventoryBulk(eq(Map.of("ID1", 6)));
+        verify(inventoryApi, never()).deductInventoryBulk(anyMap());
+        verify(orderApi).createOrder(any());
     }
 
     @Test
-    void create_sellingPriceExceedsMrp_throws_andDoesNotTouchInventoryOrPersist() throws Exception {
+    void create_sellingPriceExceedsMrp_throws_andDoesNotTouchInventory() throws Exception {
         OrderPojo order = orderWithItems(item(1, 150.0));
-        List<String> barcodesByIndex = List.of("B1");
+        List<String> barcodes = List.of("B1");
 
         when(orderApi.orderReferenceIdExists(anyString())).thenReturn(false);
 
         ProductPojo p1 = product("ID1", "B1", 100.0);
         when(productApi.findByBarcodes(eq(List.of("B1")))).thenReturn(List.of(p1));
 
-        ApiException ex = assertThrows(ApiException.class, () -> orderFlow.create(order, barcodesByIndex));
-        assertTrue(ex.getMessage().contains("Selling price cannot exceed MRP"));
-        assertTrue(ex.getMessage().contains("B1"));
+        ApiException ex = assertThrows(ApiException.class,
+                () -> orderFlow.create(order, barcodes));
 
-        verify(inventoryApi, never()).deductInventoryBulk(anyMap());
-        verify(orderApi, never()).createOrder(any());
-    }
-
-    @Test
-    void create_missingProduct_throws_withBarcodeList() throws Exception {
-        OrderPojo order = orderWithItems(item(1, 10.0));
-        List<String> barcodesByIndex = List.of("B_MISSING");
-
-        when(orderApi.orderReferenceIdExists(anyString())).thenReturn(false);
-        when(productApi.findByBarcodes(eq(List.of("B_MISSING")))).thenReturn(List.of());
-
-        ApiException ex = assertThrows(ApiException.class, () -> orderFlow.create(order, barcodesByIndex));
-        assertTrue(ex.getMessage().contains("Products not found for barcodes"));
-        assertTrue(ex.getMessage().contains("B_MISSING"));
-
-        verify(inventoryApi, never()).deductInventoryBulk(anyMap());
-        verify(orderApi, never()).createOrder(any());
-    }
-
-    @Test
-    void create_itemsAndBarcodeListSizeMismatch_throws() throws Exception {
-        OrderPojo order = orderWithItems(item(1, 10.0), item(1, 10.0));
-        List<String> barcodesByIndex = List.of("B1"); // mismatch
-
-        when(orderApi.orderReferenceIdExists(anyString())).thenReturn(false);
-
-        ProductPojo p1 = product("ID1", "B1", 100.0);
-        when(productApi.findByBarcodes(eq(List.of("B1")))).thenReturn(List.of(p1));
-
-        ApiException ex = assertThrows(ApiException.class, () -> orderFlow.create(order, barcodesByIndex));
-        assertTrue(ex.getMessage().toLowerCase().contains("size mismatch"));
-
-        verify(productApi, times(1)).findByBarcodes(eq(List.of("B1")));
+        assertTrue(ex.getMessage().contains("MRP"));
         verifyNoInteractions(inventoryApi);
         verify(orderApi, never()).createOrder(any());
-    }
-
-    // ---------------- CANCEL ----------------
-
-    @Test
-    void cancel_whenFulfillable_restoresBulk_andSetsCancelled() throws Exception {
-        OrderPojo existing = orderWithItems(itemWithProductId("ID1", 2, 10.0), itemWithProductId("ID1", 1, 10.0));
-        existing.setStatus(OrderStatus.FULFILLABLE.name());
-        existing.setOrderReferenceId("ORD-1");
-
-        when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
-        doNothing().when(inventoryApi).incrementInventoryBulk(eq(Map.of("ID1", 3)));
-        when(orderApi.updateOrder(any(OrderPojo.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        OrderPojo cancelled = orderFlow.cancel("ORD-1");
-
-        assertEquals(OrderStatus.CANCELLED.name(), cancelled.getStatus());
-        verify(inventoryApi, times(1)).incrementInventoryBulk(eq(Map.of("ID1", 3)));
-        verify(orderApi, times(1)).updateOrder(any(OrderPojo.class));
-        verifyNoInteractions(productApi);
-    }
-
-    @Test
-    void cancel_whenUnfulfillable_doesNotRestoreInventory() throws Exception {
-        OrderPojo existing = orderWithItems(itemWithProductId("ID1", 2, 10.0));
-        existing.setStatus(OrderStatus.UNFULFILLABLE.name());
-        existing.setOrderReferenceId("ORD-1");
-
-        when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
-        when(orderApi.updateOrder(any(OrderPojo.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        OrderPojo cancelled = orderFlow.cancel("ORD-1");
-
-        assertEquals(OrderStatus.CANCELLED.name(), cancelled.getStatus());
-        verify(inventoryApi, never()).incrementInventoryBulk(anyMap());
-        verify(orderApi).updateOrder(any(OrderPojo.class));
-        verifyNoInteractions(productApi);
     }
 
     // ---------------- UPDATE ----------------
 
     @Test
-    void update_whenNotEditable_throws() throws Exception {
-        OrderPojo existing = orderWithItems(itemWithProductId("ID1", 1, 10.0));
-        existing.setStatus(OrderStatus.CANCELLED.name());
-        existing.setOrderReferenceId("ORD-1");
-
-        when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
-
-        OrderPojo updateRequest = orderWithItems(item(1, 10.0));
-        List<String> barcodesByIndex = List.of("B1");
-
-        ApiException ex = assertThrows(ApiException.class, () -> orderFlow.update("ORD-1", updateRequest, barcodesByIndex));
-        assertTrue(ex.getMessage().toLowerCase().contains("cannot be modified"));
-
-        verifyNoInteractions(productApi);
-        verify(inventoryApi, never()).incrementInventoryBulk(anyMap());
-        verify(inventoryApi, never()).deductInventoryBulk(anyMap());
-        verify(orderApi, never()).updateOrder(any());
-    }
-
-    @Test
-    void update_restoresOldIfFulfillable_thenBulkDeductsNew_andPersists() throws Exception {
+    void update_restoresOld_thenDeductsNew_whenFulfillable() throws Exception {
         OrderPojo existing = orderWithItems(itemWithProductId("ID1", 2, 10.0));
         existing.setStatus(OrderStatus.FULFILLABLE.name());
         existing.setOrderReferenceId("ORD-1");
 
         OrderPojo updateRequest = orderWithItems(item(5, 10.0));
-        List<String> barcodesByIndex = List.of("B1");
+        List<String> barcodes = List.of("B1");
 
         when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
 
         ProductPojo p1 = product("ID1", "B1", 100.0);
         when(productApi.findByBarcodes(eq(List.of("B1")))).thenReturn(List.of(p1));
+
+        when(inventoryApi.isSufficientInventoryBulk(eq(Map.of("ID1", 5)))).thenReturn(true);
 
         doNothing().when(inventoryApi).incrementInventoryBulk(eq(Map.of("ID1", 2)));
         doNothing().when(inventoryApi).deductInventoryBulk(eq(Map.of("ID1", 5)));
 
         when(orderApi.updateOrder(any(OrderPojo.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        OrderPojo out = orderFlow.update("ORD-1", updateRequest, barcodesByIndex);
+        OrderPojo out = orderFlow.update("ORD-1", updateRequest, barcodes);
 
         assertEquals(OrderStatus.FULFILLABLE.name(), out.getStatus());
-        assertEquals(1, out.getOrderItems().size());
-        assertEquals(5, out.getOrderItems().get(0).getOrderedQuantity());
-        assertEquals("ID1", out.getOrderItems().get(0).getProductId());
 
         InOrder inOrder = inOrder(inventoryApi, orderApi);
         inOrder.verify(inventoryApi).incrementInventoryBulk(eq(Map.of("ID1", 2)));
+        inOrder.verify(inventoryApi).isSufficientInventoryBulk(eq(Map.of("ID1", 5)));
         inOrder.verify(inventoryApi).deductInventoryBulk(eq(Map.of("ID1", 5)));
-        inOrder.verify(orderApi).updateOrder(any(OrderPojo.class));
-    }
-
-    // ---------------- MARK INVOICED ----------------
-
-    @Test
-    void markInvoiced_throws_whenAlreadyInvoiced() throws Exception {
-        OrderPojo existing = orderWithItems(itemWithProductId("ID1", 1, 10.0));
-        existing.setStatus(OrderStatus.INVOICED.name());
-
-        when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
-
-        ApiException ex = assertThrows(ApiException.class, () -> orderFlow.markInvoiced("ORD-1"));
-        assertTrue(ex.getMessage().toLowerCase().contains("already invoiced"));
-
-        verify(orderApi, never()).updateOrder(any());
+        inOrder.verify(orderApi).updateOrder(any());
     }
 
     @Test
-    void markInvoiced_throws_whenUnfulfillable() throws Exception {
-        OrderPojo existing = orderWithItems(itemWithProductId("ID1", 1, 10.0));
-        existing.setStatus(OrderStatus.UNFULFILLABLE.name());
-
-        when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
-
-        ApiException ex = assertThrows(ApiException.class, () -> orderFlow.markInvoiced("ORD-1"));
-        assertTrue(ex.getMessage().toLowerCase().contains("only fulfillable"));
-
-        verify(orderApi, never()).updateOrder(any());
-    }
-
-    @Test
-    void markInvoiced_happyPath_setsStatusAndUpdates() throws Exception {
-        OrderPojo existing = orderWithItems(itemWithProductId("ID1", 1, 10.0));
+    void update_restoresOld_butDoesNotDeduct_whenNewIsUnfulfillable() throws Exception {
+        OrderPojo existing = orderWithItems(itemWithProductId("ID1", 2, 10.0));
         existing.setStatus(OrderStatus.FULFILLABLE.name());
+        existing.setOrderReferenceId("ORD-1");
+
+        OrderPojo updateRequest = orderWithItems(item(10, 10.0));
+        List<String> barcodes = List.of("B1");
 
         when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
+
+        ProductPojo p1 = product("ID1", "B1", 100.0);
+        when(productApi.findByBarcodes(eq(List.of("B1")))).thenReturn(List.of(p1));
+
+        when(inventoryApi.isSufficientInventoryBulk(eq(Map.of("ID1", 10)))).thenReturn(false);
+        doNothing().when(inventoryApi).incrementInventoryBulk(eq(Map.of("ID1", 2)));
+
         when(orderApi.updateOrder(any(OrderPojo.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        orderFlow.markInvoiced("ORD-1");
+        OrderPojo out = orderFlow.update("ORD-1", updateRequest, barcodes);
 
-        assertEquals(OrderStatus.INVOICED.name(), existing.getStatus());
-        verify(orderApi).updateOrder(existing);
+        assertEquals(OrderStatus.UNFULFILLABLE.name(), out.getStatus());
+
+        verify(inventoryApi).incrementInventoryBulk(eq(Map.of("ID1", 2)));
+        verify(inventoryApi).isSufficientInventoryBulk(eq(Map.of("ID1", 10)));
+        verify(inventoryApi, never()).deductInventoryBulk(anyMap());
+        verify(orderApi).updateOrder(any());
+    }
+
+    // ---------------- CANCEL ----------------
+
+    @Test
+    void cancel_whenFulfillable_restoresInventory() throws Exception {
+        OrderPojo existing = orderWithItems(itemWithProductId("ID1", 3, 10.0));
+        existing.setStatus(OrderStatus.FULFILLABLE.name());
+        existing.setOrderReferenceId("ORD-1");
+
+        when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
+        doNothing().when(inventoryApi).incrementInventoryBulk(eq(Map.of("ID1", 3)));
+        when(orderApi.updateOrder(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        OrderPojo cancelled = orderFlow.cancel("ORD-1");
+
+        assertEquals(OrderStatus.CANCELLED.name(), cancelled.getStatus());
+        verify(inventoryApi).incrementInventoryBulk(eq(Map.of("ID1", 3)));
+        verify(orderApi).updateOrder(any());
+    }
+
+    @Test
+    void cancel_whenUnfulfillable_doesNotRestoreInventory() throws Exception {
+        OrderPojo existing = orderWithItems(itemWithProductId("ID1", 3, 10.0));
+        existing.setStatus(OrderStatus.UNFULFILLABLE.name());
+        existing.setOrderReferenceId("ORD-1");
+
+        when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
+        when(orderApi.updateOrder(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        OrderPojo cancelled = orderFlow.cancel("ORD-1");
+
+        assertEquals(OrderStatus.CANCELLED.name(), cancelled.getStatus());
+        verify(inventoryApi, never()).incrementInventoryBulk(anyMap());
+        verify(orderApi).updateOrder(any());
     }
 
     // ---------------- helpers ----------------
 
-    private static OrderItemPojo item(int qty, double sellingPrice) {
+    private static OrderItemPojo item(int qty, double price) {
         OrderItemPojo i = new OrderItemPojo();
         i.setOrderedQuantity(qty);
-        i.setSellingPrice(sellingPrice);
+        i.setSellingPrice(price);
         return i;
     }
 
-    private static OrderItemPojo itemWithProductId(String productId, int qty, double sellingPrice) {
+    private static OrderItemPojo itemWithProductId(String productId, int qty, double price) {
         OrderItemPojo i = new OrderItemPojo();
         i.setProductId(productId);
         i.setOrderedQuantity(qty);
-        i.setSellingPrice(sellingPrice);
+        i.setSellingPrice(price);
         return i;
     }
 

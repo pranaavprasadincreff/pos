@@ -1,8 +1,10 @@
 package com.increff.pos.db;
 
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
-@Data
+@Getter
+@Setter
 public class SalesReportRowPojo {
     private String clientEmail;
     private String productBarcode;

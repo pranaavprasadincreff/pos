@@ -44,36 +44,32 @@ public class InventoryDao extends AbstractDao<InventoryPojo> {
         return updated != null;
     }
 
-    public boolean deductInventoryBulk(Map<String, Integer> quantityToDeductByProductId) {
-        BulkOperations bulkOps = mongoOperations.bulkOps(BulkOperations.BulkMode.ORDERED, InventoryPojo.class);
+    public boolean deductInventoryBulk(Map<String, Integer> quantityByProductId) {
+        BulkOperations bulkOps =
+                mongoOperations.bulkOps(BulkOperations.BulkMode.ORDERED, InventoryPojo.class);
 
-        for (Map.Entry<String, Integer> entry : quantityToDeductByProductId.entrySet()) {
-            String productId = entry.getKey();
-            Integer quantityToDeduct = entry.getValue();
-
+        for (var entry : quantityByProductId.entrySet()) {
             Query query = Query.query(
-                    Criteria.where("productId").is(productId)
-                            .and("quantity").gte(quantityToDeduct)
+                    Criteria.where("productId").is(entry.getKey())
+                            .and("quantity").gte(entry.getValue())
             );
-
-            Update update = new Update().inc("quantity", -quantityToDeduct);
-
-            bulkOps.updateOne(query, update);
+            bulkOps.updateOne(query, new Update().inc("quantity", -entry.getValue()));
         }
 
         var result = bulkOps.execute();
-        return result.getModifiedCount() == quantityToDeductByProductId.size();
+        return result.getModifiedCount() == quantityByProductId.size();
     }
 
-    public void incrementInventoryBulk(Map<String, Integer> quantityToAddByProductId) {
-        BulkOperations bulkOps = mongoOperations.bulkOps(BulkOperations.BulkMode.ORDERED, InventoryPojo.class);
 
-        for (Map.Entry<String, Integer> entry : quantityToAddByProductId.entrySet()) {
+    public void incrementInventoryBulk(Map<String, Integer> quantityByProductId) {
+        BulkOperations bulkOps = mongoOperations.bulkOps(BulkOperations.BulkMode.UNORDERED, InventoryPojo.class);
+
+        for (Map.Entry<String, Integer> entry : quantityByProductId.entrySet()) {
             String productId = entry.getKey();
-            Integer quantityToAdd = entry.getValue();
+            int quantity = entry.getValue();
 
             Query query = Query.query(Criteria.where("productId").is(productId));
-            Update update = new Update().inc("quantity", quantityToAdd);
+            Update update = new Update().inc("quantity", quantity);
 
             bulkOps.updateOne(query, update);
         }

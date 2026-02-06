@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -14,6 +15,7 @@ import java.util.Map;
 public class InventoryApiImpl implements InventoryApi {
 
     private static final int INVENTORY_MAX = 1000;
+    private static final String INSUFFICIENT_INVENTORY = "Insufficient inventory";
 
     @Autowired
     private InventoryDao inventoryDao;
@@ -64,7 +66,7 @@ public class InventoryApiImpl implements InventoryApi {
     public void deductInventory(String productId, int quantity) throws ApiException {
         boolean updated = inventoryDao.deductInventoryAtomically(productId, quantity);
         if (!updated) {
-            throw new ApiException("Insufficient inventory");
+            throw new ApiException(INSUFFICIENT_INVENTORY);
         }
     }
 
@@ -90,24 +92,43 @@ public class InventoryApiImpl implements InventoryApi {
         return inventoryDao.saveAll(inventoriesToSave);
     }
 
-    // ✅ Bulk deduct: one DB call
     @Override
-    @Transactional(rollbackFor = ApiException.class)
-    public void deductInventoryBulk(Map<String, Integer> quantityToDeductByProductId) throws ApiException {
-        validateBulkQuantityMap(quantityToDeductByProductId);
+    public boolean isSufficientInventoryBulk(Map<String, Integer> qtyByProductId)
+            throws ApiException {
 
-        boolean allUpdated = inventoryDao.deductInventoryBulk(quantityToDeductByProductId);
-        if (!allUpdated) {
-            throw new ApiException("Insufficient inventory");
+        validateBulkQuantityMap(qtyByProductId);
+
+        List<String> productIds = qtyByProductId.keySet().stream().toList();
+        List<InventoryPojo> inventories = inventoryDao.findByProductIds(productIds);
+
+        Map<String, Integer> availableByProductId = new HashMap<>();
+        for (InventoryPojo inv : inventories) {
+            availableByProductId.put(inv.getProductId(), inv.getQuantity());
         }
+
+        for (var entry : qtyByProductId.entrySet()) {
+            int available = availableByProductId.getOrDefault(entry.getKey(), 0);
+            if (available < entry.getValue()) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    // ✅ Bulk increment: one DB call
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public void incrementInventoryBulk(Map<String, Integer> quantityToAddByProductId) throws ApiException {
-        validateBulkQuantityMap(quantityToAddByProductId);
-        inventoryDao.incrementInventoryBulk(quantityToAddByProductId);
+    public void deductInventoryBulk(Map<String, Integer> quantityByProductId)
+            throws ApiException {
+
+        validateBulkQuantityMap(quantityByProductId);
+        inventoryDao.deductInventoryBulk(quantityByProductId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = ApiException.class)
+    public void incrementInventoryBulk(Map<String, Integer> quantityByProductId) throws ApiException {
+        validateBulkQuantityMap(quantityByProductId);
+        inventoryDao.incrementInventoryBulk(quantityByProductId);
     }
 
     // -------------------- private helpers --------------------

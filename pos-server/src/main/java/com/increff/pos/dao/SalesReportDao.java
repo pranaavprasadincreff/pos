@@ -29,11 +29,14 @@ public class SalesReportDao {
     private static final String ORDERS_COLLECTION = "orders";
     private static final String PRODUCTS_COLLECTION = "products";
 
-    private static final String PRODUCT_BARCODE_FIELD = "barcode";
     private static final String ORDER_ITEMS_PATH = "orderItems";
-    private static final String ORDER_ITEMS_PRODUCT_BARCODE_PATH = "orderItems.productBarcode";
+    private static final String ORDER_ITEMS_PRODUCT_ID_PATH = "orderItems.productId";
+    private static final String ORDER_ITEMS_PRODUCT_OID_PATH = "orderItems.productObjectId";
+
+    private static final String PRODUCT_ID_FIELD = "_id";
     private static final String PRODUCT_LOOKUP_ALIAS = "product";
     private static final String PRODUCT_CLIENT_EMAIL_PATH = "product.clientEmail";
+    private static final String PRODUCT_BARCODE_PATH = "product.barcode";
 
     private final MongoOperations mongoOperations;
 
@@ -57,7 +60,7 @@ public class SalesReportDao {
 
     public List<SalesReportRowPojo> getDailyReportRows(LocalDate reportDate, String clientEmail, ReportRowType rowType) {
         if (reportDate == null) return List.of();
-        DayToDaySalesReportPojo reportDocument = fetchDailyReportDocument(reportDate); // ✅ only fetch; no create
+        DayToDaySalesReportPojo reportDocument = fetchDailyReportDocument(reportDate); // fetch only; no create
         return mapDailyDocumentToRows(reportDocument, clientEmail, rowType);
     }
 
@@ -96,15 +99,42 @@ public class SalesReportDao {
         return reportDate.toString();
     }
 
+    // -------------------- Core aggregation helpers --------------------
+
+    /**
+     * Convert orderItems.productId (String) -> orderItems.productObjectId (ObjectId)
+     * so that $lookup can match products._id (ObjectId).
+     *
+     * NOTE: $toObjectId requires MongoDB 4.0+.
+     */
+    private AddFieldsOperation addProductObjectIdField() {
+        AggregationExpression toObjectIdExpr =
+                context -> new org.bson.Document("$toObjectId", "$" + ORDER_ITEMS_PRODUCT_ID_PATH);
+
+        return AddFieldsOperation.addField(ORDER_ITEMS_PRODUCT_OID_PATH)
+                .withValue(toObjectIdExpr)
+                .build();
+    }
+
+    private MatchOperation matchHasProductId() {
+        // Avoid $toObjectId on null
+        return match(Criteria.where(ORDER_ITEMS_PRODUCT_ID_PATH).ne(null));
+    }
+
+    private LookupOperation lookupProductByObjectId() {
+        return LookupOperation.newLookup()
+                .from(PRODUCTS_COLLECTION)
+                .localField(ORDER_ITEMS_PRODUCT_OID_PATH)
+                .foreignField(PRODUCT_ID_FIELD)
+                .as(PRODUCT_LOOKUP_ALIAS);
+    }
+
     // -------------------- Daily aggregation (orders -> nested doc) --------------------
 
     private DayToDaySalesReportPojo buildDailyReportDocumentFromOrders(LocalDate reportDate) {
         if (reportDate == null) return null;
 
-        Aggregation aggregation = buildNestedDailyAggregation(
-                reportDate,
-                OrderStatus.INVOICED
-        );
+        Aggregation aggregation = buildNestedDailyAggregation(reportDate, OrderStatus.INVOICED);
 
         AggregationResults<ClientAgg> results =
                 mongoOperations.aggregate(aggregation, ORDERS_COLLECTION, ClientAgg.class);
@@ -127,22 +157,19 @@ public class SalesReportDao {
 
         UnwindOperation unwindItems = unwind(ORDER_ITEMS_PATH);
 
-        LookupOperation lookupProduct = LookupOperation.newLookup()
-                .from(PRODUCTS_COLLECTION)
-                .localField(ORDER_ITEMS_PRODUCT_BARCODE_PATH)
-                .foreignField(PRODUCT_BARCODE_FIELD)
-                .as(PRODUCT_LOOKUP_ALIAS);
-
+        // join products by _id (ObjectId) using converted orderItems.productId
+        LookupOperation lookupProduct = lookupProductByObjectId();
         UnwindOperation unwindProduct = unwind(PRODUCT_LOOKUP_ALIAS);
 
         AggregationExpression lineRevenue =
                 ArithmeticOperators.Multiply.valueOf("orderItems.orderedQuantity")
                         .multiplyBy("orderItems.sellingPrice");
 
+        // group by client + productBarcode (from looked-up product)
         GroupOperation groupByClientAndProduct = group(
                 Fields.from(
                         Fields.field("clientEmail", PRODUCT_CLIENT_EMAIL_PATH),
-                        Fields.field("productBarcode", ORDER_ITEMS_PRODUCT_BARCODE_PATH)
+                        Fields.field("productBarcode", PRODUCT_BARCODE_PATH)
                 ))
                 .addToSet("orderReferenceId").as("orderRefs")
                 .sum("orderItems.orderedQuantity").as("itemsCount")
@@ -183,6 +210,8 @@ public class SalesReportDao {
         return newAggregation(
                 matchInvoicedOrders,
                 unwindItems,
+                matchHasProductId(),
+                addProductObjectIdField(),
                 lookupProduct,
                 unwindProduct,
                 groupByClientAndProduct,
@@ -242,20 +271,13 @@ public class SalesReportDao {
         ));
 
         UnwindOperation unwindItems = unwind(ORDER_ITEMS_PATH);
-
-        LookupOperation lookupProduct = LookupOperation.newLookup()
-                .from(PRODUCTS_COLLECTION)
-                .localField(ORDER_ITEMS_PRODUCT_BARCODE_PATH)
-                .foreignField(PRODUCT_BARCODE_FIELD)
-                .as(PRODUCT_LOOKUP_ALIAS);
-
+        LookupOperation lookupProduct = lookupProductByObjectId();
         UnwindOperation unwindProduct = unwind(PRODUCT_LOOKUP_ALIAS);
 
         AggregationExpression lineRevenue =
                 ArithmeticOperators.Multiply.valueOf("orderItems.orderedQuantity")
                         .multiplyBy("orderItems.sellingPrice");
 
-        // group by client
         GroupOperation groupByClient = group(PRODUCT_CLIENT_EMAIL_PATH)
                 .addToSet("orderReferenceId").as("orderRefs")
                 .sum("orderItems.orderedQuantity").as("itemsCount")
@@ -273,6 +295,8 @@ public class SalesReportDao {
         Aggregation agg = newAggregation(
                 matchOrders,
                 unwindItems,
+                matchHasProductId(),
+                addProductObjectIdField(),
                 lookupProduct,
                 unwindProduct,
                 groupByClient,
@@ -301,28 +325,22 @@ public class SalesReportDao {
         ));
 
         UnwindOperation unwindItems = unwind(ORDER_ITEMS_PATH);
-
-        LookupOperation lookupProduct = LookupOperation.newLookup()
-                .from(PRODUCTS_COLLECTION)
-                .localField(ORDER_ITEMS_PRODUCT_BARCODE_PATH)
-                .foreignField(PRODUCT_BARCODE_FIELD)
-                .as(PRODUCT_LOOKUP_ALIAS);
-
+        LookupOperation lookupProduct = lookupProductByObjectId();
         UnwindOperation unwindProduct = unwind(PRODUCT_LOOKUP_ALIAS);
 
-        // only this client
         MatchOperation matchClient = match(Criteria.where(PRODUCT_CLIENT_EMAIL_PATH).is(clientEmail));
 
         AggregationExpression lineRevenue =
                 ArithmeticOperators.Multiply.valueOf("orderItems.orderedQuantity")
                         .multiplyBy("orderItems.sellingPrice");
 
-        GroupOperation groupByBarcode = group(ORDER_ITEMS_PRODUCT_BARCODE_PATH)
+        // group by product barcode from looked-up product
+        GroupOperation groupByBarcode = group(PRODUCT_BARCODE_PATH)
                 .addToSet("orderReferenceId").as("orderRefs")
                 .sum("orderItems.orderedQuantity").as("itemsCount")
                 .sum(lineRevenue).as("totalRevenue");
 
-        // ✅ Spring Data MongoDB 4.2.x: inject constant via $literal (Aggregation.literal doesn't exist)
+        // inject constant clientEmail via $literal
         AggregationExpression constantClientEmail =
                 context -> new org.bson.Document("$literal", clientEmail);
 
@@ -339,6 +357,8 @@ public class SalesReportDao {
         Aggregation agg = newAggregation(
                 matchOrders,
                 unwindItems,
+                matchHasProductId(),
+                addProductObjectIdField(),
                 lookupProduct,
                 unwindProduct,
                 matchClient,
