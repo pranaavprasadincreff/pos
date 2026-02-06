@@ -16,4 +16,5 @@ public interface ProductApi {
     Page<ProductPojo> search(ProductSearchForm form, List<String> clientEmails);
     List<ProductPojo> findByBarcodes(List<String> barcodes);
     List<ProductPojo> saveAll(List<ProductPojo> list);
+    List<ProductPojo> findByIds(List<String> productIds);
 }

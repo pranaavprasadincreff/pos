@@ -23,7 +23,8 @@ public class OrderApiTest extends AbstractUnitTest {
 
     private static OrderPojo order(String ref, String status, ZonedDateTime time) {
         OrderItemPojo item = new OrderItemPojo();
-        item.setProductBarcode("B1");
+        // DB now stores productId (not productBarcode)
+        item.setProductId("PID-1");
         item.setOrderedQuantity(1);
         item.setSellingPrice(10.0);
 
@@ -61,6 +62,9 @@ public class OrderApiTest extends AbstractUnitTest {
         assertEquals(OrderStatus.FULFILLABLE.name(), fetched.getStatus());
         assertNotNull(fetched.getOrderItems());
         assertFalse(fetched.getOrderItems().isEmpty());
+
+        // items store productId now
+        assertEquals("PID-1", fetched.getOrderItems().getFirst().getProductId());
     }
 
     @Test
@@ -83,9 +87,8 @@ public class OrderApiTest extends AbstractUnitTest {
         orderApi.createOrder(order("ORD-ABCD-0001", OrderStatus.FULFILLABLE.name(), now.minusMinutes(5)));
         orderApi.createOrder(order("ORD-WXYZ-0002", OrderStatus.FULFILLABLE.name(), now.minusMinutes(2)));
 
-        // search uses regex ".*<refContains>.*" case-insensitive
         Page<OrderPojo> page = orderApi.search(
-                "abcd", // lowercase should match
+                "abcd", // lowercase should match if dao uses case-insensitive regex
                 null,
                 null,
                 null,
@@ -122,10 +125,7 @@ public class OrderApiTest extends AbstractUnitTest {
     public void testSearchByTimeRange_filtersCorrectly() throws ApiException {
         ZonedDateTime now = ZonedDateTime.now();
 
-        // outside range
         orderApi.createOrder(order("ORD-T1", OrderStatus.FULFILLABLE.name(), now.minusDays(10)));
-
-        // inside range
         orderApi.createOrder(order("ORD-T2", OrderStatus.FULFILLABLE.name(), now.minusDays(2)));
         orderApi.createOrder(order("ORD-T3", OrderStatus.FULFILLABLE.name(), now.minusHours(1)));
 
@@ -143,7 +143,7 @@ public class OrderApiTest extends AbstractUnitTest {
 
         assertEquals(2, page.getTotalElements());
 
-        // should be sorted by orderTime desc (newest first)
+        // assuming dao sorts by orderTime desc
         assertEquals("ORD-T3", page.getContent().get(0).getOrderReferenceId());
         assertEquals("ORD-T2", page.getContent().get(1).getOrderReferenceId());
     }
@@ -156,7 +156,6 @@ public class OrderApiTest extends AbstractUnitTest {
         orderApi.createOrder(order("ORD-X-2", OrderStatus.FULFILLABLE.name(), now.minusMinutes(20)));
         orderApi.createOrder(order("ORD-X-3", OrderStatus.FULFILLABLE.name(), now.minusMinutes(10)));
 
-        // Combined: refContains "x", status fulfillable; page size 2
         Page<OrderPojo> page0 = orderApi.search(
                 "x",
                 OrderStatus.FULFILLABLE.name(),
@@ -168,7 +167,6 @@ public class OrderApiTest extends AbstractUnitTest {
 
         assertEquals(3, page0.getTotalElements());
         assertEquals(2, page0.getContent().size());
-        // newest first
         assertEquals("ORD-X-3", page0.getContent().get(0).getOrderReferenceId());
         assertEquals("ORD-X-2", page0.getContent().get(1).getOrderReferenceId());
 

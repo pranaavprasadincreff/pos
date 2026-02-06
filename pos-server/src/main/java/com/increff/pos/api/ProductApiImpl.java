@@ -65,6 +65,11 @@ public class ProductApiImpl implements ProductApi {
         return productDao.saveAll(productsToSave);
     }
 
+    @Override
+    public List<ProductPojo> findByIds(List<String> productIds) {
+        return productDao.findByIds(productIds);
+    }
+
     // -------------------- private helpers --------------------
 
     private ProductPojo loadProductByBarcode(String barcode) throws ApiException {

@@ -6,10 +6,11 @@ import org.springframework.data.mongodb.core.index.Indexed;
 
 @Getter
 @Setter
-public class OrderItemPojo extends AbstractPojo{
+public class OrderItemPojo extends AbstractPojo {
+
     @Indexed
-    // TODO product id when storing in db
-    private String productBarcode;
+    private String productId;
+
     private Integer orderedQuantity;
     private Double sellingPrice;
 }

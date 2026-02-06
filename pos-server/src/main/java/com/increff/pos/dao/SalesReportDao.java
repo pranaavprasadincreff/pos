@@ -473,10 +473,6 @@ public class SalesReportDao {
 
     // -------------------- Aggregation mapping classes --------------------
 
-    /**
-     * Daily nested aggregation target (client with nested products),
-     * used to build DayToDaySalesReportPojo.
-     */
     public static class ClientAgg {
         private String clientEmail;
         private Long ordersCount;
@@ -512,9 +508,6 @@ public class SalesReportDao {
         public void setTotalRevenue(Double totalRevenue) { this.totalRevenue = totalRevenue; }
     }
 
-    /**
-     * Range CLIENT row aggregation projection target
-     */
     public static class RangeClientRowAgg {
         private String clientEmail;
         private Long ordersCount;
@@ -531,9 +524,6 @@ public class SalesReportDao {
         public void setTotalRevenue(Double totalRevenue) { this.totalRevenue = totalRevenue; }
     }
 
-    /**
-     * Range PRODUCT row aggregation projection target
-     */
     public static class RangeProductRowAgg {
         private String clientEmail;
         private String productBarcode;

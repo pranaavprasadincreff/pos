@@ -1,29 +1,31 @@
 package com.increff.pos.dto;
 
+import com.increff.pos.api.ProductApi;
+import com.increff.pos.db.OrderItemPojo;
 import com.increff.pos.db.OrderPojo;
+import com.increff.pos.db.ProductPojo;
 import com.increff.pos.flow.OrderFlow;
 import com.increff.pos.helper.OrderHelper;
-import com.increff.pos.model.constants.OrderStatus;
 import com.increff.pos.model.constants.OrderTimeframe;
 import com.increff.pos.model.data.OrderData;
+import com.increff.pos.model.data.OrderItemData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.OrderCreateForm;
+import com.increff.pos.model.form.OrderCreateItemForm;
 import com.increff.pos.model.form.OrderSearchForm;
 import com.increff.pos.model.form.PageForm;
-import com.increff.pos.util.NormalizationUtil;
 import com.increff.pos.util.ValidationUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
 
 import java.time.ZonedDateTime;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Component
 public class OrderDto {
@@ -31,170 +33,54 @@ public class OrderDto {
     @Autowired
     private OrderFlow orderFlow;
 
+    @Autowired
+    private ProductApi productApi;
+
     public OrderData createOrder(OrderCreateForm form) throws ApiException {
-        NormalizationUtil.normalizeOrderCreateForm(form);
-        validateOrderCreateForm(form);
+        List<String> barcodes = extractBarcodes(form.getItems());
+        List<Integer> quantities = extractQuantities(form.getItems());
+        List<Double> sellingPrices = extractSellingPrices(form.getItems());
 
-        OrderPojo orderToCreate = OrderHelper.convertCreateFormToEntity(form);
-        OrderPojo createdOrder = orderFlow.create(orderToCreate);
+        OrderPojo orderToCreate = OrderHelper.buildOrderForCreate(quantities, sellingPrices);
+        OrderPojo createdOrder = orderFlow.create(orderToCreate, barcodes);
 
-        return OrderHelper.convertToData(createdOrder);
+        return buildOrderData(createdOrder);
     }
 
     public OrderData updateOrder(String orderReferenceId, OrderCreateForm form) throws ApiException {
-        String normalizedOrderReferenceId = normalizeAndValidateOrderReferenceId(orderReferenceId);
+        List<String> barcodes = extractBarcodes(form.getItems());
+        List<Integer> quantities = extractQuantities(form.getItems());
+        List<Double> sellingPrices = extractSellingPrices(form.getItems());
 
-        NormalizationUtil.normalizeOrderCreateForm(form);
-        validateOrderCreateForm(form);
+        OrderPojo updateRequest = OrderHelper.buildOrderForCreate(quantities, sellingPrices);
+        OrderPojo updatedOrder = orderFlow.update(orderReferenceId, updateRequest, barcodes);
 
-        OrderPojo updatedOrderRequest = OrderHelper.convertCreateFormToEntity(form);
-        OrderPojo updatedOrder = orderFlow.update(normalizedOrderReferenceId, updatedOrderRequest);
-
-        return OrderHelper.convertToData(updatedOrder);
+        return buildOrderData(updatedOrder);
     }
 
     public OrderData cancelOrder(String orderReferenceId) throws ApiException {
-        String normalizedOrderReferenceId = normalizeAndValidateOrderReferenceId(orderReferenceId);
-
-        OrderPojo cancelledOrder = orderFlow.cancel(normalizedOrderReferenceId);
-
-        return OrderHelper.convertToData(cancelledOrder);
+        OrderPojo cancelled = orderFlow.cancel(orderReferenceId);
+        return buildOrderData(cancelled);
     }
 
     public OrderData getByOrderReferenceId(String orderReferenceId) throws ApiException {
-        String normalizedOrderReferenceId = normalizeAndValidateOrderReferenceId(orderReferenceId);
-
-        OrderPojo order = orderFlow.getByRef(normalizedOrderReferenceId);
-
-        return OrderHelper.convertToData(order);
+        OrderPojo order = orderFlow.getByRef(orderReferenceId);
+        return buildOrderData(order);
     }
 
     public Page<OrderData> getAllOrders(PageForm form) throws ApiException {
-        Page<OrderData> page = searchAllOrders(form);
-        return page;
+        ValidationUtil.validatePageForm(form);
+
+        var orders = orderFlow.search(null, null, null, null, form.getPage(), form.getSize());
+        return buildOrderDataPage(orders);
     }
 
     public Page<OrderData> searchOrders(OrderSearchForm form) throws ApiException {
-        validateRawStatusSearch(form);
-        NormalizationUtil.normalizeOrderSearchForm(form);
         ValidationUtil.validateOrderSearchForm(form);
 
         TimeRange timeRange = computeTimeRange(form.getTimeframe());
-        Page<OrderPojo> orders = searchOrders(form, timeRange);
 
-        return convertToOrderDataPage(orders);
-    }
-
-    // -------------------- Private helpers --------------------
-
-    private Page<OrderData> searchAllOrders(PageForm form) throws ApiException {
-        ValidationUtil.validatePageForm(form);
-
-        Page<OrderPojo> orders = orderFlow.search(
-                null,
-                null,
-                null,
-                null,
-                form.getPage(),
-                form.getSize()
-        );
-
-        Page<OrderData> page = convertToOrderDataPage(orders);
-        return page;
-    }
-
-    private void validateRawStatusSearch(OrderSearchForm form) throws ApiException {
-        String rawStatus = form != null ? form.getStatus() : null;
-
-        if (!StringUtils.hasText(rawStatus)) {
-            return;
-        }
-
-        String normalized = rawStatus.trim().toUpperCase();
-
-        if ("ALL".equals(normalized)) {
-            throw new ApiException("Invalid order status search: " + rawStatus);
-        }
-
-        try {
-            OrderStatus.valueOf(normalized);
-        } catch (IllegalArgumentException e) {
-            throw new ApiException("Invalid order status search: " + rawStatus);
-        }
-    }
-
-    private String normalizeAndValidateOrderReferenceId(String orderReferenceId) throws ApiException {
-        String normalized = normalizeOrderReferenceId(orderReferenceId);
-        validateOrderReferenceId(normalized);
-        return normalized;
-    }
-
-    private String normalizeOrderReferenceId(String value) {
-        if (!StringUtils.hasText(value)) {
-            return value;
-        }
-        return value.trim().toUpperCase();
-    }
-
-    private void validateOrderReferenceId(String value) throws ApiException {
-        if (!StringUtils.hasText(value)) {
-            throw new ApiException("Order reference id cannot be empty");
-        }
-        if (value.length() > 50) {
-            throw new ApiException("Order reference id too long");
-        }
-    }
-
-    private void validateOrderCreateForm(OrderCreateForm form) throws ApiException {
-        if (form == null || CollectionUtils.isEmpty(form.getItems())) {
-            throw new ApiException("Order must contain at least one item");
-        }
-
-        Set<String> uniqueBarcodes = new HashSet<>();
-
-        for (var item : form.getItems()) {
-            if (!StringUtils.hasText(item.getProductBarcode())) {
-                throw new ApiException("Product barcode cannot be empty");
-            }
-            if (item.getProductBarcode().length() > 40) {
-                throw new ApiException("Barcode too long");
-            }
-            if (item.getQuantity() == null || item.getQuantity() <= 0) {
-                throw new ApiException("Invalid quantity");
-            }
-            if (item.getQuantity() > 1000) {
-                throw new ApiException("Quantity cannot exceed 1000");
-            }
-            if (item.getSellingPrice() == null || item.getSellingPrice() <= 0) {
-                throw new ApiException("Invalid selling price");
-            }
-
-            String normalizedBarcode = item.getProductBarcode();
-            boolean firstTime = uniqueBarcodes.add(normalizedBarcode);
-            if (!firstTime) {
-                throw new ApiException("Duplicate product barcode in order: " + normalizedBarcode);
-            }
-        }
-    }
-
-    private TimeRange computeTimeRange(OrderTimeframe timeframe) {
-        ZonedDateTime toTime = ZonedDateTime.now();
-        ZonedDateTime fromTime = computeFromTime(timeframe, toTime);
-        return new TimeRange(fromTime, toTime);
-    }
-
-    private ZonedDateTime computeFromTime(OrderTimeframe timeframe, ZonedDateTime now) {
-        OrderTimeframe effectiveTimeframe = timeframe == null ? OrderTimeframe.LAST_MONTH : timeframe;
-
-        return switch (effectiveTimeframe) {
-            case LAST_DAY -> now.minusDays(1);
-            case LAST_WEEK -> now.minusWeeks(1);
-            case LAST_MONTH -> now.minusMonths(1);
-        };
-    }
-
-    private Page<OrderPojo> searchOrders(OrderSearchForm form, TimeRange timeRange) {
-        return orderFlow.search(
+        var orders = orderFlow.search(
                 form.getOrderReferenceId(),
                 form.getStatus(),
                 timeRange.from(),
@@ -202,17 +88,100 @@ public class OrderDto {
                 form.getPage(),
                 form.getSize()
         );
+
+        return buildOrderDataPage(orders);
     }
 
-    private Page<OrderData> convertToOrderDataPage(Page<OrderPojo> orders) {
-        List<OrderData> data = orders.getContent()
-                .stream()
-                .map(OrderHelper::convertToData)
-                .collect(Collectors.toList());
+    // ---------------- private helpers ----------------
+
+    private Page<OrderData> buildOrderDataPage(Page<OrderPojo> orders) {
+        List<OrderData> data = orders.getContent().stream()
+                .map(this::buildOrderData)
+                .toList();
 
         return new PageImpl<>(data, orders.getPageable(), orders.getTotalElements());
     }
 
-    private record TimeRange(ZonedDateTime from, ZonedDateTime to) {
+    private OrderData buildOrderData(OrderPojo order) {
+        List<String> productIds = order.getOrderItems().stream()
+                .map(OrderItemPojo::getProductId)
+                .distinct()
+                .toList();
+
+        Map<String, ProductPojo> productById = fetchProductsById(productIds);
+
+        List<OrderItemData> items = order.getOrderItems().stream()
+                .map(item -> buildOrderItemData(item, productById.get(item.getProductId())))
+                .toList();
+
+        return OrderHelper.buildOrderData(order, items);
     }
+
+    private Map<String, ProductPojo> fetchProductsById(List<String> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<ProductPojo> products = productApi.findByIds(productIds);
+
+        Map<String, ProductPojo> productById = new HashMap<>();
+        for (ProductPojo p : products) {
+            productById.put(p.getId(), p);
+        }
+        return productById;
+    }
+
+    private OrderItemData buildOrderItemData(OrderItemPojo item, ProductPojo product) {
+        OrderItemData data = new OrderItemData();
+        data.setQuantity(item.getOrderedQuantity());
+        data.setSellingPrice(item.getSellingPrice());
+        data.setProductBarcode(product == null ? null : product.getBarcode());
+        return data;
+    }
+
+    private List<String> extractBarcodes(List<OrderCreateItemForm> items) throws ApiException {
+        List<String> barcodes = items.stream()
+                .map(OrderCreateItemForm::getProductBarcode)
+                .map(this::normalizeBarcode)
+                .toList();
+
+        Set<String> unique = new HashSet<>();
+        for (String barcode : barcodes) {
+            if (!unique.add(barcode)) {
+                throw new ApiException("Duplicate product barcode in order: " + barcode);
+            }
+        }
+
+        return barcodes;
+    }
+
+    private String normalizeBarcode(String barcode) {
+        return barcode == null ? null : barcode.trim().toUpperCase();
+    }
+
+    private List<Integer> extractQuantities(List<OrderCreateItemForm> items) {
+        return items.stream().map(OrderCreateItemForm::getQuantity).toList();
+    }
+
+    private List<Double> extractSellingPrices(List<OrderCreateItemForm> items) {
+        return items.stream().map(OrderCreateItemForm::getSellingPrice).toList();
+    }
+
+    private TimeRange computeTimeRange(OrderTimeframe timeframe) {
+        ZonedDateTime to = ZonedDateTime.now();
+        ZonedDateTime from = computeFromTime(timeframe, to);
+        return new TimeRange(from, to);
+    }
+
+    private ZonedDateTime computeFromTime(OrderTimeframe timeframe, ZonedDateTime now) {
+        OrderTimeframe effective = timeframe == null ? OrderTimeframe.LAST_MONTH : timeframe;
+
+        return switch (effective) {
+            case LAST_DAY -> now.minusDays(1);
+            case LAST_WEEK -> now.minusWeeks(1);
+            case LAST_MONTH -> now.minusMonths(1);
+        };
+    }
+
+    private record TimeRange(ZonedDateTime from, ZonedDateTime to) {}
 }

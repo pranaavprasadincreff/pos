@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class InventoryApiImpl implements InventoryApi {
@@ -33,7 +34,7 @@ public class InventoryApiImpl implements InventoryApi {
 
     @Override
     public InventoryPojo getByProductId(String productId) throws ApiException {
-        return loadInventoryByProductId(productId);
+        return fetchInventoryByProductId(productId);
     }
 
     @Override
@@ -41,7 +42,7 @@ public class InventoryApiImpl implements InventoryApi {
     public InventoryPojo updateInventory(InventoryPojo inventoryUpdate) throws ApiException {
         validateInventoryUpdate(inventoryUpdate);
 
-        InventoryPojo existingInventory = loadInventoryByProductId(inventoryUpdate.getProductId());
+        InventoryPojo existingInventory = fetchInventoryByProductId(inventoryUpdate.getProductId());
         existingInventory.setQuantity(inventoryUpdate.getQuantity());
 
         return inventoryDao.save(existingInventory);
@@ -52,7 +53,7 @@ public class InventoryApiImpl implements InventoryApi {
     public void incrementInventory(String productId, int delta) throws ApiException {
         validateNonNegativeDelta(delta);
 
-        InventoryPojo existingInventory = loadInventoryByProductId(productId);
+        InventoryPojo existingInventory = fetchInventoryByProductId(productId);
         int nextQuantity = calculateNextQuantity(existingInventory.getQuantity(), delta);
 
         existingInventory.setQuantity(nextQuantity);
@@ -89,9 +90,29 @@ public class InventoryApiImpl implements InventoryApi {
         return inventoryDao.saveAll(inventoriesToSave);
     }
 
+    // ✅ Bulk deduct: one DB call
+    @Override
+    @Transactional(rollbackFor = ApiException.class)
+    public void deductInventoryBulk(Map<String, Integer> quantityToDeductByProductId) throws ApiException {
+        validateBulkQuantityMap(quantityToDeductByProductId);
+
+        boolean allUpdated = inventoryDao.deductInventoryBulk(quantityToDeductByProductId);
+        if (!allUpdated) {
+            throw new ApiException("Insufficient inventory");
+        }
+    }
+
+    // ✅ Bulk increment: one DB call
+    @Override
+    @Transactional(rollbackFor = ApiException.class)
+    public void incrementInventoryBulk(Map<String, Integer> quantityToAddByProductId) throws ApiException {
+        validateBulkQuantityMap(quantityToAddByProductId);
+        inventoryDao.incrementInventoryBulk(quantityToAddByProductId);
+    }
+
     // -------------------- private helpers --------------------
 
-    private InventoryPojo loadInventoryByProductId(String productId) throws ApiException {
+    private InventoryPojo fetchInventoryByProductId(String productId) throws ApiException {
         InventoryPojo inventory = inventoryDao.findByProductId(productId);
         if (inventory == null) {
             throw new ApiException("Inventory not found for productId: " + productId);
@@ -142,6 +163,24 @@ public class InventoryApiImpl implements InventoryApi {
 
         if (quantity > INVENTORY_MAX) {
             throw new RuntimeException("Inventory cannot exceed " + INVENTORY_MAX);
+        }
+    }
+
+    private void validateBulkQuantityMap(Map<String, Integer> quantityByProductId) throws ApiException {
+        if (quantityByProductId == null || quantityByProductId.isEmpty()) {
+            throw new ApiException("No inventory updates provided");
+        }
+
+        for (var entry : quantityByProductId.entrySet()) {
+            String productId = entry.getKey();
+            Integer quantity = entry.getValue();
+
+            if (productId == null) {
+                throw new ApiException("Invalid product id");
+            }
+            if (quantity == null || quantity <= 0) {
+                throw new ApiException("Invalid quantity for product id: " + productId);
+            }
         }
     }
 }

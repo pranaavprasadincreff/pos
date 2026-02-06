@@ -47,6 +47,14 @@ public class ProductDao extends AbstractDao<ProductPojo> {
         return pageableQuery(query, pageable);
     }
 
+    public List<ProductPojo> findByIds(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        Query query = Query.query(Criteria.where("id").in(ids));
+        return mongoOperations.find(query, ProductPojo.class);
+    }
+
     // -------------------- private helpers --------------------
 
     private Query buildSearchQuery(ProductSearchForm searchForm, List<String> clientEmails) {

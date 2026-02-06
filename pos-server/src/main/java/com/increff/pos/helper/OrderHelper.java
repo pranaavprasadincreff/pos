@@ -4,50 +4,37 @@ import com.increff.pos.db.OrderItemPojo;
 import com.increff.pos.db.OrderPojo;
 import com.increff.pos.model.data.OrderData;
 import com.increff.pos.model.data.OrderItemData;
-import com.increff.pos.model.form.OrderCreateForm;
-import com.increff.pos.model.form.OrderCreateItemForm;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class OrderHelper {
-    public static OrderPojo convertCreateFormToEntity(OrderCreateForm form) {
+
+    public static OrderPojo buildOrderForCreate(List<Integer> quantities, List<Double> sellingPrices) {
         OrderPojo order = new OrderPojo();
-        order.setOrderItems(
-                form.getItems()
-                        .stream()
-                        .map(OrderHelper::convertItemFormToEntity)
-                        .collect(Collectors.toList())
-        );
+        order.setOrderItems(buildOrderItems(quantities, sellingPrices));
         return order;
     }
 
-    private static OrderItemPojo convertItemFormToEntity(OrderCreateItemForm form) {
+    private static List<OrderItemPojo> buildOrderItems(List<Integer> quantities, List<Double> sellingPrices) {
+        return java.util.stream.IntStream.range(0, quantities.size())
+                .mapToObj(i -> buildOrderItem(quantities.get(i), sellingPrices.get(i)))
+                .collect(Collectors.toList());
+    }
+
+    private static OrderItemPojo buildOrderItem(Integer quantity, Double sellingPrice) {
         OrderItemPojo item = new OrderItemPojo();
-        item.setProductBarcode(form.getProductBarcode());
-        item.setOrderedQuantity(form.getQuantity());
-        item.setSellingPrice(form.getSellingPrice());
+        item.setOrderedQuantity(quantity);
+        item.setSellingPrice(sellingPrice);
         return item;
     }
 
-    public static OrderData convertToData(OrderPojo order) {
+    public static OrderData buildOrderData(OrderPojo order, List<OrderItemData> items) {
         OrderData data = new OrderData();
         data.setOrderReferenceId(order.getOrderReferenceId());
         data.setOrderTime(order.getOrderTime());
         data.setStatus(order.getStatus());
-        data.setItems(
-                order.getOrderItems()
-                        .stream()
-                        .map(OrderHelper::convertItemToData)
-                        .collect(Collectors.toList())
-        );
-        return data;
-    }
-
-    private static OrderItemData convertItemToData(OrderItemPojo item) {
-        OrderItemData data = new OrderItemData();
-        data.setProductBarcode(item.getProductBarcode());
-        data.setQuantity(item.getOrderedQuantity());
-        data.setSellingPrice(item.getSellingPrice());
+        data.setItems(items);
         return data;
     }
 }
