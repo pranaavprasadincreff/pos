@@ -12,6 +12,7 @@ import org.springframework.web.client.RestTemplate;
 public class InvoiceClient {
     private final RestTemplate restTemplate;
 
+    // TODO use class
     @Value("${invoice.self.url}") // keep your current property name
     private String invoiceServiceBaseUrl;
 

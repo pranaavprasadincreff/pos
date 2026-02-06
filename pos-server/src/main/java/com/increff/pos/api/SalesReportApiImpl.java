@@ -1,8 +1,8 @@
 package com.increff.pos.api;
 
 import com.increff.pos.dao.SalesReportDao;
-import com.increff.pos.db.SalesReportRowPojo;
 import com.increff.pos.model.constants.ReportRowType;
+import com.increff.pos.model.data.SalesReportRowData;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -15,12 +15,12 @@ public class SalesReportApiImpl implements SalesReportApi {
     private SalesReportDao salesReportDao;
 
     @Override
-    public List<SalesReportRowPojo> getDailyReport(LocalDate reportDate, String clientEmail, ReportRowType rowType) {
+    public List<SalesReportRowData> getDailyReport(LocalDate reportDate, String clientEmail, ReportRowType rowType) {
         return salesReportDao.getDailyReportRows(reportDate, clientEmail, rowType);
     }
 
     @Override
-    public List<SalesReportRowPojo> getRangeReport(LocalDate startDate, LocalDate endDate, String clientEmail, ReportRowType rowType) {
+    public List<SalesReportRowData> getRangeReport(LocalDate startDate, LocalDate endDate, String clientEmail, ReportRowType rowType) {
         return salesReportDao.getRangeReportRows(startDate, endDate, clientEmail, rowType);
     }
 

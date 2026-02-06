@@ -36,6 +36,7 @@ public class OrderFlow {
 
     @Transactional(rollbackFor = ApiException.class)
     public OrderPojo create(OrderPojo order, List<String> barcodes) throws ApiException {
+        // TODO move to dto
         populateNewOrder(order);
 
         Map<String, ProductPojo> productByBarcode = fetchProductsByBarcode(barcodes);

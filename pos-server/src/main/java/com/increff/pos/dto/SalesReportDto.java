@@ -1,10 +1,10 @@
 package com.increff.pos.dto;
 
 import com.increff.pos.api.SalesReportApi;
-import com.increff.pos.db.SalesReportRowPojo;
 import com.increff.pos.helper.SalesReportHelper;
 import com.increff.pos.model.constants.ReportRowType;
 import com.increff.pos.model.data.SalesReportResponseData;
+import com.increff.pos.model.data.SalesReportRowData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.DailySalesReportForm;
 import com.increff.pos.model.form.RangeSalesReportForm;
@@ -31,7 +31,7 @@ public class SalesReportDto {
         LocalDate reportDate = validatedRequest.getDate();
         String clientEmail = validatedRequest.getClientEmail();
         ReportRowType reportRowType = computeReportRowType(clientEmail);
-        List<SalesReportRowPojo> reportRows =
+        List<SalesReportRowData> reportRows =
                 salesReportApi.getDailyReport(reportDate, clientEmail, reportRowType);
 
         return SalesReportHelper.toResponseData(
@@ -50,7 +50,7 @@ public class SalesReportDto {
         LocalDate endDate = validatedRequest.getEndDate();
         String clientEmail = validatedRequest.getClientEmail();
         ReportRowType reportRowType = computeReportRowType(clientEmail);
-        List<SalesReportRowPojo> reportRows =
+        List<SalesReportRowData> reportRows =
                 salesReportApi.getRangeReport(startDate, endDate, clientEmail, reportRowType);
 
         return SalesReportHelper.toResponseData(

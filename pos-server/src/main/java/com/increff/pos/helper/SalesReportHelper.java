@@ -1,6 +1,5 @@
 package com.increff.pos.helper;
 
-import com.increff.pos.db.SalesReportRowPojo;
 import com.increff.pos.model.constants.ReportRowType;
 import com.increff.pos.model.data.SalesReportResponseData;
 import com.increff.pos.model.data.SalesReportRowData;
@@ -20,7 +19,7 @@ public class SalesReportHelper {
             LocalDate end,
             String clientEmail,
             ReportRowType rowType,
-            List<SalesReportRowPojo> rows
+            List<SalesReportRowData> rows
     ) {
         SalesReportResponseData data = new SalesReportResponseData();
         data.setReportKind(reportKind);
@@ -33,18 +32,18 @@ public class SalesReportHelper {
         return data;
     }
 
-    private static List<SalesReportRowData> mapRows(List<SalesReportRowPojo> rows) {
+    private static List<com.increff.pos.model.data.SalesReportRowData> mapRows(List<SalesReportRowData> rows) {
         if (rows == null || rows.isEmpty()) return List.of();
 
-        List<SalesReportRowData> out = new ArrayList<>();
-        for (SalesReportRowPojo row : rows) {
+        List<com.increff.pos.model.data.SalesReportRowData> out = new ArrayList<>();
+        for (SalesReportRowData row : rows) {
             out.add(toRowData(row));
         }
         return out;
     }
 
-    private static SalesReportRowData toRowData(SalesReportRowPojo p) {
-        SalesReportRowData d = new SalesReportRowData();
+    private static com.increff.pos.model.data.SalesReportRowData toRowData(SalesReportRowData p) {
+        com.increff.pos.model.data.SalesReportRowData d = new com.increff.pos.model.data.SalesReportRowData();
         d.setClientEmail(p.getClientEmail());
         d.setProductBarcode(p.getProductBarcode());
         d.setOrdersCount(p.getOrdersCount());

@@ -1,9 +1,9 @@
 package com.increff.pos.dao;
 
 import com.increff.pos.db.DayToDaySalesReportPojo;
-import com.increff.pos.db.SalesReportRowPojo;
 import com.increff.pos.model.constants.OrderStatus;
 import com.increff.pos.model.constants.ReportRowType;
+import com.increff.pos.model.data.SalesReportRowData;
 import org.bson.Document;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoOperations;
@@ -58,7 +58,7 @@ public class SalesReportDao {
         saveDailyReportDocument(reportDocument);
     }
 
-    public List<SalesReportRowPojo> getDailyReportRows(LocalDate reportDate, String clientEmail, ReportRowType rowType) {
+    public List<SalesReportRowData> getDailyReportRows(LocalDate reportDate, String clientEmail, ReportRowType rowType) {
         if (reportDate == null) return List.of();
         DayToDaySalesReportPojo reportDocument = fetchDailyReportDocument(reportDate); // fetch only; no create
         return mapDailyDocumentToRows(reportDocument, clientEmail, rowType);
@@ -66,7 +66,7 @@ public class SalesReportDao {
 
     // -------------------- Range: LIVE from orders (NO writes) --------------------
 
-    public List<SalesReportRowPojo> getRangeReportRows(
+    public List<SalesReportRowData> getRangeReportRows(
             LocalDate startDate,
             LocalDate endDate,
             String clientEmail,
@@ -257,7 +257,7 @@ public class SalesReportDao {
 
     // -------------------- Range aggregations (orders -> rows) --------------------
 
-    private List<SalesReportRowPojo> aggregateRangeClientRowsFromOrders(
+    private List<SalesReportRowData> aggregateRangeClientRowsFromOrders(
             LocalDate startDate,
             LocalDate endDate,
             OrderStatus requiredOrderStatus
@@ -310,7 +310,7 @@ public class SalesReportDao {
         return mapRangeClientAggToRows(results.getMappedResults());
     }
 
-    private List<SalesReportRowPojo> aggregateRangeProductRowsForClientFromOrders(
+    private List<SalesReportRowData> aggregateRangeProductRowsForClientFromOrders(
             LocalDate startDate,
             LocalDate endDate,
             String clientEmail,
@@ -373,12 +373,12 @@ public class SalesReportDao {
         return mapRangeProductAggToRows(results.getMappedResults());
     }
 
-    private List<SalesReportRowPojo> mapRangeClientAggToRows(List<RangeClientRowAgg> aggs) {
+    private List<SalesReportRowData> mapRangeClientAggToRows(List<RangeClientRowAgg> aggs) {
         if (aggs == null) return List.of();
-        List<SalesReportRowPojo> out = new ArrayList<>();
+        List<SalesReportRowData> out = new ArrayList<>();
         for (RangeClientRowAgg a : aggs) {
             if (a == null) continue;
-            SalesReportRowPojo r = new SalesReportRowPojo();
+            SalesReportRowData r = new SalesReportRowData();
             r.setClientEmail(a.getClientEmail());
             r.setProductBarcode(null);
             r.setOrdersCount(nullSafeLong(a.getOrdersCount()));
@@ -389,12 +389,12 @@ public class SalesReportDao {
         return out;
     }
 
-    private List<SalesReportRowPojo> mapRangeProductAggToRows(List<RangeProductRowAgg> aggs) {
+    private List<SalesReportRowData> mapRangeProductAggToRows(List<RangeProductRowAgg> aggs) {
         if (aggs == null) return List.of();
-        List<SalesReportRowPojo> out = new ArrayList<>();
+        List<SalesReportRowData> out = new ArrayList<>();
         for (RangeProductRowAgg a : aggs) {
             if (a == null) continue;
-            SalesReportRowPojo r = new SalesReportRowPojo();
+            SalesReportRowData r = new SalesReportRowData();
             r.setClientEmail(a.getClientEmail());
             r.setProductBarcode(a.getProductBarcode());
             r.setOrdersCount(nullSafeLong(a.getOrdersCount()));
@@ -407,7 +407,7 @@ public class SalesReportDao {
 
     // -------------------- Daily mapping (doc -> rows) --------------------
 
-    private List<SalesReportRowPojo> mapDailyDocumentToRows(
+    private List<SalesReportRowData> mapDailyDocumentToRows(
             DayToDaySalesReportPojo reportDocument,
             String clientEmail,
             ReportRowType rowType
@@ -423,14 +423,14 @@ public class SalesReportDao {
         return mapProductRowsForClient(reportDocument.getClients(), clientEmail);
     }
 
-    private List<SalesReportRowPojo> mapClientRows(List<DayToDaySalesReportPojo.ClientBlock> clientBlocks) {
-        List<SalesReportRowPojo> rows = new ArrayList<>();
+    private List<SalesReportRowData> mapClientRows(List<DayToDaySalesReportPojo.ClientBlock> clientBlocks) {
+        List<SalesReportRowData> rows = new ArrayList<>();
         if (clientBlocks == null) return rows;
 
         for (DayToDaySalesReportPojo.ClientBlock clientBlock : clientBlocks) {
             if (clientBlock == null) continue;
 
-            SalesReportRowPojo row = new SalesReportRowPojo();
+            SalesReportRowData row = new SalesReportRowData();
             row.setClientEmail(clientBlock.getClientEmail());
             row.setProductBarcode(null);
             row.setOrdersCount(nullSafeLong(clientBlock.getOrdersCount()));
@@ -439,11 +439,11 @@ public class SalesReportDao {
             rows.add(row);
         }
 
-        rows.sort(Comparator.comparingDouble(SalesReportRowPojo::getTotalRevenue).reversed());
+        rows.sort(Comparator.comparingDouble(SalesReportRowData::getTotalRevenue).reversed());
         return rows;
     }
 
-    private List<SalesReportRowPojo> mapProductRowsForClient(
+    private List<SalesReportRowData> mapProductRowsForClient(
             List<DayToDaySalesReportPojo.ClientBlock> clientBlocks,
             String clientEmail
     ) {
@@ -452,11 +452,11 @@ public class SalesReportDao {
         DayToDaySalesReportPojo.ClientBlock clientBlock = findClientBlock(clientBlocks, clientEmail);
         if (clientBlock == null || clientBlock.getProducts() == null) return List.of();
 
-        List<SalesReportRowPojo> rows = new ArrayList<>();
+        List<SalesReportRowData> rows = new ArrayList<>();
         for (DayToDaySalesReportPojo.ProductBlock productBlock : clientBlock.getProducts()) {
             if (productBlock == null) continue;
 
-            SalesReportRowPojo row = new SalesReportRowPojo();
+            SalesReportRowData row = new SalesReportRowData();
             row.setClientEmail(clientBlock.getClientEmail());
             row.setProductBarcode(productBlock.getProductBarcode());
             row.setOrdersCount(nullSafeLong(productBlock.getOrdersCount()));
@@ -465,7 +465,7 @@ public class SalesReportDao {
             rows.add(row);
         }
 
-        rows.sort(Comparator.comparingDouble(SalesReportRowPojo::getTotalRevenue).reversed());
+        rows.sort(Comparator.comparingDouble(SalesReportRowData::getTotalRevenue).reversed());
         return rows;
     }
 

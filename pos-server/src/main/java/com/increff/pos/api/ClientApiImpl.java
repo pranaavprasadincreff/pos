@@ -4,6 +4,7 @@ import com.increff.pos.dao.ClientDao;
 import com.increff.pos.db.ClientPojo;
 import com.increff.pos.db.ClientUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
+import jakarta.annotation.Nonnull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,7 +24,7 @@ public class ClientApiImpl implements ClientApi {
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public ClientPojo add(ClientPojo clientToCreate) throws ApiException {
+    public ClientPojo add(@Nonnull ClientPojo clientToCreate) throws ApiException {
         validateClientEmailIsUnique(clientToCreate.getEmail());
         return clientDao.save(clientToCreate);
     }
@@ -35,7 +36,7 @@ public class ClientApiImpl implements ClientApi {
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public ClientPojo update(ClientUpdatePojo updateRequest) throws ApiException {
+    public ClientPojo update(@Nonnull ClientUpdatePojo updateRequest) throws ApiException {
         ClientPojo existingClient = fetchClientByEmail(updateRequest.getOldEmail());
         validateUpdatedEmailDoesNotConflict(existingClient, updateRequest.getNewEmail());
         applyClientUpdate(existingClient, updateRequest);
