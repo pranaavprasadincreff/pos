@@ -4,9 +4,7 @@ import com.increff.pos.api.ClientApi;
 import com.increff.pos.api.InventoryApi;
 import com.increff.pos.api.ProductApi;
 import com.increff.pos.db.InventoryPojo;
-import com.increff.pos.db.InventoryUpdatePojo;
 import com.increff.pos.db.ProductPojo;
-import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.PageForm;
 import com.increff.pos.model.form.ProductSearchForm;
@@ -36,10 +34,8 @@ public class ProductFlow {
     @Transactional(rollbackFor = ApiException.class)
     public Pair<ProductPojo, InventoryPojo> addProduct(ProductPojo productToCreate) throws ApiException {
         ensureClientExistsByEmail(productToCreate.getClientEmail());
-
         ProductPojo createdProduct = productApi.addProduct(productToCreate);
         InventoryPojo inventory = getOrCreateInventoryForProductId(createdProduct.getId());
-
         return Pair.of(createdProduct, inventory);
     }
 
@@ -54,31 +50,29 @@ public class ProductFlow {
         return attachInventoryToProductPage(productPage);
     }
 
-    public Pair<ProductPojo, InventoryPojo> updateProduct(ProductUpdatePojo updateRequest) throws ApiException {
-        ensureClientExistsByEmail(updateRequest.getClientEmail());
-
-        ProductPojo updatedProduct = productApi.updateProduct(updateRequest);
+    public Pair<ProductPojo, InventoryPojo> updateProduct(ProductPojo productToUpdate, String oldBarcode) throws ApiException {
+        ensureClientExistsByEmail(productToUpdate.getClientEmail());
+        ProductPojo updatedProduct = productApi.updateProduct(productToUpdate, oldBarcode);
         InventoryPojo inventory = inventoryApi.getByProductId(updatedProduct.getId());
-
         return Pair.of(updatedProduct, inventory);
     }
 
     @Transactional(rollbackFor = ApiException.class)
-    public Pair<ProductPojo, InventoryPojo> updateInventory(InventoryUpdatePojo updateRequest) throws ApiException {
-        ProductPojo product = productApi.getProductByBarcode(updateRequest.getBarcode());
+    public Pair<ProductPojo, InventoryPojo> updateInventory(InventoryPojo inventoryToUpdate, String barcode) throws ApiException {
+        ProductPojo product = productApi.getProductByBarcode(barcode);
         inventoryApi.createInventoryIfAbsent(product.getId());
 
-        InventoryPojo inventoryToUpdate = new InventoryPojo();
-        inventoryToUpdate.setProductId(product.getId());
-        inventoryToUpdate.setQuantity(updateRequest.getQuantity());
+        InventoryPojo toSave = new InventoryPojo();
+        toSave.setProductId(product.getId());
+        toSave.setQuantity(inventoryToUpdate.getQuantity());
 
-        InventoryPojo updatedInventory = inventoryApi.updateInventory(inventoryToUpdate);
+        InventoryPojo updatedInventory = inventoryApi.updateInventory(toSave);
         return Pair.of(product, updatedInventory);
     }
 
+
     public Page<Pair<ProductPojo, InventoryPojo>> search(ProductSearchForm searchForm) throws ApiException {
         List<String> matchedClientEmails = resolveClientEmailsForClientSearch(searchForm);
-
         Page<ProductPojo> productPage = productApi.search(searchForm, matchedClientEmails);
         return attachInventoryToProductPage(productPage);
     }

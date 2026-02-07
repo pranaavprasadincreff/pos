@@ -80,16 +80,16 @@ public class InventoryApiImpl implements InventoryApi {
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public List<InventoryPojo> saveAll(List<InventoryPojo> inventoriesToSave) {
+    public void saveAll(List<InventoryPojo> inventoriesToSave) {
         if (inventoriesToSave == null || inventoriesToSave.isEmpty()) {
-            return List.of();
+            return;
         }
 
         for (InventoryPojo inventory : inventoriesToSave) {
             validateInventoryForBulkSave(inventory);
         }
 
-        return inventoryDao.saveAll(inventoriesToSave);
+        inventoryDao.saveAll(inventoriesToSave);
     }
 
     @Override

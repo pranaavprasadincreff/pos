@@ -1,7 +1,6 @@
 package com.increff.pos.api;
 
 import com.increff.pos.db.ProductPojo;
-import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.test.AbstractUnitTest;
 import org.junit.jupiter.api.Test;
@@ -40,14 +39,12 @@ public class ProductApiTest extends AbstractUnitTest {
         productApi.addProduct(product("b1"));
         productApi.addProduct(product("b2"));
 
-        ProductUpdatePojo u = new ProductUpdatePojo();
-        u.setOldBarcode("b1");
-        u.setNewBarcode("b2");
-        u.setClientEmail("c@example.com");
-        u.setName("n");
-        u.setMrp(10.0);
-        u.setImageUrl("x");
+        ProductPojo update = product("b2");
+        update.setClientEmail("c@example.com");
+        update.setName("n");
+        update.setMrp(10.0);
+        update.setImageUrl("x");
 
-        assertThrows(ApiException.class, () -> productApi.updateProduct(u));
+        assertThrows(ApiException.class, () -> productApi.updateProduct(update, "b1"));
     }
 }

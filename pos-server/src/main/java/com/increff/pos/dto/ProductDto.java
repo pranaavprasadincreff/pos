@@ -1,9 +1,7 @@
 package com.increff.pos.dto;
 
 import com.increff.pos.db.InventoryPojo;
-import com.increff.pos.db.InventoryUpdatePojo;
 import com.increff.pos.db.ProductPojo;
-import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.flow.ProductFlow;
 import com.increff.pos.helper.BulkUploadHelper;
 import com.increff.pos.helper.ProductHelper;
@@ -58,17 +56,20 @@ public class ProductDto {
     public ProductData updateProduct(ProductUpdateForm form) throws ApiException {
         NormalizationUtil.normalizeProductUpdateForm(form);
 
-        ProductUpdatePojo update = ProductHelper.convertProductUpdateFormToEntity(form);
-        Pair<ProductPojo, InventoryPojo> pair = productFlow.updateProduct(update);
+        String oldBarcode = form.getOldBarcode();
+        ProductPojo productToUpdate = ProductHelper.convertProductUpdateFormToProductPojo(form);
 
+        Pair<ProductPojo, InventoryPojo> pair = productFlow.updateProduct(productToUpdate, oldBarcode);
         return ProductHelper.convertToProductData(pair.getLeft(), pair.getRight());
     }
 
     public ProductData updateInventory(InventoryUpdateForm form) throws ApiException {
         NormalizationUtil.normalizeInventoryUpdateForm(form);
 
-        InventoryUpdatePojo update = ProductHelper.convertInventoryUpdateFormToEntity(form);
-        Pair<ProductPojo, InventoryPojo> pair = productFlow.updateInventory(update);
+        String barcode = form.getBarcode();
+        InventoryPojo inventoryToUpdate = ProductHelper.convertInventoryUpdateFormToInventoryPojo(form);
+
+        Pair<ProductPojo, InventoryPojo> pair = productFlow.updateInventory(inventoryToUpdate, barcode);
 
         return ProductHelper.convertToProductData(pair.getLeft(), pair.getRight());
     }

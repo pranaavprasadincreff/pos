@@ -5,7 +5,6 @@ import com.increff.pos.api.InventoryApi;
 import com.increff.pos.api.ProductApi;
 import com.increff.pos.db.ClientPojo;
 import com.increff.pos.db.InventoryPojo;
-import com.increff.pos.db.InventoryUpdatePojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.PageForm;
@@ -75,11 +74,11 @@ public class ProductFlowTest extends AbstractUnitTest {
         createClient("c1@example.com", "client one");
         Pair<ProductPojo, InventoryPojo> pair = productFlow.addProduct(product("p1", "c1@example.com"));
 
-        InventoryUpdatePojo invUpdate = new InventoryUpdatePojo();
-        invUpdate.setBarcode(pair.getLeft().getBarcode());
+        // ✅ InventoryPojo first, barcode second (as per new signature)
+        InventoryPojo invUpdate = new InventoryPojo();
         invUpdate.setQuantity(1001);
 
-        assertThrows(ApiException.class, () -> productFlow.updateInventory(invUpdate));
+        assertThrows(ApiException.class, () -> productFlow.updateInventory(invUpdate, pair.getLeft().getBarcode()));
     }
 
     @Test

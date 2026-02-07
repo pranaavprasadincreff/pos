@@ -2,7 +2,6 @@ package com.increff.pos.api;
 
 import com.increff.pos.dao.ProductDao;
 import com.increff.pos.db.ProductPojo;
-import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.ProductSearchForm;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,12 +50,12 @@ public class ProductApiImpl implements ProductApi {
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public ProductPojo updateProduct(ProductUpdatePojo updateRequest) throws ApiException {
-        ProductPojo existingProduct = loadProductByBarcode(updateRequest.getOldBarcode());
+    public ProductPojo updateProduct(ProductPojo productToUpdate, String oldBarcode) throws ApiException {
+        ProductPojo existingProduct = loadProductByBarcode(oldBarcode);
 
-        ensureBarcodeIsUnique(updateRequest.getNewBarcode(), existingProduct.getId());
-        applyUpdate(existingProduct, updateRequest);
+        ensureBarcodeIsUnique(productToUpdate.getBarcode(), existingProduct.getId());
 
+        applyUpdate(existingProduct, productToUpdate);
         return productDao.save(existingProduct);
     }
 
@@ -93,11 +92,11 @@ public class ProductApiImpl implements ProductApi {
         throw new ApiException("Duplicate barcode");
     }
 
-    private void applyUpdate(ProductPojo existingProduct, ProductUpdatePojo updateRequest) {
-        existingProduct.setBarcode(updateRequest.getNewBarcode());
-        existingProduct.setClientEmail(updateRequest.getClientEmail());
-        existingProduct.setName(updateRequest.getName());
-        existingProduct.setMrp(updateRequest.getMrp());
-        existingProduct.setImageUrl(updateRequest.getImageUrl());
+    private void applyUpdate(ProductPojo existingProduct, ProductPojo productToUpdate) {
+        existingProduct.setBarcode(productToUpdate.getBarcode());
+        existingProduct.setClientEmail(productToUpdate.getClientEmail());
+        existingProduct.setName(productToUpdate.getName());
+        existingProduct.setMrp(productToUpdate.getMrp());
+        existingProduct.setImageUrl(productToUpdate.getImageUrl());
     }
 }

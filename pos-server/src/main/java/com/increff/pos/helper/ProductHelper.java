@@ -1,9 +1,7 @@
 package com.increff.pos.helper;
 
 import com.increff.pos.db.InventoryPojo;
-import com.increff.pos.db.InventoryUpdatePojo;
 import com.increff.pos.db.ProductPojo;
-import com.increff.pos.db.ProductUpdatePojo;
 import com.increff.pos.model.data.ProductData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.InventoryUpdateForm;
@@ -25,22 +23,21 @@ public class ProductHelper {
         return productToCreate;
     }
 
-    public static InventoryUpdatePojo convertInventoryUpdateFormToEntity(InventoryUpdateForm inventoryUpdateForm) {
-        InventoryUpdatePojo updateRequest = new InventoryUpdatePojo();
-        updateRequest.setBarcode(inventoryUpdateForm.getBarcode());
-        updateRequest.setQuantity(inventoryUpdateForm.getQuantity());
-        return updateRequest;
+    public static InventoryPojo convertInventoryUpdateFormToInventoryPojo(InventoryUpdateForm form) {
+        InventoryPojo inventoryPojo = new InventoryPojo();
+        inventoryPojo.setQuantity(form.getQuantity());
+        return inventoryPojo;
     }
 
-    public static ProductUpdatePojo convertProductUpdateFormToEntity(ProductUpdateForm productUpdateForm) {
-        ProductUpdatePojo updateRequest = new ProductUpdatePojo();
-        updateRequest.setOldBarcode(productUpdateForm.getOldBarcode());
-        updateRequest.setNewBarcode(productUpdateForm.getNewBarcode());
-        updateRequest.setClientEmail(productUpdateForm.getClientEmail());
-        updateRequest.setName(productUpdateForm.getName());
-        updateRequest.setMrp(productUpdateForm.getMrp());
-        updateRequest.setImageUrl(productUpdateForm.getImageUrl());
-        return updateRequest;
+
+    public static ProductPojo convertProductUpdateFormToProductPojo(ProductUpdateForm form) {
+        ProductPojo p = new ProductPojo();
+        p.setBarcode(form.getNewBarcode());
+        p.setClientEmail(form.getClientEmail());
+        p.setName(form.getName());
+        p.setMrp(form.getMrp());
+        p.setImageUrl(form.getImageUrl());
+        return p;
     }
 
     public static ProductData convertToProductData(ProductPojo product, InventoryPojo inventory) {

@@ -15,7 +15,7 @@ public interface InventoryApi {
     void deductInventory(String productId, int quantity) throws ApiException;
 
     List<InventoryPojo> getByProductIds(List<String> ids);
-    List<InventoryPojo> saveAll(List<InventoryPojo> list);
+    void saveAll(List<InventoryPojo> list);
 
     boolean isSufficientInventoryBulk(Map<String, Integer> qtyByProductId) throws ApiException;
     void deductInventoryBulk(Map<String, Integer> quantityToDeductByProductId) throws ApiException;
