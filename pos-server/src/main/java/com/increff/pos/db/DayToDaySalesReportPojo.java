@@ -32,7 +32,6 @@ public class DayToDaySalesReportPojo extends AbstractPojo {
     @Setter
     @NoArgsConstructor
     public static class ProductBlock {
-        // TODO use productId
         private String productBarcode;
         private Long ordersCount;
         private Long itemsCount;

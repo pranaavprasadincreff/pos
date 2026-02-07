@@ -20,7 +20,6 @@ import java.util.Map;
 
 @Service
 public class OrderFlow {
-
     private static final int MAX_REF_GENERATION_ATTEMPTS = 10;
 
     @Autowired
@@ -31,8 +30,6 @@ public class OrderFlow {
 
     @Autowired
     private ProductApi productApi;
-
-    // ---------------- PUBLIC FLOWS ----------------
 
     @Transactional(rollbackFor = ApiException.class)
     public OrderPojo create(OrderPojo order, List<String> barcodes) throws ApiException {

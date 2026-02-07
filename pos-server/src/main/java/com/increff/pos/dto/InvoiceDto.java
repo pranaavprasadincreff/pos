@@ -19,7 +19,7 @@ public class InvoiceDto {
     private InvoiceClientWrapper invoiceClientWrapper;
 
     public InvoiceData generateInvoice(String orderReferenceId) throws ApiException {
-        String normalizedOrderReferenceId = normalizeOrderReferenceId(orderReferenceId);
+        String normalizedOrderReferenceId = NormalizationUtil.normalizeBarcode(orderReferenceId);
 
         boolean invoiceExists = invoiceFlow.invoiceAlreadyExists(normalizedOrderReferenceId);
         if (invoiceExists) {
@@ -33,11 +33,7 @@ public class InvoiceDto {
     }
 
     public InvoiceData getInvoice(String orderReferenceId) throws ApiException {
-        String normalizedOrderReferenceId = normalizeOrderReferenceId(orderReferenceId);
+        String normalizedOrderReferenceId = NormalizationUtil.normalizeBarcode(orderReferenceId);
         return invoiceClientWrapper.getInvoice(normalizedOrderReferenceId);
-    }
-
-    private String normalizeOrderReferenceId(String orderReferenceId) {
-        return NormalizationUtil.normalizeBarcode(orderReferenceId);
     }
 }

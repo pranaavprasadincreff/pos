@@ -1,7 +1,6 @@
 package com.increff.pos.api;
 
 import com.increff.pos.db.ClientPojo;
-import com.increff.pos.db.ClientUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.test.AbstractUnitTest;
 import org.junit.jupiter.api.Test;
@@ -53,12 +52,13 @@ public class ClientApiTest extends AbstractUnitTest {
 
     @Test
     public void testUpdateClientNotFound() {
-        ClientUpdatePojo upd = new ClientUpdatePojo();
-        upd.setOldEmail("missing@example.com");
-        upd.setNewEmail("new@example.com");
+        String oldEmail = "missing@example.com";
+
+        ClientPojo upd = new ClientPojo();
+        upd.setEmail("new@example.com");
         upd.setName("New Name");
 
-        assertThrows(ApiException.class, () -> clientApi.update(upd));
+        assertThrows(ApiException.class, () -> clientApi.update(upd, oldEmail));
     }
 
     @Test
@@ -73,12 +73,13 @@ public class ClientApiTest extends AbstractUnitTest {
         b.setName("B");
         clientApi.add(b);
 
-        ClientUpdatePojo upd = new ClientUpdatePojo();
-        upd.setOldEmail("a@example.com");
-        upd.setNewEmail("b@example.com");
+        String oldEmail = "a@example.com";
+
+        ClientPojo upd = new ClientPojo();
+        upd.setEmail("b@example.com"); // new email conflicts with B
         upd.setName("A Updated");
 
-        assertThrows(ApiException.class, () -> clientApi.update(upd));
+        assertThrows(ApiException.class, () -> clientApi.update(upd, oldEmail));
     }
 
     @Test
@@ -88,12 +89,13 @@ public class ClientApiTest extends AbstractUnitTest {
         a.setName("Old Name");
         ClientPojo saved = clientApi.add(a);
 
-        ClientUpdatePojo upd = new ClientUpdatePojo();
-        upd.setOldEmail("same@example.com");
-        upd.setNewEmail("same@example.com");
+        String oldEmail = "same@example.com";
+
+        ClientPojo upd = new ClientPojo();
+        upd.setEmail("same@example.com"); // same email allowed
         upd.setName("New Name");
 
-        ClientPojo updated = clientApi.update(upd);
+        ClientPojo updated = clientApi.update(upd, oldEmail);
 
         assertNotNull(updated);
         assertEquals(saved.getId(), updated.getId());
@@ -108,12 +110,13 @@ public class ClientApiTest extends AbstractUnitTest {
         a.setName("Old");
         clientApi.add(a);
 
-        ClientUpdatePojo upd = new ClientUpdatePojo();
-        upd.setOldEmail("old@example.com");
-        upd.setNewEmail("new@example.com");
+        String oldEmail = "old@example.com";
+
+        ClientPojo upd = new ClientPojo();
+        upd.setEmail("new@example.com");
         upd.setName("Updated");
 
-        ClientPojo updated = clientApi.update(upd);
+        ClientPojo updated = clientApi.update(upd, oldEmail);
 
         assertNotNull(updated);
         assertEquals("new@example.com", updated.getEmail());

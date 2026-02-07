@@ -101,12 +101,6 @@ public class SalesReportDao {
 
     // -------------------- Core aggregation helpers --------------------
 
-    /**
-     * Convert orderItems.productId (String) -> orderItems.productObjectId (ObjectId)
-     * so that $lookup can match products._id (ObjectId).
-     *
-     * NOTE: $toObjectId requires MongoDB 4.0+.
-     */
     private AddFieldsOperation addProductObjectIdField() {
         AggregationExpression toObjectIdExpr =
                 context -> new org.bson.Document("$toObjectId", "$" + ORDER_ITEMS_PRODUCT_ID_PATH);

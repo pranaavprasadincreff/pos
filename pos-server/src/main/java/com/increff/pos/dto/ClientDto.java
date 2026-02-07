@@ -2,7 +2,6 @@ package com.increff.pos.dto;
 
 import com.increff.pos.api.ClientApi;
 import com.increff.pos.db.ClientPojo;
-import com.increff.pos.db.ClientUpdatePojo;
 import com.increff.pos.helper.ClientHelper;
 import com.increff.pos.model.data.ClientData;
 import com.increff.pos.model.exception.ApiException;
@@ -46,10 +45,12 @@ public class ClientDto {
 
     public ClientData update(ClientUpdateForm clientUpdateForm) throws ApiException {
         NormalizationUtil.normalizeClientUpdateForm(clientUpdateForm);
-        ClientUpdatePojo updateRequest = ClientHelper.convertUpdateFormToEntity(clientUpdateForm);
-        ClientPojo updatedClient = clientApi.update(updateRequest);
+        String oldEmail = clientUpdateForm.getOldEmail();
+        ClientPojo clientToUpdate = ClientHelper.convertUpdateFormToClientPojo(clientUpdateForm);
+        ClientPojo updatedClient = clientApi.update(clientToUpdate, oldEmail);
         return ClientHelper.convertFormToDto(updatedClient);
     }
+
 
     public Page<ClientData> getAllUsingSearch(PageForm pageForm) throws ApiException {
         ClientSearchForm clientSearchForm = buildEmptySearchFromPage(pageForm);

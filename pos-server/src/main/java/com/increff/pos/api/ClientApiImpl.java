@@ -2,7 +2,6 @@ package com.increff.pos.api;
 
 import com.increff.pos.dao.ClientDao;
 import com.increff.pos.db.ClientPojo;
-import com.increff.pos.db.ClientUpdatePojo;
 import com.increff.pos.model.exception.ApiException;
 import jakarta.annotation.Nonnull;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +17,6 @@ import java.util.Set;
 
 @Service
 public class ClientApiImpl implements ClientApi {
-
     @Autowired
     private ClientDao clientDao;
 
@@ -36,12 +34,15 @@ public class ClientApiImpl implements ClientApi {
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public ClientPojo update(@Nonnull ClientUpdatePojo updateRequest) throws ApiException {
-        ClientPojo existingClient = fetchClientByEmail(updateRequest.getOldEmail());
-        validateUpdatedEmailDoesNotConflict(existingClient, updateRequest.getNewEmail());
-        applyClientUpdate(existingClient, updateRequest);
+    public ClientPojo update(@Nonnull ClientPojo clientToUpdate, @Nonnull String oldEmail) throws ApiException {
+        ClientPojo existingClient = fetchClientByEmail(oldEmail);
+
+        validateUpdatedEmailDoesNotConflict(existingClient, clientToUpdate.getEmail());
+        applyClientUpdate(existingClient, clientToUpdate);
+
         return clientDao.save(existingClient);
     }
+
 
     @Override
     public Page<ClientPojo> search(String name, String email, int page, int size) {
@@ -93,9 +94,9 @@ public class ClientApiImpl implements ClientApi {
         throw new ApiException("Client already exists with email: " + newEmail);
     }
 
-    private void applyClientUpdate(ClientPojo existingClient, ClientUpdatePojo updateRequest) {
-        existingClient.setName(updateRequest.getName());
-        existingClient.setEmail(updateRequest.getNewEmail());
+    private void applyClientUpdate(ClientPojo existingClient, ClientPojo clientToUpdate) {
+        existingClient.setName(clientToUpdate.getName());
+        existingClient.setEmail(clientToUpdate.getEmail());
     }
 
     private void validateAllClientsExist(Set<String> emails, List<ClientPojo> clients) throws ApiException {
