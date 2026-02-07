@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -19,296 +19,285 @@ const NAME_MAX = 30
 const EMAIL_REGEX = /^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$/
 
 interface CreateClientForm {
-    name: string
-    email: string
+  name: string
+  email: string
 }
 
 interface EditClientForm {
-    name: string
-    oldEmail: string
-    newEmail: string
+  name: string
+  oldEmail: string
+  newEmail: string
 }
 
 type ClientForm = CreateClientForm | EditClientForm
 
 interface Props {
-    isOpen: boolean
-    onClose: () => void
-    onSubmit: (form: ClientForm) => Promise<void>
-    initialData: Client | null
+  isOpen: boolean
+  onClose: () => void
+  onSubmit: (form: ClientForm) => Promise<void>
+  initialData: Client | null
 }
 
 function validateName(name: string): string | null {
-    const v = name.trim()
-    if (!v) return "Name required"
-    if (v.length > NAME_MAX) return "Name too long"
-    return null
+  const v = name.trim()
+  if (!v) return "Name required"
+  if (v.length > NAME_MAX) return "Name too long"
+  return null
 }
 
-// ✅ lightweight validation while user is typing
 function validateEmailWhileTyping(email: string): string | null {
-    const v = email.trim()
-    if (!v) return "Email required"
-    if (v.length > EMAIL_MAX) return "Email too long"
-    return null
+  const v = email.trim()
+  if (!v) return "Email required"
+  if (v.length > EMAIL_MAX) return "Email too long"
+  return null
 }
 
-// ✅ strict validation only when user "finishes" (blur / submit)
 function validateEmailStrict(email: string): string | null {
-    const basic = validateEmailWhileTyping(email)
-    if (basic) return basic
+  const basic = validateEmailWhileTyping(email)
+  if (basic) return basic
 
-    const v = email.trim()
-    if (!EMAIL_REGEX.test(v)) return "Invalid email format"
-    return null
+  const v = email.trim()
+  if (!EMAIL_REGEX.test(v)) return "Invalid email format"
+  return null
 }
 
 export default function ClientModal({ isOpen, onClose, onSubmit, initialData }: Props) {
-    const isEdit = Boolean(initialData)
+  const isEdit = Boolean(initialData)
 
-    const [name, setName] = useState("")
-    const [email, setEmail] = useState("")
-    const [originalEmail, setOriginalEmail] = useState("")
-    const [submitting, setSubmitting] = useState(false)
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [originalEmail, setOriginalEmail] = useState("")
+  const [submitting, setSubmitting] = useState(false)
 
-    // touched flags (show errors only after interaction)
-    const [nameTouched, setNameTouched] = useState(false)
-    const [emailTouched, setEmailTouched] = useState(false)
+  const [nameTouched, setNameTouched] = useState(false)
+  const [emailTouched, setEmailTouched] = useState(false)
 
-    // ✅ new: we only show strict email format error after blur OR submit
-    const [emailBlurred, setEmailBlurred] = useState(false)
-    const [submitAttempted, setSubmitAttempted] = useState(false)
+  const [emailBlurred, setEmailBlurred] = useState(false)
+  const [submitAttempted, setSubmitAttempted] = useState(false)
 
-    const nameRef = useRef<HTMLInputElement>(null)
-    const emailRef = useRef<HTMLInputElement>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
 
-    // backend errors can override field errors
-    const [serverNameError, setServerNameError] = useState<string | null>(null)
-    const [serverEmailError, setServerEmailError] = useState<string | null>(null)
+  const [serverNameError, setServerNameError] = useState<string | null>(null)
+  const [serverEmailError, setServerEmailError] = useState<string | null>(null)
 
-    function resetLocalState() {
-        setName("")
-        setEmail("")
-        setOriginalEmail("")
-        setSubmitting(false)
+  function resetLocalState() {
+    setName("")
+    setEmail("")
+    setOriginalEmail("")
+    setSubmitting(false)
 
-        setNameTouched(false)
-        setEmailTouched(false)
-        setEmailBlurred(false)
-        setSubmitAttempted(false)
+    setNameTouched(false)
+    setEmailTouched(false)
+    setEmailBlurred(false)
+    setSubmitAttempted(false)
 
-        setServerNameError(null)
-        setServerEmailError(null)
+    setServerNameError(null)
+    setServerEmailError(null)
+  }
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    if (initialData) {
+      setName(initialData.name ?? "")
+      setEmail(initialData.email ?? "")
+      setOriginalEmail(initialData.email ?? "")
+    } else {
+      setName("")
+      setEmail("")
+      setOriginalEmail("")
     }
 
-    useEffect(() => {
-        if (!isOpen) return
+    setSubmitting(false)
+    setNameTouched(false)
+    setEmailTouched(false)
+    setEmailBlurred(false)
+    setSubmitAttempted(false)
+    setServerNameError(null)
+    setServerEmailError(null)
+  }, [initialData, isOpen])
 
-        if (initialData) {
-            setName(initialData.name ?? "")
-            setEmail(initialData.email ?? "")
-            setOriginalEmail(initialData.email ?? "")
-        } else {
-            setName("")
-            setEmail("")
-            setOriginalEmail("")
-        }
+  const nameError = useMemo(() => {
+    if (serverNameError) return serverNameError
+    if (!isOpen) return null
+    if (!nameTouched && !submitAttempted) return null
+    return validateName(name)
+  }, [name, nameTouched, submitAttempted, serverNameError, isOpen])
 
-        setSubmitting(false)
-        setNameTouched(false)
-        setEmailTouched(false)
-        setEmailBlurred(false)
-        setSubmitAttempted(false)
-        setServerNameError(null)
-        setServerEmailError(null)
-    }, [initialData, isOpen])
+  const emailError = useMemo(() => {
+    if (serverEmailError) return serverEmailError
+    if (!isOpen) return null
+    if (!emailTouched && !submitAttempted) return null
 
-    const nameError = useMemo(() => {
-        if (serverNameError) return serverNameError
-        if (!isOpen) return null
-        if (!nameTouched && !submitAttempted) return null
-        return validateName(name)
-    }, [name, nameTouched, submitAttempted, serverNameError, isOpen])
-
-    const emailError = useMemo(() => {
-        if (serverEmailError) return serverEmailError
-        if (!isOpen) return null
-        if (!emailTouched && !submitAttempted) return null
-
-        // ✅ while typing, don’t show “Invalid email format”
-        if (!emailBlurred && !submitAttempted) {
-            return validateEmailWhileTyping(email)
-        }
-
-        // ✅ after blur/submit: strict check
-        return validateEmailStrict(email)
-    }, [email, emailTouched, emailBlurred, submitAttempted, serverEmailError, isOpen])
-
-    const isFormValid = useMemo(() => {
-        // ✅ form enablement can be strict only after email blurred/submit,
-        // but still allow typing without disabling.
-        const nameOk = !validateName(name)
-
-        // While user is typing (not blurred, not submitted), only require + length.
-        // After blur/submit, require strict format.
-        const emailOk =
-            !emailBlurred && !submitAttempted
-                ? !validateEmailWhileTyping(email)
-                : !validateEmailStrict(email)
-
-        return nameOk && emailOk
-    }, [name, email, emailBlurred, submitAttempted])
-
-    async function handleSubmit() {
-        setSubmitAttempted(true)
-        setEmailBlurred(true) // ✅ force strict validation on submit
-        setServerNameError(null)
-        setServerEmailError(null)
-
-        const nErr = validateName(name)
-        const eErr = validateEmailStrict(email)
-
-        if (nErr) {
-            setNameTouched(true)
-            nameRef.current?.focus()
-            return
-        }
-        if (eErr) {
-            setEmailTouched(true)
-            emailRef.current?.focus()
-            return
-        }
-
-        setSubmitting(true)
-        try {
-            if (isEdit) {
-                await onSubmit({
-                    name: name.trim(),
-                    oldEmail: originalEmail.trim(),
-                    newEmail: email.trim(),
-                })
-            } else {
-                await onSubmit({
-                    name: name.trim(),
-                    email: email.trim(),
-                })
-            }
-
-            // close only after submit success
-            resetLocalState()
-            onClose()
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : "Something went wrong"
-
-            if (msg.toLowerCase().includes("name")) {
-                setServerNameError(msg)
-                nameRef.current?.focus()
-            } else {
-                setServerEmailError(msg)
-                emailRef.current?.focus()
-            }
-        } finally {
-            setSubmitting(false)
-        }
+    if (!emailBlurred && !submitAttempted) {
+      return validateEmailWhileTyping(email)
     }
 
-    function handleClose() {
-        // close from Cancel or X only
-        resetLocalState()
-        onClose()
+    return validateEmailStrict(email)
+  }, [email, emailTouched, emailBlurred, submitAttempted, serverEmailError, isOpen])
+
+  const isFormValid = useMemo(() => {
+    const nameOk = !validateName(name)
+
+    const emailOk =
+      !emailBlurred && !submitAttempted
+        ? !validateEmailWhileTyping(email)
+        : !validateEmailStrict(email)
+
+    return nameOk && emailOk
+  }, [name, email, emailBlurred, submitAttempted])
+
+  async function handleSubmit() {
+    setSubmitAttempted(true)
+    setEmailBlurred(true)
+    setServerNameError(null)
+    setServerEmailError(null)
+
+    const nErr = validateName(name)
+    const eErr = validateEmailStrict(email)
+
+    if (nErr) {
+      setNameTouched(true)
+      nameRef.current?.focus()
+      return
+    }
+    if (eErr) {
+      setEmailTouched(true)
+      emailRef.current?.focus()
+      return
     }
 
-    return (
-        <Dialog open={isOpen} onOpenChange={(open) => (!open ? handleClose() : undefined)}>
-            <DialogContent
-                className="animate-in fade-in zoom-in-95 duration-200"
-                onInteractOutside={(e) => e.preventDefault()}
-                onEscapeKeyDown={(e) => e.preventDefault()}
-            >
-                <DialogHeader>
-                    <DialogTitle>{isEdit ? "Edit Client" : "Add Client"}</DialogTitle>
-                </DialogHeader>
+    setSubmitting(true)
+    try {
+      if (isEdit) {
+        await onSubmit({
+          name: name.trim(),
+          oldEmail: originalEmail.trim(),
+          newEmail: email.trim(),
+        })
+      } else {
+        await onSubmit({
+          name: name.trim(),
+          email: email.trim(),
+        })
+      }
 
-                <div className="space-y-4">
-                    {/* Name */}
-                    <div className="space-y-1">
-                        <Label>Name</Label>
-                        <Input
-                            ref={nameRef}
-                            value={name}
-                            onChange={(e) => {
-                                setName(e.target.value)
-                                if (!nameTouched) setNameTouched(true)
-                                if (serverNameError) setServerNameError(null)
-                            }}
-                            onBlur={() => setNameTouched(true)}
-                            placeholder="Client name"
-                            autoFocus
-                            className={cn(
-                                "focus-visible:ring-1 focus-visible:ring-indigo-500",
-                                nameError &&
-                                "border-red-400 ring-2 ring-red-400/30 focus-visible:ring-red-400/40"
-                            )}
-                        />
-                        {nameError ? (
-                            <p className="text-sm text-red-500">{nameError}</p>
-                        ) : (
-                            <p className="text-xs text-muted-foreground">Max {NAME_MAX} characters</p>
-                        )}
-                    </div>
+      resetLocalState()
+      onClose()
+    } catch (err: unknown) {
+      // ✅ With api.ts normalization, err.message will be backend message.
+      // Still keep fallbacks in case something throws a non-Error.
+      const msg =
+        (err instanceof Error && err.message) ||
+        (err as any)?.response?.data?.message ||
+        "Something went wrong"
 
-                    {/* Email */}
-                    <div className="space-y-1">
-                        <Label>Email</Label>
-                        <Input
-                            ref={emailRef}
-                            value={email}
-                            onChange={(e) => {
-                                setEmail(e.target.value)
-                                if (!emailTouched) setEmailTouched(true)
-                                // ✅ user is still typing; don’t treat as “finished”
-                                if (emailBlurred) setEmailBlurred(false)
-                                if (serverEmailError) setServerEmailError(null)
-                            }}
-                            onBlur={() => {
-                                setEmailTouched(true)
-                                setEmailBlurred(true) // ✅ now consider input "finished"
-                            }}
-                            placeholder="client@email.com"
-                            type="email"
-                            className={cn(
-                                "focus-visible:ring-1 focus-visible:ring-indigo-500",
-                                emailError &&
-                                "border-red-400 ring-2 ring-red-400/30 focus-visible:ring-red-400/40"
-                            )}
-                        />
-                        {emailError ? (
-                            <p className="text-sm text-red-500">{emailError}</p>
-                        ) : (
-                            <p className="text-xs text-muted-foreground">Max {EMAIL_MAX} characters</p>
-                        )}
-                    </div>
-                </div>
+      if (msg.toLowerCase().includes("name")) {
+        setServerNameError(msg)
+        nameRef.current?.focus()
+      } else {
+        setServerEmailError(msg)
+        emailRef.current?.focus()
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
-                <DialogFooter>
-                    <Button
-                        variant="outline"
-                        className="border-slate-300"
-                        onClick={handleClose}
-                        disabled={submitting}
-                    >
-                        Cancel
-                    </Button>
+  function handleClose() {
+    resetLocalState()
+    onClose()
+  }
 
-                    <Button
-                        onClick={handleSubmit}
-                        disabled={submitting || !isFormValid}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
-                    >
-                        {submitting ? "Saving..." : "Save"}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => (!open ? handleClose() : undefined)}>
+      <DialogContent
+        className="animate-in fade-in zoom-in-95 duration-200"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Edit Client" : "Add Client"}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <Label>Name</Label>
+            <Input
+              ref={nameRef}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value)
+                if (!nameTouched) setNameTouched(true)
+                if (serverNameError) setServerNameError(null)
+              }}
+              onBlur={() => setNameTouched(true)}
+              placeholder="Client name"
+              autoFocus
+              className={cn(
+                "focus-visible:ring-1 focus-visible:ring-indigo-500",
+                nameError &&
+                  "border-red-400 ring-2 ring-red-400/30 focus-visible:ring-red-400/40"
+              )}
+            />
+            {nameError ? (
+              <p className="text-sm text-red-500">{nameError}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Max {NAME_MAX} characters</p>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <Label>Email</Label>
+            <Input
+              ref={emailRef}
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                if (!emailTouched) setEmailTouched(true)
+                if (emailBlurred) setEmailBlurred(false)
+                if (serverEmailError) setServerEmailError(null)
+              }}
+              onBlur={() => {
+                setEmailTouched(true)
+                setEmailBlurred(true)
+              }}
+              placeholder="client@email.com"
+              type="email"
+              className={cn(
+                "focus-visible:ring-1 focus-visible:ring-indigo-500",
+                emailError &&
+                  "border-red-400 ring-2 ring-red-400/30 focus-visible:ring-red-400/40"
+              )}
+            />
+            {emailError ? (
+              <p className="text-sm text-red-500">{emailError}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Max {EMAIL_MAX} characters</p>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            className="border-slate-300"
+            onClick={handleClose}
+            disabled={submitting}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || !isFormValid}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+          >
+            {submitting ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }

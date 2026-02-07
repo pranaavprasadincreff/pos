@@ -6,6 +6,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -25,17 +27,45 @@ public class AppRestControllerAdvice {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<MessageData> handle(MethodArgumentNotValidException exception) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new MessageData(firstFieldErrorMessage(exception)));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new MessageData(firstFieldErrorMessage(exception)));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<MessageData> handle(ConstraintViolationException exception) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new MessageData(firstConstraintViolationMessage(exception)));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new MessageData(firstConstraintViolationMessage(exception)));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<MessageData> handle(HttpMessageNotReadableException exception) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new MessageData("Invalid request body"));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new MessageData("Invalid request body"));
+    }
+
+    /**
+     * ✅ Unwraps reflection-wrapped exceptions (InvocationTargetException) so that
+     * ApiException is handled correctly instead of falling into Throwable -> 500.
+     */
+    @ExceptionHandler(InvocationTargetException.class)
+    public ResponseEntity<MessageData> handle(InvocationTargetException exception) {
+        Throwable target = exception.getTargetException();
+
+        if (target instanceof ApiException apiEx) {
+            return handle(apiEx);
+        }
+
+        if (target instanceof DuplicateKeyException dk) {
+            return handle(dk);
+        }
+
+        if (target instanceof DataIntegrityViolationException div) {
+            return handle(div);
+        }
+
+        log.error("InvocationTargetException (unwrapped target not mapped)", exception);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new MessageData("An internal error occurred"));
     }
 
     @ExceptionHandler(ApiException.class)
@@ -48,13 +78,39 @@ public class AppRestControllerAdvice {
     @ExceptionHandler(DuplicateKeyException.class)
     public ResponseEntity<MessageData> handle(DuplicateKeyException exception) {
         log.warn("DuplicateKeyException", exception);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new MessageData("A record with this key already exists"));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new MessageData("A record with this key already exists"));
+    }
+
+    /**
+     * ✅ Some Mongo/Spring duplicate-key scenarios come as DataIntegrityViolationException
+     * instead of DuplicateKeyException. Treat them the same.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<MessageData> handle(DataIntegrityViolationException exception) {
+        log.warn("DataIntegrityViolationException", exception);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new MessageData("A record with this key already exists"));
     }
 
     @ExceptionHandler(Throwable.class)
     public ResponseEntity<MessageData> handle(Throwable exception) {
         log.error("Unhandled exception", exception);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MessageData("An internal error occurred"));
+
+        // ✅ Last-chance unwrap if something wrapped ApiException as a cause
+        Throwable cause = exception.getCause();
+        if (cause instanceof ApiException apiEx) {
+            return handle(apiEx);
+        }
+        if (cause instanceof DuplicateKeyException dk) {
+            return handle(dk);
+        }
+        if (cause instanceof DataIntegrityViolationException div) {
+            return handle(div);
+        }
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new MessageData("An internal error occurred"));
     }
 
     // -------------------- private helpers --------------------

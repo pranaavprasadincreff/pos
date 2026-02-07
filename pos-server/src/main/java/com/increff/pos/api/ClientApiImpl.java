@@ -83,15 +83,9 @@ public class ClientApiImpl implements ClientApi {
         }
 
         ClientPojo clientWithNewEmail = clientDao.findByEmail(newEmail);
-        if (clientWithNewEmail == null) {
-            return;
+        if (clientWithNewEmail != null) {
+            throw new ApiException("Client already exists with email: " + newEmail);
         }
-
-        boolean updatedEmailBelongsToSameClient = clientWithNewEmail.getId().equals(existingClient.getId());
-        if (updatedEmailBelongsToSameClient) {
-            return;
-        }
-        throw new ApiException("Client already exists with email: " + newEmail);
     }
 
     private void applyClientUpdate(ClientPojo existingClient, ClientPojo clientToUpdate) {
