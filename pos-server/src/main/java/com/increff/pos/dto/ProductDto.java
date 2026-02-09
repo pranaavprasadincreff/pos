@@ -14,7 +14,6 @@ import com.increff.pos.util.NormalizationUtil;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -29,10 +28,8 @@ public class ProductDto {
 
     public ProductData addProduct(ProductForm form) throws ApiException {
         NormalizationUtil.normalizeProductForm(form);
-
         ProductPojo productToCreate = ProductHelper.convertProductFormToEntity(form);
         Pair<ProductPojo, InventoryPojo> created = productFlow.addProduct(productToCreate);
-
         return ProductHelper.convertToProductData(created.getLeft(), created.getRight());
     }
 
@@ -48,9 +45,8 @@ public class ProductDto {
 
     public Page<ProductData> search(ProductSearchForm form) throws ApiException {
         NormalizationUtil.normalizeProductSearchForm(form);
-
         Page<Pair<ProductPojo, InventoryPojo>> page = productFlow.search(form);
-        return convertToProductDataPage(page);
+        return ProductHelper.convertToProductDataPage(page);
     }
 
     public ProductData updateProduct(ProductUpdateForm form) throws ApiException {
@@ -70,7 +66,6 @@ public class ProductDto {
         InventoryPojo inventoryToUpdate = ProductHelper.convertInventoryUpdateFormToInventoryPojo(form);
 
         Pair<ProductPojo, InventoryPojo> pair = productFlow.updateInventory(inventoryToUpdate, barcode);
-
         return ProductHelper.convertToProductData(pair.getLeft(), pair.getRight());
     }
 
@@ -79,7 +74,6 @@ public class ProductDto {
 
         List<ProductPojo> alignedProducts = new ArrayList<>(parsedFile.rows().size());
         Map<Integer, String> errorByRowIndex = new HashMap<>();
-
         List<String> barcodesByRow = new ArrayList<>(parsedFile.rows().size());
 
         for (int rowIndex = 0; rowIndex < parsedFile.rows().size(); rowIndex++) {
@@ -111,14 +105,11 @@ public class ProductDto {
 
         List<InventoryPojo> alignedInventoryDeltas = new ArrayList<>(parsedFile.rows().size());
         Map<Integer, String> errorByRowIndex = new HashMap<>();
-
-        // NEW: capture barcode per row from raw TSV
         List<String> barcodesByRow = new ArrayList<>(parsedFile.rows().size());
 
         for (int rowIndex = 0; rowIndex < parsedFile.rows().size(); rowIndex++) {
             String[] row = parsedFile.rows().get(rowIndex);
 
-            // read barcode even if inventory is bad
             String rawBarcode = BulkUploadHelper.readCell(row, parsedFile.headers(), "barcode");
             String normalizedBarcode = BulkUploadHelper.normalizeBarcode(rawBarcode);
             barcodesByRow.add(normalizedBarcode);
@@ -167,7 +158,6 @@ public class ProductDto {
         String barcode = BulkUploadHelper.normalizeBarcode(BulkUploadHelper.readCell(row, headers, "barcode"));
         String clientEmail = BulkUploadHelper.normalizeEmail(BulkUploadHelper.readCell(row, headers, "clientemail"));
         String productName = BulkUploadHelper.normalizeName(BulkUploadHelper.readCell(row, headers, "name"));
-
         Double mrp = BulkUploadHelper.parseMrp(BulkUploadHelper.readCell(row, headers, "mrp"));
 
         String imageUrl = null;
@@ -176,7 +166,6 @@ public class ProductDto {
         }
 
         BulkUploadHelper.validateProductRow(barcode, clientEmail, productName, mrp, imageUrl);
-
         return ProductHelper.createProductPojo(barcode, clientEmail, productName, mrp, imageUrl);
     }
 
@@ -187,15 +176,6 @@ public class ProductDto {
         BulkUploadHelper.validateInventoryRow(barcode, delta);
 
         return ProductHelper.createInventoryDeltaPojo(barcode, delta);
-    }
-
-    private Page<ProductData> convertToProductDataPage(Page<Pair<ProductPojo, InventoryPojo>> page) {
-        List<ProductData> data = page.getContent()
-                .stream()
-                .map(pair -> ProductHelper.convertToProductData(pair.getLeft(), pair.getRight()))
-                .toList();
-
-        return new PageImpl<>(data, page.getPageable(), page.getTotalElements());
     }
 
     private void forceBarcodeInResults(List<String[]> flowResults, List<String> barcodesByRow) {

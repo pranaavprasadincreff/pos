@@ -1,5 +1,6 @@
 package com.increff.pos.helper;
 
+import org.apache.commons.lang3.tuple.Pair;
 import com.increff.pos.db.InventoryPojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.model.data.ProductData;
@@ -7,6 +8,10 @@ import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.InventoryUpdateForm;
 import com.increff.pos.model.form.ProductForm;
 import com.increff.pos.model.form.ProductUpdateForm;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+
+import java.util.List;
 
 public class ProductHelper {
 
@@ -61,16 +66,22 @@ public class ProductHelper {
         return productPojo;
     }
 
+    public static Page<ProductData> convertToProductDataPage(Page<Pair<ProductPojo, InventoryPojo>> page) {
+        List<ProductData> data = page.getContent()
+                .stream()
+                .map(pair -> convertToProductData(pair.getLeft(), pair.getRight()))
+                .toList();
+
+        return new PageImpl<>(data, page.getPageable(), page.getTotalElements());
+    }
+
     public static InventoryPojo createInventoryDeltaPojo(String barcode, Integer delta) {
         InventoryPojo inventoryPojo = new InventoryPojo();
-        inventoryPojo.setProductId(barcode); // barcode carrier
+        inventoryPojo.setProductId(barcode);
         inventoryPojo.setQuantity(delta);
         return inventoryPojo;
     }
 
-    /**
-     * Row format: barcode, clientEmail, name, mrp, imageUrl(optional)
-     */
     public static ProductPojo toBulkProductPojo(String[] canonicalRow) throws ApiException {
         validateBulkProductRowShape(canonicalRow);
 
@@ -87,10 +98,6 @@ public class ProductHelper {
         return productPojo;
     }
 
-    /**
-     * Row format: barcode, inventoryDelta
-     * Note: productId is used as "barcode carrier" in bulk inventory flow.
-     */
     public static InventoryPojo toBulkInventoryPojo(String[] canonicalRow) throws ApiException {
         validateBulkInventoryRowShape(canonicalRow);
 
