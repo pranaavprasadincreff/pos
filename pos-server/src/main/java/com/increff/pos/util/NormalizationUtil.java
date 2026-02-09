@@ -36,9 +36,9 @@ public class NormalizationUtil {
         return name.trim().toLowerCase();
     }
 
-    public static String normalizeBarcode(String value) {
-        if (!StringUtils.hasText(value)) return value;
-        return value.trim().toUpperCase();
+    public static String normalizeBarcode(String barcode) {
+        if (!StringUtils.hasText(barcode)) return null;
+        return barcode.trim().toUpperCase();
     }
 
     public static void normalizeProductSearchForm(ProductSearchForm form) {
@@ -109,4 +109,20 @@ public class NormalizationUtil {
         if (form == null) return;
         form.setClientEmail(normalizeEmail(form.getClientEmail()));
     }
+
+    public static String normalizeOrderReferenceId(String ref) {
+        if (!StringUtils.hasText(ref)) return null;
+        return ref.trim().toUpperCase();
+    }
+
+    public static void normalizeOrderUpdateForm(OrderUpdateForm form) {
+        if (form == null) return;
+        form.setOrderReferenceId(normalizeOrderReferenceId(form.getOrderReferenceId()));
+        if (form.getItems() != null) {
+            form.getItems().forEach(i ->
+                    i.setProductBarcode(normalizeBarcode(i.getProductBarcode()))
+            );
+        }
+    }
+
 }

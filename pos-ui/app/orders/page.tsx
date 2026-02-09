@@ -16,7 +16,7 @@ import OrderTable from "@/components/orders/OrderTable"
 import CreateOrderModal from "@/components/orders/OrderFormModal"
 import Pagination from "@/components/shared/Pagination"
 
-import { getAllOrders, filterOrders } from "@/services/orderService"
+import { searchOrders } from "@/services/orderService"
 import type { OrderData } from "@/services/types"
 
 import { Hint } from "@/components/shared/Hint"
@@ -95,40 +95,34 @@ export default function OrdersPage() {
 
     const debouncedOrderId = useDebouncedValue(orderId, 350)
 
-    const hasAnyFilter = useMemo(() => {
-        return Boolean(debouncedOrderId.trim()) || status !== "ALL" || range !== "1m"
-    }, [debouncedOrderId, status, range])
-
     const fetchOrders = useCallback(
-        async (pageToLoad: number) => {
-            const toastId = toast.loading("Loading orders...")
-            try {
-                setLoading(true)
+      async (pageToLoad: number) => {
+        const toastId = toast.loading("Loading orders...")
+        try {
+          setLoading(true)
 
-                const trimmedRef = debouncedOrderId.trim()
-                const timeframe = TIMEFRAME_MAP[range]
+          const trimmedRef = debouncedOrderId.trim()
+          const timeframe = TIMEFRAME_MAP[range]
 
-                const res = hasAnyFilter
-                    ? await filterOrders({
-                        orderReferenceId: trimmedRef ? trimmedRef : undefined,
-                        status: status === "ALL" ? undefined : status,
-                        timeframe,
-                        page: pageToLoad,
-                        size: PAGE_SIZE,
-                    })
-                    : await getAllOrders(pageToLoad, PAGE_SIZE)
+          const res = await searchOrders({
+            orderReferenceId: trimmedRef ? trimmedRef : undefined,
+            status: status === "ALL" ? undefined : status,
+            timeframe,
+            page: pageToLoad,
+            size: PAGE_SIZE,
+          })
 
-                setOrders(res.content)
-                setTotalPages(res.totalPages || 1)
-            } catch (e: unknown) {
-                toast.error(e instanceof Error ? e.message : "Failed to load orders", { id: toastId })
-                return
-            } finally {
-                setLoading(false)
-                toast.dismiss(toastId)
-            }
-        },
-        [debouncedOrderId, status, range, hasAnyFilter]
+          setOrders(res.content)
+          setTotalPages(res.totalPages || 1)
+        } catch (e: unknown) {
+          toast.error(e instanceof Error ? e.message : "Failed to load orders", { id: toastId })
+          return
+        } finally {
+          setLoading(false)
+          toast.dismiss(toastId)
+        }
+      },
+      [debouncedOrderId, status, range]
     )
 
     useEffect(() => {

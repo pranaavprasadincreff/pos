@@ -33,15 +33,13 @@ public class OrderFlow {
 
     @Transactional(rollbackFor = ApiException.class)
     public OrderPojo create(OrderPojo order, List<String> barcodes) throws ApiException {
-        // TODO move to dto
         populateNewOrder(order);
 
-        Map<String, ProductPojo> productByBarcode = fetchProductsByBarcode(barcodes);
-        setProductIds(order.getOrderItems(), barcodes, productByBarcode);
-        validateSellingPrices(order.getOrderItems(), barcodes, productByBarcode);
+        Map<String, ProductPojo> productsByBarcode = fetchProductsByBarcode(barcodes);
+        setProductIds(order.getOrderItems(), barcodes, productsByBarcode);
+        validateSellingPrices(order.getOrderItems(), barcodes, productsByBarcode);
 
         boolean fulfillable = isOrderFulfillable(order.getOrderItems());
-
         if (fulfillable) {
             deductInventoryForItems(order.getOrderItems());
         }
@@ -64,7 +62,6 @@ public class OrderFlow {
         validateSellingPrices(updateRequest.getOrderItems(), barcodes, productByBarcode);
 
         boolean fulfillable = isOrderFulfillable(updateRequest.getOrderItems());
-
         if (fulfillable) {
             deductInventoryForItems(updateRequest.getOrderItems());
         }

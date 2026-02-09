@@ -10,7 +10,7 @@ import com.increff.pos.model.constants.OrderTimeframe;
 import com.increff.pos.model.data.OrderData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.OrderSearchForm;
-import com.increff.pos.model.form.PageForm;
+import com.increff.pos.util.FormValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -35,17 +35,23 @@ class OrderDtoTest {
     @Mock
     private ProductApi productApi;
 
+    @Mock
+    private FormValidator formValidator;
+
     @InjectMocks
     private OrderDto orderDto;
 
     @Test
-    void searchOrders_happyPath_delegatesToFlow_andBuildsDataUsingProductIds() throws Exception {
+    void searchOrders_happyPath_normalizesInputs_delegatesToFlow_andBuildsDataUsingProductIds() throws Exception {
         OrderSearchForm form = new OrderSearchForm();
         form.setOrderReferenceId(" ord-12 ");
         form.setStatus("fulfillable");
         form.setTimeframe(OrderTimeframe.LAST_DAY);
         form.setPage(0);
         form.setSize(10);
+
+        // form validation happens via FormValidator now
+        doNothing().when(formValidator).validate(any(OrderSearchForm.class));
 
         // OrderPojo returned from flow must have productIds (DB stores productId)
         OrderItemPojo item = new OrderItemPojo();
@@ -91,80 +97,82 @@ class OrderDtoTest {
                 eq(10)
         );
 
-        // Your DTO currently does NOT normalize ref/status in code itself, only ValidationUtil does.
-        // So we assert pass-through of what form provides (minus whatever ValidationUtil changes).
-        // If ValidationUtil normalizes: update expected values accordingly.
-        assertEquals(" ord-12 ", refCaptor.getValue());
-        assertEquals("fulfillable", statusCaptor.getValue());
+        // NormalizationUtil.normalizeOrderSearchForm() uppercases & trims ref/status
+        assertEquals("ORD-12", refCaptor.getValue());
+        assertEquals("FULFILLABLE", statusCaptor.getValue());
 
         assertNotNull(fromCaptor.getValue());
         assertNotNull(toCaptor.getValue());
         assertTrue(fromCaptor.getValue().isBefore(toCaptor.getValue()));
 
         verify(productApi).findByIds(eq(List.of("PID-1")));
+        verify(formValidator).validate(any(OrderSearchForm.class));
     }
 
     @Test
-    void getAllOrders_happyPath_delegatesToFlow_andBuildsData() throws Exception {
-        PageForm form = new PageForm();
-        form.setPage(0);
-        form.setSize(10);
-
-        OrderItemPojo item = new OrderItemPojo();
-        item.setProductId("PID-1");
-        item.setOrderedQuantity(2);
-        item.setSellingPrice(20.0);
-
-        OrderPojo pojo = new OrderPojo();
-        pojo.setOrderReferenceId("ORD-1");
-        pojo.setStatus(OrderStatus.FULFILLABLE.name());
-        pojo.setOrderTime(ZonedDateTime.now());
-        pojo.setOrderItems(List.of(item));
-
-        Page<OrderPojo> returned = new PageImpl<>(List.of(pojo), PageRequest.of(0, 10), 1);
-        when(orderFlow.search(isNull(), isNull(), isNull(), isNull(), eq(0), eq(10))).thenReturn(returned);
-
-        ProductPojo product = new ProductPojo();
-        product.setId("PID-1");
-        product.setBarcode("B1");
-        when(productApi.findByIds(eq(List.of("PID-1")))).thenReturn(List.of(product));
-
-        Page<OrderData> page = orderDto.getAllOrders(form);
-
-        assertEquals(1, page.getTotalElements());
-        assertEquals("ORD-1", page.getContent().getFirst().getOrderReferenceId());
-        assertEquals("B1", page.getContent().getFirst().getItems().getFirst().getProductBarcode());
-
-        verify(orderFlow).search(null, null, null, null, 0, 10);
-        verify(productApi).findByIds(eq(List.of("PID-1")));
-    }
-
-    @Test
-    void searchOrders_invalidStatus_throws_andDoesNotCallFlow() {
+    void searchOrders_invalidStatus_throws_andDoesNotCallFlow() throws Exception {
         OrderSearchForm form = new OrderSearchForm();
         form.setStatus("NOT_A_STATUS");
         form.setTimeframe(OrderTimeframe.LAST_DAY);
         form.setPage(0);
         form.setSize(10);
 
+        doThrow(new ApiException("status: Invalid status filter"))
+                .when(formValidator).validate(any(OrderSearchForm.class));
+
         ApiException ex = assertThrows(ApiException.class, () -> orderDto.searchOrders(form));
-        assertTrue(ex.getMessage().toLowerCase().contains("invalid"));
+        assertTrue(ex.getMessage().toLowerCase().contains("status"));
 
         verifyNoInteractions(orderFlow);
         verifyNoInteractions(productApi);
     }
 
     @Test
-    void searchOrders_invalidPage_throws_andDoesNotCallFlow() {
+    void searchOrders_invalidPage_throws_andDoesNotCallFlow() throws Exception {
         OrderSearchForm form = new OrderSearchForm();
         form.setStatus(OrderStatus.FULFILLABLE.name());
         form.setTimeframe(OrderTimeframe.LAST_DAY);
         form.setPage(-1);
         form.setSize(10);
 
-        assertThrows(ApiException.class, () -> orderDto.searchOrders(form));
+        doThrow(new ApiException("page: Page cannot be negative"))
+                .when(formValidator).validate(any(OrderSearchForm.class));
+
+        ApiException ex = assertThrows(ApiException.class, () -> orderDto.searchOrders(form));
+        assertTrue(ex.getMessage().toLowerCase().contains("page"));
 
         verifyNoInteractions(orderFlow);
         verifyNoInteractions(productApi);
+    }
+
+    @Test
+    void cancelOrder_normalizesReferenceId_andDelegatesToFlow() throws Exception {
+        OrderItemPojo item = new OrderItemPojo();
+        item.setProductId("PID-1");
+        item.setOrderedQuantity(1);
+        item.setSellingPrice(10.0);
+
+        OrderPojo pojo = new OrderPojo();
+        pojo.setOrderReferenceId("ORD-12");
+        pojo.setStatus(OrderStatus.CANCELLED.name());
+        pojo.setOrderTime(ZonedDateTime.now());
+        pojo.setOrderItems(List.of(item));
+
+        when(orderFlow.cancel(eq("ORD-12"))).thenReturn(pojo);
+
+        ProductPojo product = new ProductPojo();
+        product.setId("PID-1");
+        product.setBarcode("B1");
+        when(productApi.findByIds(eq(List.of("PID-1")))).thenReturn(List.of(product));
+
+        OrderData out = orderDto.cancelOrder("  ord-12  ");
+
+        assertNotNull(out);
+        assertEquals("ORD-12", out.getOrderReferenceId());
+        assertEquals(1, out.getItems().size());
+        assertEquals("B1", out.getItems().getFirst().getProductBarcode());
+
+        verify(orderFlow).cancel(eq("ORD-12"));
+        verify(productApi).findByIds(eq(List.of("PID-1")));
     }
 }

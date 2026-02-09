@@ -160,6 +160,11 @@ public class ValidationUtil {
 
     // ---------------- ORDER CREATE (items validation; price<=MRP must be in service) ----------------
 
+    public static void validateOrderReferenceId(String ref) throws ApiException {
+        if (!StringUtils.hasText(ref)) throw new ApiException("Order reference id is required");
+        if (ref.length() > 50) throw new ApiException("Order reference id too long");
+    }
+
     public static void validateOrderCreateForm(OrderCreateForm form) throws ApiException {
         if (form == null) throw new ApiException("Order form required");
         if (form.getItems() == null || form.getItems().isEmpty()) {

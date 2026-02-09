@@ -33,7 +33,7 @@ import { toast } from 'sonner'
 import { downloadBase64Pdf } from '@/utils/downloadPdf'
 import { ORDER_STATUS_META } from '@/utils/orderStatus'
 import { formatDate } from '@/utils/date'
-import { cancel, retryOrder } from '@/services/orderService'
+import { cancelOrder, retryOrder } from '@/services/orderService'
 import { cn } from '@/lib/utils'
 import {
     Dialog,
@@ -93,7 +93,7 @@ export default function OrderTable({ orders, loading, onInvoiceGenerated, onEdit
         if (!pendingCancelRef || cancelLoading || !canCancel) return
         setCancelLoading(true)
         try {
-            await cancel(pendingCancelRef)
+            await cancelOrder(pendingCancelRef)
             toast.success('Order cancelled')
             onInvoiceGenerated()
             setConfirmOpen(false)

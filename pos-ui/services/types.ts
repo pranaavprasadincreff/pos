@@ -78,6 +78,15 @@ export interface OrderCreateForm {
     items: OrderCreateItemForm[]
 }
 
+export interface OrderUpdateForm {
+  orderReferenceId: string
+  items: {
+    productBarcode: string
+    quantity: number
+    sellingPrice: number
+  }[]
+}
+
 export interface InvoiceData {
     orderReferenceId: string
     pdfBase64: string
