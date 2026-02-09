@@ -1,4 +1,4 @@
-package com.increff.pos.config;
+package com.increff.pos.auth;
 
 import org.springframework.http.HttpMethod;
 import java.util.List;
@@ -6,7 +6,6 @@ import java.util.List;
 public class ApiAccessRules {
     public record Rule(HttpMethod method, String pattern) {}
 
-    // Single source of truth for operator access
     public static final List<Rule> OPERATOR_ALLOWED = List.of(
             new Rule(HttpMethod.POST, "/api/client/get-all-paginated"),
             new Rule(HttpMethod.POST, "/api/client/filter"),

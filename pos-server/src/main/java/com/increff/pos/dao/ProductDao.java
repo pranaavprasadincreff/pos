@@ -19,7 +19,6 @@ import java.util.regex.Pattern;
 
 @Repository
 public class ProductDao extends AbstractDao<ProductPojo> {
-
     public ProductDao(MongoOperations mongoOperations) {
         super(
                 new MongoRepositoryFactory(mongoOperations).getEntityInformation(ProductPojo.class),
@@ -36,14 +35,33 @@ public class ProductDao extends AbstractDao<ProductPojo> {
         if (barcodes == null || barcodes.isEmpty()) {
             return List.of();
         }
-
         Query query = Query.query(Criteria.where("barcode").in(barcodes));
         return mongoOperations.find(query, ProductPojo.class);
     }
 
     public Page<ProductPojo> search(ProductSearchForm searchForm, List<String> clientEmails) {
-        Query query = buildSearchQuery(searchForm, clientEmails);
-        Pageable pageable = buildPageRequest(searchForm);
+        List<Criteria> criteria = new ArrayList<>();
+
+        if (StringUtils.hasText(searchForm.getBarcode())) {
+            criteria.add(buildPartialMatchingIgnoreCaseCriteria("barcode", searchForm.getBarcode()));
+        }
+        if (StringUtils.hasText(searchForm.getName())) {
+            criteria.add(buildPartialMatchingIgnoreCaseCriteria("name", searchForm.getName()));
+        }
+        if (clientEmails != null && !clientEmails.isEmpty()) {
+            criteria.add(Criteria.where("clientEmail").in(clientEmails));
+        }
+
+        Query query = new Query();
+        if (!criteria.isEmpty()) {
+            query.addCriteria(new Criteria().andOperator(criteria));
+        }
+
+        Pageable pageable = PageRequest.of(
+                searchForm.getPage(),
+                searchForm.getSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
         return pageableQuery(query, pageable);
     }
 
@@ -55,40 +73,7 @@ public class ProductDao extends AbstractDao<ProductPojo> {
         return mongoOperations.find(query, ProductPojo.class);
     }
 
-    // -------------------- private helpers --------------------
-
-    private Query buildSearchQuery(ProductSearchForm searchForm, List<String> clientEmails) {
-        List<Criteria> criteria = new ArrayList<>();
-
-        if (StringUtils.hasText(searchForm.getBarcode())) {
-            criteria.add(buildContainsIgnoreCaseCriteria("barcode", searchForm.getBarcode()));
-        }
-
-        if (StringUtils.hasText(searchForm.getName())) {
-            criteria.add(buildContainsIgnoreCaseCriteria("name", searchForm.getName()));
-        }
-
-        if (clientEmails != null && !clientEmails.isEmpty()) {
-            criteria.add(Criteria.where("clientEmail").in(clientEmails));
-        }
-
-        Query query = new Query();
-        if (!criteria.isEmpty()) {
-            query.addCriteria(new Criteria().andOperator(criteria));
-        }
-
-        return query;
-    }
-
-    private Pageable buildPageRequest(ProductSearchForm searchForm) {
-        return PageRequest.of(
-                searchForm.getPage(),
-                searchForm.getSize(),
-                Sort.by(Sort.Direction.DESC, "createdAt")
-        );
-    }
-
-    private Criteria buildContainsIgnoreCaseCriteria(String fieldName, String rawValue) {
+    private Criteria buildPartialMatchingIgnoreCaseCriteria(String fieldName, String rawValue) {
         String safeValue = Pattern.quote(rawValue.trim());
         Pattern pattern = Pattern.compile(".*" + safeValue + ".*", Pattern.CASE_INSENSITIVE);
         return Criteria.where(fieldName).regex(pattern);

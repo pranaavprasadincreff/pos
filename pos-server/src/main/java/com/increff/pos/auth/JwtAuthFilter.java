@@ -1,4 +1,4 @@
-package com.increff.pos.config;
+package com.increff.pos.auth;
 
 import com.increff.pos.helper.JwtHelper;
 import io.jsonwebtoken.Claims;

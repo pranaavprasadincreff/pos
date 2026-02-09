@@ -3,6 +3,7 @@ package com.increff.pos.api;
 import com.increff.pos.dao.ClientDao;
 import com.increff.pos.db.ClientPojo;
 import com.increff.pos.model.exception.ApiException;
+import com.increff.pos.model.form.ClientSearchForm;
 import jakarta.annotation.Nonnull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -36,18 +37,14 @@ public class ClientApiImpl implements ClientApi {
     @Transactional(rollbackFor = ApiException.class)
     public ClientPojo update(@Nonnull ClientPojo clientToUpdate, @Nonnull String oldEmail) throws ApiException {
         ClientPojo existingClient = fetchClientByEmail(oldEmail);
-
         validateUpdatedEmailDoesNotConflict(existingClient, clientToUpdate.getEmail());
         applyClientUpdate(existingClient, clientToUpdate);
-
         return clientDao.save(existingClient);
     }
 
-
     @Override
-    public Page<ClientPojo> search(String name, String email, int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return clientDao.search(name, email, pageRequest);
+    public Page<ClientPojo> search(ClientSearchForm form) {
+        return clientDao.search(form);
     }
 
     @Override

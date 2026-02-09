@@ -34,12 +34,7 @@ public class ClientDto {
 
     public Page<ClientData> search(ClientSearchForm clientSearchForm) throws ApiException {
         NormalizationUtil.normalizeClientSearchForm(clientSearchForm);
-        Page<ClientPojo> clientPage = clientApi.search(
-                clientSearchForm.getName(),
-                clientSearchForm.getEmail(),
-                clientSearchForm.getPage(),
-                clientSearchForm.getSize()
-        );
+        Page<ClientPojo> clientPage = clientApi.search(clientSearchForm);
         return clientPage.map(ClientHelper::convertFormToDto);
     }
 
@@ -50,7 +45,6 @@ public class ClientDto {
         ClientPojo updatedClient = clientApi.update(clientToUpdate, oldEmail);
         return ClientHelper.convertFormToDto(updatedClient);
     }
-
 
     public Page<ClientData> getAllUsingSearch(PageForm pageForm) throws ApiException {
         ClientSearchForm clientSearchForm = buildEmptySearchFromPage(pageForm);

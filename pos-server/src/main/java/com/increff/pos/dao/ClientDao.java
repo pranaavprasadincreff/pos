@@ -1,8 +1,11 @@
 package com.increff.pos.dao;
 
 import com.increff.pos.db.ClientPojo;
+import com.increff.pos.model.form.ClientSearchForm;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -15,7 +18,6 @@ import java.util.regex.Pattern;
 
 @Repository
 public class ClientDao extends AbstractDao<ClientPojo> {
-
     public ClientDao(MongoOperations mongoOperations) {
         super(
                 new MongoRepositoryFactory(mongoOperations).getEntityInformation(ClientPojo.class),
@@ -28,15 +30,18 @@ public class ClientDao extends AbstractDao<ClientPojo> {
         return mongoOperations.findOne(query, ClientPojo.class);
     }
 
-    public Page<ClientPojo> search(String name, String email, Pageable pageable) {
+    public Page<ClientPojo> search(ClientSearchForm form) {
         List<Criteria> list = new ArrayList<>();
 
+        String name = form.getName();
+        String email = form.getEmail();
+
         if (name != null && !name.isBlank()) {
-            Pattern pattern = Pattern.compile(Pattern.quote(name), Pattern.CASE_INSENSITIVE);
+            Pattern pattern = Pattern.compile(".*" + Pattern.quote(name) + ".*", Pattern.CASE_INSENSITIVE);
             list.add(Criteria.where("name").regex(pattern));
         }
         if (email != null && !email.isBlank()) {
-            Pattern pattern = Pattern.compile(Pattern.quote(email), Pattern.CASE_INSENSITIVE);
+            Pattern pattern = Pattern.compile(".*" + Pattern.quote(email) + ".*", Pattern.CASE_INSENSITIVE);
             list.add(Criteria.where("email").regex(pattern));
         }
 
@@ -44,6 +49,12 @@ public class ClientDao extends AbstractDao<ClientPojo> {
         if (!list.isEmpty()) {
             query.addCriteria(new Criteria().andOperator(list));
         }
+
+        Pageable pageable = PageRequest.of(
+                form.getPage(),
+                form.getSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
 
         return pageableQuery(query, pageable);
     }
@@ -54,7 +65,6 @@ public class ClientDao extends AbstractDao<ClientPojo> {
         return mongoOperations.find(query, ClientPojo.class);
     }
 
-    // ✅ For product filter: "client" matches name OR email
     public List<String> findEmailsByNameOrEmail(String query, int limit) {
         if (query == null || query.isBlank()) return List.of();
 

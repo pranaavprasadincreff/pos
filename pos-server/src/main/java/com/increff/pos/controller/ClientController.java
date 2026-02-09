@@ -9,15 +9,14 @@ import com.increff.pos.model.form.ClientUpdateForm;
 import com.increff.pos.model.form.PageForm;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
-
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Client Management", description = "APIs for managing clients")
 @CrossOrigin(origins = "http://localhost:3000")
@@ -29,19 +28,19 @@ public class ClientController {
     private ClientDto clientDto;
 
     @Operation(summary = "Create a new client")
-    @RequestMapping(path = "/add", method = RequestMethod.POST)
+    @PostMapping("/add")
     public ClientData create(@Valid @RequestBody ClientForm clientForm) throws ApiException {
         return clientDto.create(clientForm);
     }
 
     @Operation(summary = "Get all clients with pagination")
-    @RequestMapping(path = "/get-all-paginated", method = RequestMethod.POST)
+    @PostMapping("/get-all-paginated")
     public Page<ClientData> getAllClients(@Valid @RequestBody PageForm pageForm) throws ApiException {
         return clientDto.getAllUsingSearch(pageForm);
     }
 
     @Operation(summary = "Get client by email")
-    @RequestMapping(path = "/get-by-email/{email}", method = RequestMethod.GET)
+    @GetMapping("/get-by-email/{email}")
     public ClientData getByEmail(
             @PathVariable
             @NotBlank(message = "Email is required")
@@ -53,13 +52,13 @@ public class ClientController {
     }
 
     @Operation(summary = "Update existing client")
-    @RequestMapping(path = "/update", method = RequestMethod.PUT)
-    public ClientData updateClient(@Valid @RequestBody ClientUpdateForm form) throws ApiException {
+    @PutMapping("/update")
+    public ClientData update(@Valid @RequestBody ClientUpdateForm form) throws ApiException {
         return clientDto.update(form);
     }
 
     @Operation(summary = "Search clients")
-    @RequestMapping(path = "/search", method = RequestMethod.POST)
+    @PostMapping("/search")
     public Page<ClientData> search(@Valid @RequestBody ClientSearchForm form) throws ApiException {
         return clientDto.search(form);
     }
