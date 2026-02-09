@@ -6,12 +6,8 @@ import com.increff.pos.model.data.ProductData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.BulkUploadForm;
 import com.increff.pos.model.form.InventoryUpdateForm;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-
-import jakarta.validation.Valid;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,18 +16,19 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/inventory")
 public class InventoryController {
+
     @Autowired
     private ProductDto productDto;
 
     @Operation(summary = "Update inventory")
-    @PatchMapping("/update")
-    public ProductData updateInventory(@Valid @RequestBody InventoryUpdateForm form) throws ApiException {
+    @PutMapping
+    public ProductData updateInventory(@RequestBody InventoryUpdateForm form) throws ApiException {
         return productDto.updateInventory(form);
     }
 
     @Operation(summary = "Bulk inventory update")
     @PostMapping("/bulk-inventory-update")
-    public BulkUploadData bulkInventory(@Valid @RequestBody BulkUploadForm form) throws ApiException {
+    public BulkUploadData bulkInventory(@RequestBody BulkUploadForm form) throws ApiException {
         return productDto.bulkUpdateInventory(form);
     }
 }

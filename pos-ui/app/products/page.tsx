@@ -10,7 +10,7 @@ import ProductCardGrid from "@/components/products/ProductCardGrid"
 import ProductModal from "@/components/products/ProductModal"
 import BulkUploadModal from "@/components/products/BulkUploadModal"
 
-import { filterProducts, getAllProducts } from "@/services/productService"
+import { searchProducts } from "@/services/productService"
 import { getClientByEmail } from "@/services/clientService"
 import type { ProductData } from "@/services/types"
 
@@ -139,64 +139,42 @@ export default function ProductsPage() {
     }, [])
 
     const fetchPage = useCallback(
-        async (pageToLoad: number, mode: "append" | "replace") => {
-            const myRequestId = ++requestIdRef.current
-            const isLatest = () => requestIdRef.current === myRequestId
+      async (pageToLoad: number, mode: "append" | "replace") => {
+        const myRequestId = ++requestIdRef.current
+        const isLatest = () => requestIdRef.current === myRequestId
 
-            const trimmed = searchTerm.trim()
-            const err = validateFilterInput(trimmed, searchBy)
-            setSearchError(err)
-            if (err) return
+        const trimmed = searchTerm.trim()
+        const err = validateFilterInput(trimmed, searchBy)
+        setSearchError(err)
+        if (err) return
 
-            // --- no search => get all ---
-            if (trimmed.length === 0) {
-                const res = await getAllProducts(pageToLoad, PAGE_SIZE)
-                if (!isLatest()) return
+        const params: any = { page: pageToLoad, size: PAGE_SIZE }
 
-                const enriched = enrichProducts(res.content)
+        if (trimmed.length > 0) {
+          if (searchBy === "name") params.name = trimmed
+          else if (searchBy === "barcode") params.barcode = trimmed
+          else params.client = trimmed // backend expects "client"
+        }
 
-                setProducts((prev) => {
-                    if (mode === "replace") return enriched
+        const res = await searchProducts(params)
+        if (!isLatest()) return
 
-                    const map = new Map(prev.map((p) => [p.barcode, p]))
-                    enriched.forEach((p) => map.set(p.barcode, p))
-                    return Array.from(map.values())
-                })
+        const enriched = enrichProducts(res.content)
 
-                setHasMore(pageToLoad + 1 < res.totalPages)
-                setPage(pageToLoad + 1)
-                fetchMissingClientNames(res.content.map((p) => p.clientEmail))
-                return
-            }
+        setProducts((prev) => {
+          if (mode === "replace") return enriched
 
-            // --- filtered ---
-            let res
-            if (searchBy === "name") {
-                res = await filterProducts({ page: pageToLoad, size: PAGE_SIZE, name: trimmed })
-            } else if (searchBy === "barcode") {
-                res = await filterProducts({ page: pageToLoad, size: PAGE_SIZE, barcode: trimmed })
-            } else {
-                res = await filterProducts({ page: pageToLoad, size: PAGE_SIZE, client: trimmed })
-            }
+          const map = new Map(prev.map((p) => [p.barcode, p]))
+          enriched.forEach((p) => map.set(p.barcode, p))
+          return Array.from(map.values())
+        })
 
-            if (!isLatest()) return
+        setHasMore(pageToLoad + 1 < res.totalPages)
+        setPage(pageToLoad + 1)
 
-            const enriched = enrichProducts(res.content)
-
-            setProducts((prev) => {
-                if (mode === "replace") return enriched
-
-                const map = new Map(prev.map((p) => [p.barcode, p]))
-                enriched.forEach((p) => map.set(p.barcode, p))
-                return Array.from(map.values())
-            })
-
-            setHasMore(pageToLoad + 1 < res.totalPages)
-            setPage(pageToLoad + 1)
-
-            fetchMissingClientNames(res.content.map((p) => p.clientEmail))
-        },
-        [searchBy, searchTerm, enrichProducts, fetchMissingClientNames]
+        fetchMissingClientNames(res.content.map((p) => p.clientEmail))
+      },
+      [searchBy, searchTerm, enrichProducts, fetchMissingClientNames]
     )
 
     // initial load

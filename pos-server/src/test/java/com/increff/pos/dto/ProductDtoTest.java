@@ -6,7 +6,11 @@ import com.increff.pos.db.ClientPojo;
 import com.increff.pos.model.data.BulkUploadData;
 import com.increff.pos.model.data.ProductData;
 import com.increff.pos.model.exception.ApiException;
-import com.increff.pos.model.form.*;
+import com.increff.pos.model.form.BulkUploadForm;
+import com.increff.pos.model.form.InventoryUpdateForm;
+import com.increff.pos.model.form.ProductForm;
+import com.increff.pos.model.form.ProductSearchForm;
+import com.increff.pos.model.form.ProductUpdateForm;
 import com.increff.pos.test.AbstractUnitTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +39,13 @@ public class ProductDtoTest extends AbstractUnitTest {
         clientApi.add(c);
     }
 
+    private void createClientQuietly(String email, String name) {
+        try {
+            createClient(email, name);
+        } catch (ApiException ignored) {
+        }
+    }
+
     private ProductForm validProductForm(String barcode, String clientEmail) {
         ProductForm f = new ProductForm();
         f.setBarcode(barcode);
@@ -53,11 +64,10 @@ public class ProductDtoTest extends AbstractUnitTest {
         return new String(Base64.getDecoder().decode(b64), StandardCharsets.UTF_8);
     }
 
-    private void createClientQuietly(String email, String name) {
-        try {
-            createClient(email, name);
-        } catch (ApiException ignored) {
-        }
+    private static void assertApiExceptionMentions(ApiException e, String needleLower) {
+        assertNotNull(e.getMessage());
+        assertTrue(e.getMessage().toLowerCase().contains(needleLower),
+                "Expected error to contain '" + needleLower + "' but got: " + e.getMessage());
     }
 
     // ------------------------
@@ -71,6 +81,23 @@ public class ProductDtoTest extends AbstractUnitTest {
     }
 
     @Test
+    public void testAddProductInvalidInputShouldFailValidation() {
+        // missing required fields should be caught by FormValidator after normalization
+        ProductForm f = new ProductForm();
+        f.setBarcode("");                 // invalid
+        f.setClientEmail("not-an-email"); // invalid
+        f.setName("");                    // invalid
+        f.setMrp(-1.0);                   // invalid (assuming @Positive / custom)
+        ApiException e = assertThrows(ApiException.class, () -> productDto.addProduct(f));
+        // don't overfit message; just ensure validation triggered
+        assertTrue(e.getMessage().toLowerCase().contains("barcode")
+                || e.getMessage().toLowerCase().contains("client")
+                || e.getMessage().toLowerCase().contains("email")
+                || e.getMessage().toLowerCase().contains("mrp")
+                || e.getMessage().toLowerCase().contains("name"));
+    }
+
+    @Test
     public void testAddProductValidCreatesInventory() throws ApiException {
         createClient("c1@example.com", "Client One");
 
@@ -78,7 +105,7 @@ public class ProductDtoTest extends AbstractUnitTest {
         ProductData created = productDto.addProduct(f);
 
         assertNotNull(created);
-        assertEquals("P1", created.getBarcode()); // normalized
+        assertEquals("P1", created.getBarcode()); // normalized (trim+upper)
         assertEquals("c1@example.com", created.getClientEmail());
         assertEquals(100.0, created.getMrp());
         assertNotNull(created.getInventory());
@@ -100,6 +127,12 @@ public class ProductDtoTest extends AbstractUnitTest {
     }
 
     @Test
+    public void testGetByBarcodeInvalidBarcodeShouldFailFast() {
+        ApiException e = assertThrows(ApiException.class, () -> productDto.getByBarcode("   "));
+        assertApiExceptionMentions(e, "barcode");
+    }
+
+    @Test
     public void testGetByBarcodeSuccess() throws ApiException {
         createClient("c1@example.com", "Client One");
 
@@ -113,46 +146,41 @@ public class ProductDtoTest extends AbstractUnitTest {
     }
 
     // ------------------------
-    // PAGINATION / FILTER
+    // SEARCH (also substitutes "get all paginated")
     // ------------------------
 
     @Test
-    public void testGetAllDoesNotThrowForLargePageSizeBecauseDtoDoesNotValidate() throws ApiException {
-        createClient("c1@example.com", "Client One");
-
-        for (int i = 0; i < 3; i++) {
-            productDto.addProduct(validProductForm("p" + i, "c1@example.com"));
-        }
-
-        PageForm pf = new PageForm();
-        pf.setPage(0);
-        pf.setSize(101); // NOTE: DTO does not validate page size anymore
-
-        Page<ProductData> page = productDto.getAllUsingSearch(pf);
-
-        assertNotNull(page);
-        assertTrue(page.getTotalElements() >= 3);
-        assertNotNull(page.getContent().get(0).getInventory());
-    }
-
-    @Test
-    public void testGetAllValid() throws ApiException {
+    public void testSearchEmptyFiltersReturnsAllPaginated() throws ApiException {
         createClient("c1@example.com", "Client One");
 
         for (int i = 0; i < 5; i++) {
             productDto.addProduct(validProductForm("p" + i, "c1@example.com"));
         }
 
-        PageForm pf = new PageForm();
-        pf.setPage(0);
-        pf.setSize(3);
+        ProductSearchForm f = new ProductSearchForm();
+        f.setBarcode(null);
+        f.setName(null);
+        f.setClient(null);
+        f.setPage(0);
+        f.setSize(3);
 
-        Page<ProductData> page = productDto.getAllUsingSearch(pf);
+        Page<ProductData> page = productDto.search(f);
 
         assertNotNull(page);
         assertTrue(page.getContent().size() <= 3);
         assertTrue(page.getTotalElements() >= 5);
         assertNotNull(page.getContent().get(0).getInventory());
+    }
+
+    @Test
+    public void testSearchInvalidPaginationShouldFailValidation() {
+        ProductSearchForm f = new ProductSearchForm();
+        f.setBarcode("abc");
+        f.setPage(-1);
+        f.setSize(10);
+
+        ApiException e = assertThrows(ApiException.class, () -> productDto.search(f));
+        assertTrue(e.getMessage().toLowerCase().contains("page"));
     }
 
     @Test
@@ -255,7 +283,7 @@ public class ProductDtoTest extends AbstractUnitTest {
     }
 
     @Test
-    public void testUpdateInventoryCapExceeded() throws ApiException {
+    public void testUpdateInventoryCapExceededValidation() throws ApiException {
         createClient("c1@example.com", "Client One");
         ProductData created = productDto.addProduct(validProductForm("p1", "c1@example.com"));
 
@@ -263,7 +291,24 @@ public class ProductDtoTest extends AbstractUnitTest {
         inv.setBarcode(created.getBarcode());
         inv.setQuantity(1001);
 
-        assertThrows(ApiException.class, () -> productDto.updateInventory(inv));
+        ApiException e = assertThrows(ApiException.class, () -> productDto.updateInventory(inv));
+        // should fail from bean validation: quantity max
+        assertTrue(e.getMessage().toLowerCase().contains("quantity")
+                || e.getMessage().toLowerCase().contains("inventory"));
+    }
+
+    @Test
+    public void testUpdateInventoryNegativeShouldFailValidation() throws ApiException {
+        createClient("c1@example.com", "Client One");
+        ProductData created = productDto.addProduct(validProductForm("p1", "c1@example.com"));
+
+        InventoryUpdateForm inv = new InventoryUpdateForm();
+        inv.setBarcode(created.getBarcode());
+        inv.setQuantity(-1);
+
+        ApiException e = assertThrows(ApiException.class, () -> productDto.updateInventory(inv));
+        assertTrue(e.getMessage().toLowerCase().contains("quantity")
+                || e.getMessage().toLowerCase().contains("negative"));
     }
 
     @Test
@@ -283,8 +328,17 @@ public class ProductDtoTest extends AbstractUnitTest {
     }
 
     // ------------------------
-    // BULK sanity
+    // BULK sanity (normalize + validate in DTO now)
     // ------------------------
+
+    @Test
+    public void testBulkAddProductsBlankFileShouldFailValidation() {
+        BulkUploadForm f = new BulkUploadForm();
+        f.setFile("   ");
+
+        ApiException e = assertThrows(ApiException.class, () -> productDto.bulkAddProducts(f));
+        assertTrue(e.getMessage().toLowerCase().contains("file"));
+    }
 
     @Test
     public void testBulkAddProductsInvalidHeaders() {
@@ -300,16 +354,44 @@ public class ProductDtoTest extends AbstractUnitTest {
         BulkUploadForm f = new BulkUploadForm();
         f.setFile(b64(
                 "barcode\tclientemail\tname\tmrp\n" +
-                        "dup\tc1@example.com\tProd 1\n"
+                        "dup\tc1@example.com\tProd 1\n" // missing mrp column value -> row error
         ));
 
         BulkUploadData out = productDto.bulkAddProducts(f);
         assertNotNull(out);
         assertNotNull(out.file());
 
-        String decoded = decodeB64(out.file()).toLowerCase();
-        assertTrue(decoded.contains("error") || decoded.contains("invalid") || decoded.contains("mrp"),
+        String decodedLower = decodeB64(out.file()).toLowerCase();
+        assertTrue(decodedLower.contains("error") || decodedLower.contains("invalid") || decodedLower.contains("mrp"),
                 "Expected output file to contain error/invalid but got:\n" + decodeB64(out.file()));
+    }
+
+    @Test
+    public void testBulkAddProductsNormalizesBarcodeAndEmail() throws Exception {
+        createClientQuietly("c1@example.com", "Client One");
+
+        BulkUploadForm f = new BulkUploadForm();
+        f.setFile(b64(
+                "barcode\tclientemail\tname\tmrp\n" +
+                        "  abc-1  \t  C1@EXAMPLE.COM  \tProd 1\t100\n"
+        ));
+
+        BulkUploadData out = productDto.bulkAddProducts(f);
+        assertNotNull(out);
+        assertNotNull(out.file());
+
+        String decoded = decodeB64(out.file());
+        // result file first column should include normalized barcode somewhere
+        assertTrue(decoded.toUpperCase().contains("ABC-1"));
+    }
+
+    @Test
+    public void testBulkUpdateInventoryBlankFileShouldFailValidation() {
+        BulkUploadForm f = new BulkUploadForm();
+        f.setFile("");
+
+        ApiException e = assertThrows(ApiException.class, () -> productDto.bulkUpdateInventory(f));
+        assertTrue(e.getMessage().toLowerCase().contains("file"));
     }
 
     @Test
@@ -326,8 +408,9 @@ public class ProductDtoTest extends AbstractUnitTest {
         assertNotNull(out);
         assertNotNull(out.file());
 
-        String decoded = decodeB64(out.file()).toLowerCase();
-        assertTrue(decoded.contains("error") || decoded.contains("invalid") || decoded.contains("quantity"),
+        String decodedLower = decodeB64(out.file()).toLowerCase();
+        assertTrue(decodedLower.contains("error") || decodedLower.contains("invalid") || decodedLower.contains("quantity")
+                        || decodedLower.contains("inventory"),
                 "Expected output file to contain error/invalid but got:\n" + decodeB64(out.file()));
     }
 }

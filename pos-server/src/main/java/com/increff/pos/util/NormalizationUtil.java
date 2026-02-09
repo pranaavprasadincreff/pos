@@ -27,12 +27,12 @@ public class NormalizationUtil {
     }
 
     public static String normalizeEmail(String email) {
-        if (!StringUtils.hasText(email)) return email;
+        if (!StringUtils.hasText(email)) return null;
         return email.trim().toLowerCase();
     }
 
     public static String normalizeName(String name) {
-        if (!StringUtils.hasText(name)) return name;
+        if (!StringUtils.hasText(name)) return null;
         return name.trim().toLowerCase();
     }
 

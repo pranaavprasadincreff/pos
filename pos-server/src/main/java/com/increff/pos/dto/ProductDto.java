@@ -10,24 +10,29 @@ import com.increff.pos.model.data.BulkUploadData;
 import com.increff.pos.model.data.ProductData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.*;
+import com.increff.pos.util.FormValidator;
 import com.increff.pos.util.NormalizationUtil;
+import com.increff.pos.util.ValidationUtil;
 import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Component
 public class ProductDto {
+
     @Autowired
     private ProductFlow productFlow;
 
+    @Autowired
+    private FormValidator formValidator;
+
     public ProductData addProduct(ProductForm form) throws ApiException {
         NormalizationUtil.normalizeProductForm(form);
+        formValidator.validate(form);
+
         ProductPojo productToCreate = ProductHelper.convertProductFormToEntity(form);
         Pair<ProductPojo, InventoryPojo> created = productFlow.addProduct(productToCreate);
         return ProductHelper.convertToProductData(created.getLeft(), created.getRight());
@@ -35,22 +40,23 @@ public class ProductDto {
 
     public ProductData getByBarcode(String barcode) throws ApiException {
         String normalizedBarcode = NormalizationUtil.normalizeBarcode(barcode);
+        ValidationUtil.validateBarcode(normalizedBarcode);
+
         Pair<ProductPojo, InventoryPojo> pair = productFlow.getByBarcode(normalizedBarcode);
         return ProductHelper.convertToProductData(pair.getLeft(), pair.getRight());
     }
 
-    public Page<ProductData> getAllUsingSearch(PageForm form) throws ApiException {
-        return getAllProducts(form);
-    }
-
     public Page<ProductData> search(ProductSearchForm form) throws ApiException {
         NormalizationUtil.normalizeProductSearchForm(form);
+        formValidator.validate(form); // pagination bounds + size constraints come from annotations
+
         Page<Pair<ProductPojo, InventoryPojo>> page = productFlow.search(form);
         return ProductHelper.convertToProductDataPage(page);
     }
 
     public ProductData updateProduct(ProductUpdateForm form) throws ApiException {
         NormalizationUtil.normalizeProductUpdateForm(form);
+        formValidator.validate(form);
 
         String oldBarcode = form.getOldBarcode();
         ProductPojo productToUpdate = ProductHelper.convertProductUpdateFormToProductPojo(form);
@@ -61,6 +67,7 @@ public class ProductDto {
 
     public ProductData updateInventory(InventoryUpdateForm form) throws ApiException {
         NormalizationUtil.normalizeInventoryUpdateForm(form);
+        formValidator.validate(form);
 
         String barcode = form.getBarcode();
         InventoryPojo inventoryToUpdate = ProductHelper.convertInventoryUpdateFormToInventoryPojo(form);
@@ -69,8 +76,14 @@ public class ProductDto {
         return ProductHelper.convertToProductData(pair.getLeft(), pair.getRight());
     }
 
+    // ---------------- BULK ----------------
+
     public BulkUploadData bulkAddProducts(BulkUploadForm form) throws ApiException {
+        formValidator.validate(form);
+
         ParsedBulkFile parsedFile = parseProductBulkFile(form);
+        NormalizationUtil.normalizeBulkProductRows(parsedFile.rows());
+        ValidationUtil.validateBulkProductData(parsedFile.headers(), parsedFile.rows());
 
         List<ProductPojo> alignedProducts = new ArrayList<>(parsedFile.rows().size());
         Map<Integer, String> errorByRowIndex = new HashMap<>();
@@ -94,14 +107,17 @@ public class ProductDto {
         List<String[]> flowResults = productFlow.bulkAddProducts(alignedProducts);
 
         forceBarcodeInResults(flowResults, barcodesByRow);
-
         BulkUploadHelper.applyRowErrors(flowResults, errorByRowIndex);
+
         return new BulkUploadData(TsvHelper.encodeResult(flowResults));
     }
 
-
     public BulkUploadData bulkUpdateInventory(BulkUploadForm form) throws ApiException {
+        formValidator.validate(form);
+
         ParsedBulkFile parsedFile = parseInventoryBulkFile(form);
+        NormalizationUtil.normalizeBulkInventoryRows(parsedFile.rows());
+        ValidationUtil.validateBulkInventoryData(parsedFile.headers(), parsedFile.rows());
 
         List<InventoryPojo> alignedInventoryDeltas = new ArrayList<>(parsedFile.rows().size());
         Map<Integer, String> errorByRowIndex = new HashMap<>();
@@ -125,24 +141,12 @@ public class ProductDto {
         List<String[]> flowResults = productFlow.bulkUpdateInventory(alignedInventoryDeltas);
 
         forceBarcodeInResults(flowResults, barcodesByRow);
-
         BulkUploadHelper.applyRowErrors(flowResults, errorByRowIndex);
+
         return new BulkUploadData(TsvHelper.encodeResult(flowResults));
     }
 
-
     // -------------------- private helpers --------------------
-
-    private Page<ProductData> getAllProducts(PageForm form) throws ApiException {
-        ProductSearchForm searchFrom = new ProductSearchForm();
-        searchFrom.setBarcode(null);
-        searchFrom.setName(null);
-        searchFrom.setClient(null);
-        searchFrom.setPage(form.getPage());
-        searchFrom.setSize(form.getSize());
-
-        return search(searchFrom);
-    }
 
     private ParsedBulkFile parseProductBulkFile(BulkUploadForm form) throws ApiException {
         Pair<Map<String, Integer>, List<String[]>> parsed = BulkUploadHelper.parseProductFile(form.getFile());
@@ -159,20 +163,20 @@ public class ProductDto {
         String clientEmail = BulkUploadHelper.normalizeEmail(BulkUploadHelper.readCell(row, headers, "clientemail"));
         String productName = BulkUploadHelper.normalizeName(BulkUploadHelper.readCell(row, headers, "name"));
         Double mrp = BulkUploadHelper.parseMrp(BulkUploadHelper.readCell(row, headers, "mrp"));
-
         String imageUrl = null;
         if (headers.containsKey("imageurl")) {
             imageUrl = BulkUploadHelper.normalizeUrl(BulkUploadHelper.readCell(row, headers, "imageurl"));
         }
 
         BulkUploadHelper.validateProductRow(barcode, clientEmail, productName, mrp, imageUrl);
+
         return ProductHelper.createProductPojo(barcode, clientEmail, productName, mrp, imageUrl);
     }
 
     private InventoryPojo parseBulkInventoryRow(String[] row, Map<String, Integer> headers) throws ApiException {
         String barcode = BulkUploadHelper.normalizeBarcode(BulkUploadHelper.readCell(row, headers, "barcode"));
-
         Integer delta = BulkUploadHelper.parseInventoryDelta(BulkUploadHelper.readCell(row, headers, "inventory"));
+
         BulkUploadHelper.validateInventoryRow(barcode, delta);
 
         return ProductHelper.createInventoryDeltaPojo(barcode, delta);
@@ -186,6 +190,5 @@ public class ProductDto {
         }
     }
 
-    private record ParsedBulkFile(Map<String, Integer> headers, List<String[]> rows) {
-    }
+    private record ParsedBulkFile(Map<String, Integer> headers, List<String[]> rows) { }
 }
