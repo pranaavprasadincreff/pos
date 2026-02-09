@@ -8,19 +8,26 @@ import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.ClientForm;
 import com.increff.pos.model.form.ClientSearchForm;
 import com.increff.pos.model.form.ClientUpdateForm;
-import com.increff.pos.model.form.PageForm;
+import com.increff.pos.util.FormValidator;
 import com.increff.pos.util.NormalizationUtil;
+import com.increff.pos.util.ValidationUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ClientDto {
+
     @Autowired
     private ClientApi clientApi;
 
+    @Autowired
+    private FormValidator formValidator;
+
     public ClientData create(ClientForm clientCreateForm) throws ApiException {
         NormalizationUtil.normalizeClientForm(clientCreateForm);
+        formValidator.validate(clientCreateForm);
+
         ClientPojo clientToCreate = ClientHelper.convertFormToEntity(clientCreateForm);
         ClientPojo createdClient = clientApi.add(clientToCreate);
         return ClientHelper.convertFormToDto(createdClient);
@@ -28,33 +35,27 @@ public class ClientDto {
 
     public ClientData getByEmail(String email) throws ApiException {
         String normalizedEmail = NormalizationUtil.normalizeEmail(email);
+        ValidationUtil.validateEmail(normalizedEmail);
+
         ClientPojo client = clientApi.getClientByEmail(normalizedEmail);
         return ClientHelper.convertFormToDto(client);
     }
 
     public Page<ClientData> search(ClientSearchForm clientSearchForm) throws ApiException {
         NormalizationUtil.normalizeClientSearchForm(clientSearchForm);
+        formValidator.validate(clientSearchForm);
+
         Page<ClientPojo> clientPage = clientApi.search(clientSearchForm);
         return clientPage.map(ClientHelper::convertFormToDto);
     }
 
     public ClientData update(ClientUpdateForm clientUpdateForm) throws ApiException {
         NormalizationUtil.normalizeClientUpdateForm(clientUpdateForm);
+        formValidator.validate(clientUpdateForm);
+
         String oldEmail = clientUpdateForm.getOldEmail();
         ClientPojo clientToUpdate = ClientHelper.convertUpdateFormToClientPojo(clientUpdateForm);
         ClientPojo updatedClient = clientApi.update(clientToUpdate, oldEmail);
         return ClientHelper.convertFormToDto(updatedClient);
-    }
-
-    public Page<ClientData> getAllUsingSearch(PageForm pageForm) throws ApiException {
-        ClientSearchForm clientSearchForm = buildEmptySearchFromPage(pageForm);
-        return search(clientSearchForm);
-    }
-
-    private ClientSearchForm buildEmptySearchFromPage(PageForm pageForm) {
-        ClientSearchForm clientFilterForm = new ClientSearchForm();
-        clientFilterForm.setPage(pageForm.getPage());
-        clientFilterForm.setSize(pageForm.getSize());
-        return clientFilterForm;
     }
 }

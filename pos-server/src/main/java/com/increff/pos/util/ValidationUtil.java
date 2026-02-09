@@ -9,6 +9,7 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public class ValidationUtil {
 
@@ -29,33 +30,28 @@ public class ValidationUtil {
             "CANCELLED"
     );
 
-    // ---------------- PRODUCT ----------------
+    private static final Pattern SIMPLE_EMAIL =
+            Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
-    public static void validateProductForm(ProductForm form) throws ApiException {
-        if (form == null) throw new ApiException("Product form required");
-        validateProductCommon(
-                form.getBarcode(),
-                form.getClientEmail(),
-                form.getName(),
-                form.getMrp(),
-                form.getImageUrl()
-        );
+    public static void validateEmail(String email) throws ApiException {
+        if (!StringUtils.hasText(email)) {
+            throw new ApiException("Email is required");
+        }
+        if (email.length() > EMAIL_MAX) {
+            throw new ApiException("Email too long");
+        }
+        if (!SIMPLE_EMAIL.matcher(email).matches()) {
+            throw new ApiException("Invalid email format");
+        }
     }
 
-    public static void validateProductUpdateForm(ProductUpdateForm form) throws ApiException {
-        if (form == null) throw new ApiException("Product update form required");
-
-        if (!StringUtils.hasText(form.getOldBarcode())) {
-            throw new ApiException("Old barcode cannot be empty");
+    public static void validateBarcode(String barcode) throws ApiException {
+        if (!StringUtils.hasText(barcode)) {
+            throw new ApiException("Barcode is required");
         }
-
-        validateProductCommon(
-                form.getNewBarcode(),
-                form.getClientEmail(),
-                form.getName(),
-                form.getMrp(),
-                form.getImageUrl()
-        );
+        if (barcode.length() > BARCODE_MAX) {
+            throw new ApiException("Barcode too long");
+        }
     }
 
     private static void validateProductCommon(

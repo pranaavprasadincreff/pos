@@ -6,60 +6,42 @@ import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.ClientForm;
 import com.increff.pos.model.form.ClientSearchForm;
 import com.increff.pos.model.form.ClientUpdateForm;
-import com.increff.pos.model.form.PageForm;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Client Management", description = "APIs for managing clients")
 @CrossOrigin(origins = "http://localhost:3000")
 @RestController
 @RequestMapping("/api/client")
-@Validated
 public class ClientController {
+
     @Autowired
     private ClientDto clientDto;
 
     @Operation(summary = "Create a new client")
-    @PostMapping("/add")
-    public ClientData create(@Valid @RequestBody ClientForm clientForm) throws ApiException {
+    @PostMapping
+    public ClientData create(@RequestBody ClientForm clientForm) throws ApiException {
         return clientDto.create(clientForm);
     }
 
-    @Operation(summary = "Get all clients with pagination")
-    @PostMapping("/get-all-paginated")
-    public Page<ClientData> getAllClients(@Valid @RequestBody PageForm pageForm) throws ApiException {
-        return clientDto.getAllUsingSearch(pageForm);
-    }
-
     @Operation(summary = "Get client by email")
-    @GetMapping("/get-by-email/{email}")
-    public ClientData getByEmail(
-            @PathVariable
-            @NotBlank(message = "Email is required")
-            @Email(message = "Invalid email format")
-            @Size(max = 40, message = "Email too long")
-            String email
-    ) throws ApiException {
+    @GetMapping("/{email}")
+    public ClientData getByEmail(@PathVariable String email) throws ApiException {
         return clientDto.getByEmail(email);
     }
 
     @Operation(summary = "Update existing client")
-    @PutMapping("/update")
-    public ClientData update(@Valid @RequestBody ClientUpdateForm form) throws ApiException {
+    @PutMapping
+    public ClientData update(@RequestBody ClientUpdateForm form) throws ApiException {
         return clientDto.update(form);
     }
 
     @Operation(summary = "Search clients")
     @PostMapping("/search")
-    public Page<ClientData> search(@Valid @RequestBody ClientSearchForm form) throws ApiException {
+    public Page<ClientData> search(@RequestBody ClientSearchForm form) throws ApiException {
         return clientDto.search(form);
     }
 }

@@ -5,78 +5,62 @@ import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.ClientForm;
 import com.increff.pos.model.form.ClientSearchForm;
 import com.increff.pos.model.form.ClientUpdateForm;
-import com.increff.pos.model.form.PageForm;
 import com.increff.pos.test.AbstractUnitTest;
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
-import jakarta.validation.ValidatorFactory;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 
-import java.util.Set;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ClientDtoTest extends AbstractUnitTest {
+
     @Autowired
     private ClientDto clientDto;
 
-    private Validator validator;
-
-    @BeforeEach
-    public void setupValidator() {
-        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
-        validator = factory.getValidator();
-    }
-
-    private static void assertNormalizedNameEquals(String expectedRaw, String actualNormalized) {
+    private static void assertNormalizedEquals(String expectedRaw, String actualNormalized) {
         assertNotNull(actualNormalized);
         assertEquals(expectedRaw.trim().toLowerCase(), actualNormalized);
     }
 
-    private static void assertHasViolationForField(Set<? extends ConstraintViolation<?>> violations, String fieldName) {
-        boolean found = violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals(fieldName));
-        assertTrue(found, "Expected validation error for field: " + fieldName);
+    private static void assertApiExceptionContains(ApiException e, String containsLower) {
+        assertNotNull(e.getMessage());
+        assertTrue(e.getMessage().toLowerCase().contains(containsLower),
+                "Expected error to contain: " + containsLower + " but got: " + e.getMessage());
     }
 
     // ------------------------
-    // CREATE (validation is annotation-driven now)
+    // CREATE
     // ------------------------
 
     @Test
-    public void testCreateFormValidationInvalidEmail() {
+    public void testCreateInvalidEmailShouldFail() {
         ClientForm form = new ClientForm();
         form.setEmail("invalid-email");
         form.setName("Test Client");
 
-        Set<ConstraintViolation<ClientForm>> violations = validator.validate(form);
-        assertFalse(violations.isEmpty());
-        assertHasViolationForField(violations, "email");
+        ApiException e = assertThrows(ApiException.class, () -> clientDto.create(form));
+        // message can differ; ensure the key field is mentioned
+        assertTrue(e.getMessage().toLowerCase().contains("email"));
     }
 
     @Test
-    public void testCreateFormValidationEmptyEmail() {
+    public void testCreateEmptyEmailShouldFail() {
         ClientForm form = new ClientForm();
         form.setEmail("");
         form.setName("Test Client");
 
-        Set<ConstraintViolation<ClientForm>> violations = validator.validate(form);
-        assertFalse(violations.isEmpty());
-        assertHasViolationForField(violations, "email");
+        ApiException e = assertThrows(ApiException.class, () -> clientDto.create(form));
+        assertTrue(e.getMessage().toLowerCase().contains("email"));
     }
 
     @Test
-    public void testCreateFormValidationEmptyName() {
+    public void testCreateEmptyNameShouldFail() {
         ClientForm form = new ClientForm();
         form.setEmail("test@example.com");
         form.setName("");
 
-        Set<ConstraintViolation<ClientForm>> violations = validator.validate(form);
-        assertFalse(violations.isEmpty());
-        assertHasViolationForField(violations, "name");
+        ApiException e = assertThrows(ApiException.class, () -> clientDto.create(form));
+        assertTrue(e.getMessage().toLowerCase().contains("name"));
     }
 
     @Test
@@ -85,14 +69,11 @@ public class ClientDtoTest extends AbstractUnitTest {
         form.setEmail("test@example.com");
         form.setName("Test Client");
 
-        Set<ConstraintViolation<ClientForm>> violations = validator.validate(form);
-        assertTrue(violations.isEmpty());
-
         ClientData createdClient = clientDto.create(form);
 
         assertNotNull(createdClient);
         assertEquals("test@example.com", createdClient.getEmail());
-        assertNormalizedNameEquals("Test Client", createdClient.getName());
+        assertNormalizedEquals("Test Client", createdClient.getName());
     }
 
     @Test
@@ -104,7 +85,7 @@ public class ClientDtoTest extends AbstractUnitTest {
         clientDto.create(form);
 
         ApiException exception = assertThrows(ApiException.class, () -> clientDto.create(form));
-        assertTrue(exception.getMessage().toLowerCase().contains("already exists"));
+        assertApiExceptionContains(exception, "already");
     }
 
     @Test
@@ -117,10 +98,7 @@ public class ClientDtoTest extends AbstractUnitTest {
 
         assertNotNull(createdClient);
         assertEquals("test@example.com", createdClient.getEmail());
-
-        assertFalse(createdClient.getName().startsWith(" "));
-        assertFalse(createdClient.getName().endsWith(" "));
-        assertTrue(createdClient.getName().contains("john"));
+        assertEquals("john   doe", createdClient.getName()); // trims + lowercases; preserves internal spaces
     }
 
     // ------------------------
@@ -129,8 +107,16 @@ public class ClientDtoTest extends AbstractUnitTest {
 
     @Test
     public void testGetByEmailNotFound() {
-        ApiException exception = assertThrows(ApiException.class, () -> clientDto.getByEmail("missing@example.com"));
-        assertTrue(exception.getMessage().toLowerCase().contains("not found"));
+        ApiException exception = assertThrows(ApiException.class,
+                () -> clientDto.getByEmail("missing@example.com"));
+        assertApiExceptionContains(exception, "not found");
+    }
+
+    @Test
+    public void testGetByEmailInvalidEmailShouldFailFast() {
+        ApiException exception = assertThrows(ApiException.class,
+                () -> clientDto.getByEmail("not-an-email"));
+        assertTrue(exception.getMessage().toLowerCase().contains("email"));
     }
 
     @Test
@@ -144,37 +130,15 @@ public class ClientDtoTest extends AbstractUnitTest {
 
         assertNotNull(fetched);
         assertEquals("test@example.com", fetched.getEmail());
-        assertNormalizedNameEquals("Test Client", fetched.getName());
+        assertNormalizedEquals("Test Client", fetched.getName());
     }
 
     // ------------------------
-    // GET ALL (via search compatibility)
+    // SEARCH (also substitutes "get all paginated")
     // ------------------------
 
     @Test
-    public void testPageFormValidationInvalidPageSize() {
-        PageForm pageForm = new PageForm();
-        pageForm.setPage(0);
-        pageForm.setSize(101);
-
-        Set<ConstraintViolation<PageForm>> violations = validator.validate(pageForm);
-        assertFalse(violations.isEmpty());
-        assertHasViolationForField(violations, "size");
-    }
-
-    @Test
-    public void testPageFormValidationInvalidPageNumber() {
-        PageForm pageForm = new PageForm();
-        pageForm.setPage(-1);
-        pageForm.setSize(10);
-
-        Set<ConstraintViolation<PageForm>> violations = validator.validate(pageForm);
-        assertFalse(violations.isEmpty());
-        assertHasViolationForField(violations, "page");
-    }
-
-    @Test
-    public void testGetAllUsingSearchValidParams() throws ApiException {
+    public void testSearchEmptyFiltersReturnsAllPaginated() throws ApiException {
         for (int i = 0; i < 5; i++) {
             ClientForm form = new ClientForm();
             form.setEmail("test" + i + "@example.com");
@@ -182,20 +146,18 @@ public class ClientDtoTest extends AbstractUnitTest {
             clientDto.create(form);
         }
 
-        PageForm pageForm = new PageForm();
-        pageForm.setPage(0);
-        pageForm.setSize(3);
+        ClientSearchForm search = new ClientSearchForm();
+        search.setName(null);
+        search.setEmail(null);
+        search.setPage(0);
+        search.setSize(3);
 
-        Page<ClientData> page = clientDto.getAllUsingSearch(pageForm);
+        Page<ClientData> page = clientDto.search(search);
 
         assertNotNull(page);
         assertTrue(page.getContent().size() <= 3);
         assertTrue(page.getTotalElements() >= 5);
     }
-
-    // ------------------------
-    // FILTER
-    // ------------------------
 
     @Test
     public void testSearchValidByNameCaseInsensitive() throws ApiException {
@@ -214,9 +176,6 @@ public class ClientDtoTest extends AbstractUnitTest {
         search.setEmail(null);
         search.setPage(0);
         search.setSize(10);
-
-        Set<ConstraintViolation<ClientSearchForm>> violations = validator.validate(search);
-        assertTrue(violations.isEmpty());
 
         Page<ClientData> page = clientDto.search(search);
 
@@ -243,9 +202,6 @@ public class ClientDtoTest extends AbstractUnitTest {
         search.setPage(0);
         search.setSize(10);
 
-        Set<ConstraintViolation<ClientSearchForm>> violations = validator.validate(search);
-        assertTrue(violations.isEmpty());
-
         Page<ClientData> page = clientDto.search(search);
 
         assertNotNull(page);
@@ -254,44 +210,74 @@ public class ClientDtoTest extends AbstractUnitTest {
     }
 
     @Test
-    public void testSearchFormValidationInvalidPaginationParams() {
+    public void testSearchInvalidPaginationParamsShouldFail() {
         ClientSearchForm search = new ClientSearchForm();
         search.setName("x");
         search.setEmail("y@example.com");
         search.setPage(-1);
         search.setSize(10);
 
-        Set<ConstraintViolation<ClientSearchForm>> violations = validator.validate(search);
-        assertFalse(violations.isEmpty());
-        assertHasViolationForField(violations, "page");
+        ApiException e = assertThrows(ApiException.class, () -> clientDto.search(search));
+        assertTrue(e.getMessage().toLowerCase().contains("page"));
+    }
+
+    @Test
+    public void testSearchTooLongNameShouldFail() {
+        ClientSearchForm search = new ClientSearchForm();
+        search.setName("x".repeat(31)); // NAME_MAX + 1
+        search.setEmail(null);
+        search.setPage(0);
+        search.setSize(10);
+
+        ApiException e = assertThrows(ApiException.class, () -> clientDto.search(search));
+        assertTrue(e.getMessage().toLowerCase().contains("name"));
+    }
+
+    @Test
+    public void testSearchBlankNameBecomesNullAndReturnsAll() throws ApiException {
+        for (int i = 0; i < 3; i++) {
+            ClientForm form = new ClientForm();
+            form.setEmail("blank" + i + "@example.com");
+            form.setName("Blank " + i);
+            clientDto.create(form);
+        }
+
+        ClientSearchForm search = new ClientSearchForm();
+        search.setName("   "); // should normalize to null
+        search.setEmail("   "); // should normalize to null
+        search.setPage(0);
+        search.setSize(10);
+
+        Page<ClientData> page = clientDto.search(search);
+
+        assertNotNull(page);
+        assertTrue(page.getTotalElements() >= 3);
     }
 
     // ------------------------
-    // UPDATE (validation is annotation-driven now)
+    // UPDATE
     // ------------------------
 
     @Test
-    public void testUpdateFormValidationInvalidOldEmail() {
+    public void testUpdateFormInvalidOldEmailShouldFail() {
         ClientUpdateForm form = new ClientUpdateForm();
         form.setOldEmail("not-an-email");
         form.setNewEmail("new@example.com");
         form.setName("New Name");
 
-        Set<ConstraintViolation<ClientUpdateForm>> violations = validator.validate(form);
-        assertFalse(violations.isEmpty());
-        assertHasViolationForField(violations, "oldEmail");
+        ApiException e = assertThrows(ApiException.class, () -> clientDto.update(form));
+        assertTrue(e.getMessage().toLowerCase().contains("oldemail") || e.getMessage().toLowerCase().contains("email"));
     }
 
     @Test
-    public void testUpdateFormValidationInvalidNewEmail() {
+    public void testUpdateFormInvalidNewEmailShouldFail() {
         ClientUpdateForm form = new ClientUpdateForm();
         form.setOldEmail("old@example.com");
         form.setNewEmail("not-an-email");
         form.setName("New Name");
 
-        Set<ConstraintViolation<ClientUpdateForm>> violations = validator.validate(form);
-        assertFalse(violations.isEmpty());
-        assertHasViolationForField(violations, "newEmail");
+        ApiException e = assertThrows(ApiException.class, () -> clientDto.update(form));
+        assertTrue(e.getMessage().toLowerCase().contains("newemail") || e.getMessage().toLowerCase().contains("email"));
     }
 
     @Test
@@ -302,7 +288,7 @@ public class ClientDtoTest extends AbstractUnitTest {
         form.setName("New Name");
 
         ApiException exception = assertThrows(ApiException.class, () -> clientDto.update(form));
-        assertTrue(exception.getMessage().toLowerCase().contains("not found"));
+        assertApiExceptionContains(exception, "not found");
     }
 
     @Test
@@ -341,7 +327,7 @@ public class ClientDtoTest extends AbstractUnitTest {
 
         assertNotNull(updated);
         assertEquals("same@example.com", updated.getEmail());
-        assertNormalizedNameEquals("New Name", updated.getName());
+        assertNormalizedEquals("New Name", updated.getName());
     }
 
     @Test
@@ -360,6 +346,6 @@ public class ClientDtoTest extends AbstractUnitTest {
 
         assertNotNull(updated);
         assertEquals("new@example.com", updated.getEmail());
-        assertNormalizedNameEquals("Updated", updated.getName());
+        assertNormalizedEquals("Updated", updated.getName());
     }
 }

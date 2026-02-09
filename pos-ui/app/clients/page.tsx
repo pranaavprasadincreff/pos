@@ -15,7 +15,7 @@ import ClientTable from "@/components/clients/ClientTable"
 import ClientModal from "@/components/clients/ClientModal"
 import Pagination from "@/components/shared/Pagination"
 
-import { addClient, filterClients, getClients, updateClient } from "@/services/clientService"
+import { addClient, searchClients, updateClient } from "@/services/clientService"
 import { Client, ClientForm, ClientUpdateForm } from "@/services/types"
 import { toast } from "sonner"
 
@@ -93,19 +93,17 @@ export default function ClientsPage() {
 
             const trimmed = debouncedSearchTerm.trim()
 
-            if (trimmed.length === 0) {
-                const res = await getClients(page, pageSize)
-                setClients(res.content)
-                setTotalPages(res.totalPages)
-                return
-            }
-
-            const apiField = CLIENT_FILTERS[searchBy].apiField
-            const res = await filterClients({
+            const params: any = {
                 page,
                 size: pageSize,
-                [apiField]: trimmed,
-            })
+            }
+
+            if (trimmed.length > 0) {
+                const apiField = CLIENT_FILTERS[searchBy].apiField
+                params[apiField] = trimmed
+            }
+
+            const res = await searchClients(params)
 
             setClients(res.content)
             setTotalPages(res.totalPages)
