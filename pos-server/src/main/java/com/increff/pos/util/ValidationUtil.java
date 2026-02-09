@@ -231,27 +231,6 @@ public class ValidationUtil {
         }
     }
 
-    public static List<ProductPojo> convertBulkProductRowsToPojos(List<String[]> rows) throws ApiException {
-        return rows.stream().map(r -> {
-            ProductPojo p = new ProductPojo();
-            p.setBarcode(r[0]);
-            p.setClientEmail(r[1]);
-            p.setName(r[2]);
-            p.setMrp(Double.parseDouble(r[3]));
-            if (r.length == 5) p.setImageUrl(r[4]);
-            return p;
-        }).toList();
-    }
-
-    public static List<InventoryPojo> convertBulkInventoryRowsToPojos(List<String[]> rows) throws ApiException {
-        return rows.stream().map(r -> {
-            InventoryPojo i = new InventoryPojo();
-            i.setProductId(r[0]); // barcode carrier
-            i.setQuantity(Integer.parseInt(r[1]));
-            return i;
-        }).toList();
-    }
-
     // ---------------- BULK VALIDATION ----------------
 
     public static void validateBulkProductData(Map<String, Integer> headers, List<String[]> rows) throws ApiException {
@@ -277,6 +256,15 @@ public class ValidationUtil {
         int dataRows = rows.size();
         if (dataRows > BULK_MAX_ROWS) {
             throw new ApiException("Bulk upload supports at most " + BULK_MAX_ROWS + " rows");
+        }
+    }
+
+    public static void validateOrderReferenceIdRequired(String ref) throws ApiException {
+        if (ref == null || ref.trim().isEmpty()) {
+            throw new ApiException("Order reference id is required");
+        }
+        if (ref.trim().length() > ORDER_REFERENCE_ID_MAX) {
+            throw new ApiException("Order reference id too long");
         }
     }
 

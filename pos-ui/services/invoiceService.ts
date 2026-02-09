@@ -1,12 +1,12 @@
 import api from "@/services/api"
-import { InvoiceData } from "@/services/types"
+import type { InvoiceData } from "@/services/types"
 
 export const invoiceService = {
-    generate(orderReferenceId: string) {
-        return api.post<InvoiceData>(`/pos/invoice/generate/${orderReferenceId}`)
-    },
+  generate(orderReferenceId: string) {
+    return api.post<InvoiceData>(`/invoice/${encodeURIComponent(orderReferenceId)}`)
+  },
 
-    get(orderReferenceId: string) {
-        return api.get<InvoiceData>(`/pos/invoice/get/${orderReferenceId}`)
-    },
+  get(orderReferenceId: string) {
+    return api.get<InvoiceData>(`/invoice/${encodeURIComponent(orderReferenceId)}`)
+  },
 }

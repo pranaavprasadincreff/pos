@@ -96,6 +96,7 @@ public class InventoryApiImpl implements InventoryApi {
     public boolean isSufficientInventoryBulk(Map<String, Integer> qtyByProductId)
             throws ApiException {
 
+        // TODO: remogve if not required
         validateBulkQuantityMap(qtyByProductId);
 
         List<String> productIds = qtyByProductId.keySet().stream().toList();
