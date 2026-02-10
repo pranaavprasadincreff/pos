@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 
+// TODO convert to modal to send to flow/api/dao
 @Getter
 @Setter
 public class ClientSearchForm {

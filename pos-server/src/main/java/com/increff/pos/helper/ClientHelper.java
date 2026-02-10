@@ -13,14 +13,13 @@ public class ClientHelper {
         return clientPojo;
     }
 
-    public static ClientPojo convertUpdateFormToClientPojo(ClientUpdateForm dto) {
-        ClientPojo clientPojo = new ClientPojo();
-        clientPojo.setName(dto.getName());
-        clientPojo.setEmail(dto.getNewEmail());
-        return clientPojo;
+    public static ClientPojo convertToUpdatedPojo(ClientPojo existingClient, ClientUpdateForm form) {
+        existingClient.setName(form.getName());
+        existingClient.setEmail(form.getNewEmail());
+        return existingClient;
     }
 
-    public static ClientData convertFormToDto(ClientPojo clientPojo) {
+    public static ClientData convertFormToData(ClientPojo clientPojo) {
         ClientData clientData = new ClientData();
         clientData.setName(clientPojo.getName());
         clientData.setEmail(clientPojo.getEmail());

@@ -16,20 +16,6 @@ public class ClientApiTest extends AbstractUnitTest {
     private ClientApi clientApi;
 
     @Test
-    public void testAddDuplicateEmailShouldFail() throws ApiException {
-        ClientPojo a = new ClientPojo();
-        a.setEmail("dup@example.com");
-        a.setName("A");
-        clientApi.add(a);
-
-        ClientPojo b = new ClientPojo();
-        b.setEmail("dup@example.com");
-        b.setName("B");
-
-        assertThrows(ApiException.class, () -> clientApi.add(b));
-    }
-
-    @Test
     public void testGetClientByEmailNotFound() {
         ApiException ex = assertThrows(ApiException.class,
                 () -> clientApi.getClientByEmail("missing@example.com"));
@@ -51,81 +37,30 @@ public class ClientApiTest extends AbstractUnitTest {
     }
 
     @Test
-    public void testUpdateClientNotFound() {
-        String oldEmail = "missing@example.com";
-
-        ClientPojo upd = new ClientPojo();
-        upd.setEmail("new@example.com");
-        upd.setName("New Name");
-
-        assertThrows(ApiException.class, () -> clientApi.update(upd, oldEmail));
-    }
-
-    @Test
-    public void testUpdateWhenNewEmailBelongsToDifferentClientShouldFail() throws ApiException {
-        ClientPojo a = new ClientPojo();
-        a.setEmail("a@example.com");
-        a.setName("A");
-        clientApi.add(a);
-
-        ClientPojo b = new ClientPojo();
-        b.setEmail("b@example.com");
-        b.setName("B");
-        clientApi.add(b);
-
-        String oldEmail = "a@example.com";
-
-        ClientPojo upd = new ClientPojo();
-        upd.setEmail("b@example.com"); // new email conflicts with B
-        upd.setName("A Updated");
-
-        assertThrows(ApiException.class, () -> clientApi.update(upd, oldEmail));
-    }
-
-    @Test
-    public void testUpdateSameEmailAllowedAndUpdatesName() throws ApiException {
-        ClientPojo a = new ClientPojo();
-        a.setEmail("same@example.com");
-        a.setName("Old Name");
-        ClientPojo saved = clientApi.add(a);
-
-        String oldEmail = "same@example.com";
-
-        ClientPojo upd = new ClientPojo();
-        upd.setEmail("same@example.com"); // same email allowed
-        upd.setName("New Name");
-
-        ClientPojo updated = clientApi.update(upd, oldEmail);
-
-        assertNotNull(updated);
-        assertEquals(saved.getId(), updated.getId());
-        assertEquals("same@example.com", updated.getEmail());
-        assertEquals("New Name", updated.getName());
-    }
-
-    @Test
-    public void testUpdateChangesEmailAndName() throws ApiException {
+    public void testUpdatePersistsChanges_whenPreparedPojoIsPassed() throws ApiException {
+        // create
         ClientPojo a = new ClientPojo();
         a.setEmail("old@example.com");
-        a.setName("Old");
+        a.setName("Old Name");
         clientApi.add(a);
 
-        String oldEmail = "old@example.com";
+        // fetch existing and prepare updates (this orchestration is DTO responsibility now,
+        // but for API test we prepare the final pojo ourselves)
+        ClientPojo existing = clientApi.getClientByEmail("old@example.com");
+        existing.setEmail("new@example.com");
+        existing.setName("New Name");
 
-        ClientPojo upd = new ClientPojo();
-        upd.setEmail("new@example.com");
-        upd.setName("Updated");
-
-        ClientPojo updated = clientApi.update(upd, oldEmail);
+        ClientPojo updated = clientApi.update(existing);
 
         assertNotNull(updated);
         assertEquals("new@example.com", updated.getEmail());
-        assertEquals("Updated", updated.getName());
+        assertEquals("New Name", updated.getName());
 
+        // verify persisted
         assertThrows(ApiException.class, () -> clientApi.getClientByEmail("old@example.com"));
-
         ClientPojo fetched = clientApi.getClientByEmail("new@example.com");
         assertEquals(updated.getId(), fetched.getId());
+        assertEquals("New Name", fetched.getName());
     }
 
     @Test

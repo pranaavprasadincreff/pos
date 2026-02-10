@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 
 @Repository
 public class ClientDao extends AbstractDao<ClientPojo> {
+
     public ClientDao(MongoOperations mongoOperations) {
         super(
                 new MongoRepositoryFactory(mongoOperations).getEntityInformation(ClientPojo.class),
@@ -31,23 +32,23 @@ public class ClientDao extends AbstractDao<ClientPojo> {
     }
 
     public Page<ClientPojo> search(ClientSearchForm form) {
-        List<Criteria> list = new ArrayList<>();
+        List<Criteria> filters = new ArrayList<>();
 
         String name = form.getName();
         String email = form.getEmail();
 
         if (name != null && !name.isBlank()) {
-            Pattern pattern = Pattern.compile(".*" + Pattern.quote(name) + ".*", Pattern.CASE_INSENSITIVE);
-            list.add(Criteria.where("name").regex(pattern));
+            filters.add(Criteria.where("name").
+                    regex(Pattern.compile(".*" + name + ".*", Pattern.CASE_INSENSITIVE)));
         }
         if (email != null && !email.isBlank()) {
-            Pattern pattern = Pattern.compile(".*" + Pattern.quote(email) + ".*", Pattern.CASE_INSENSITIVE);
-            list.add(Criteria.where("email").regex(pattern));
+            filters.add(Criteria.where("email").
+                    regex(Pattern.compile(".*" + email + ".*", Pattern.CASE_INSENSITIVE)));
         }
 
         Query query = new Query();
-        if (!list.isEmpty()) {
-            query.addCriteria(new Criteria().andOperator(list));
+        if (!filters.isEmpty()) {
+            query.addCriteria(new Criteria().andOperator(filters));
         }
 
         Pageable pageable = PageRequest.of(
@@ -65,20 +66,19 @@ public class ClientDao extends AbstractDao<ClientPojo> {
         return mongoOperations.find(query, ClientPojo.class);
     }
 
-    public List<String> findEmailsByNameOrEmail(String query, int limit) {
-        if (query == null || query.isBlank()) return List.of();
+    public List<String> findEmailsByNameOrEmail(String clientQuery, int limit) {
+        if (clientQuery == null || clientQuery.isBlank()) return List.of();
 
-        String safe = Pattern.quote(query.trim());
-        Pattern pattern = Pattern.compile(".*" + safe + ".*", Pattern.CASE_INSENSITIVE);
+        Pattern pattern = Pattern.compile(".*" + clientQuery + ".*", Pattern.CASE_INSENSITIVE);;
 
-        Query q = new Query();
-        q.addCriteria(new Criteria().orOperator(
+        Query query = new Query();
+        query.addCriteria(new Criteria().orOperator(
                 Criteria.where("name").regex(pattern),
                 Criteria.where("email").regex(pattern)
         ));
-        q.limit(Math.max(1, limit));
+        query.limit(Math.max(1, limit));
 
-        return mongoOperations.find(q, ClientPojo.class)
+        return mongoOperations.find(query, ClientPojo.class)
                 .stream()
                 .map(ClientPojo::getEmail)
                 .distinct()

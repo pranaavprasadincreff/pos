@@ -9,10 +9,12 @@ import java.util.List;
 import java.util.Set;
 
 public interface ClientApi {
-    ClientPojo add(ClientPojo clientPojo) throws ApiException;
+    ClientPojo add(ClientPojo clientToCreate) throws ApiException;
     ClientPojo getClientByEmail(String email) throws ApiException;
-    ClientPojo update(ClientPojo clientToUpdate, String oldEmail) throws ApiException;
     Page<ClientPojo> search(ClientSearchForm form);
+    ClientPojo update(ClientPojo clientToUpdate) throws ApiException;
+
     void validateClientsExist(Set<String> emails) throws ApiException;
     List<String> findClientEmailsByNameOrEmail(String query, int limit);
 }
+
