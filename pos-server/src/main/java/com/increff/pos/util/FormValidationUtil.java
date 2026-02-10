@@ -2,25 +2,25 @@ package com.increff.pos.util;
 
 import com.increff.pos.model.exception.ApiException;
 import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
 import jakarta.validation.Validator;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Component
-public class FormValidator {
+public final class FormValidationUtil {
 
-    @Autowired
-    private Validator validator;
+    private FormValidationUtil() {}
 
-    public <T> void validate(T form) throws ApiException {
+    private static final Validator VALIDATOR =
+            Validation.buildDefaultValidatorFactory().getValidator();
+
+    public static <T> void validate(T form) throws ApiException {
         if (form == null) {
             throw new ApiException("Request body cannot be null");
         }
 
-        Set<ConstraintViolation<T>> violations = validator.validate(form);
+        Set<ConstraintViolation<T>> violations = VALIDATOR.validate(form);
         if (violations == null || violations.isEmpty()) {
             return;
         }
