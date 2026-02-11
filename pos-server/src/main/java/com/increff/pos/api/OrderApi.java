@@ -7,9 +7,9 @@ import org.springframework.data.domain.Page;
 import java.time.ZonedDateTime;
 
 public interface OrderApi {
-    OrderPojo createOrder(OrderPojo order) throws ApiException;
+    OrderPojo createOrder(OrderPojo order);
     OrderPojo getByOrderReferenceId(String orderReferenceId) throws ApiException;
-    OrderPojo updateOrder(OrderPojo order) throws ApiException;
+    OrderPojo updateOrder(OrderPojo order);
     boolean orderReferenceIdExists(String orderReferenceId);
     Page<OrderPojo> search(
             String refContains,

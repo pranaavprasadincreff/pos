@@ -1,9 +1,8 @@
 package com.increff.pos.dto;
 
-import com.increff.pos.api.ProductApi;
-import com.increff.pos.db.OrderItemPojo;
 import com.increff.pos.db.OrderPojo;
 import com.increff.pos.db.ProductPojo;
+import com.increff.pos.db.subdocs.OrderItemPojo;
 import com.increff.pos.flow.OrderFlow;
 import com.increff.pos.helper.OrderHelper;
 import com.increff.pos.model.constants.OrderTimeframe;
@@ -14,7 +13,7 @@ import com.increff.pos.model.form.OrderCreateForm;
 import com.increff.pos.model.form.OrderCreateItemForm;
 import com.increff.pos.model.form.OrderSearchForm;
 import com.increff.pos.model.form.OrderUpdateForm;
-import com.increff.pos.util.FormValidator;
+import com.increff.pos.util.FormValidationUtil;
 import com.increff.pos.util.NormalizationUtil;
 import com.increff.pos.util.ValidationUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +22,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Component;
 
 import java.time.ZonedDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 
 @Component
 public class OrderDto {
@@ -31,42 +31,35 @@ public class OrderDto {
     @Autowired
     private OrderFlow orderFlow;
 
-    // TODO move to flow, flow can call the product api
-    @Autowired
-    private ProductApi productApi;
-
-    @Autowired
-    private FormValidator formValidator;
-
     public OrderData createOrder(OrderCreateForm form) throws ApiException {
         NormalizationUtil.normalizeOrderCreateForm(form);
-        formValidator.validate(form);
+        FormValidationUtil.validate(form);
 
-        List<String> barcodes = extractBarcodes(form.getItems());
-        List<Integer> quantities = extractQuantities(form.getItems());
-        List<Double> sellingPrices = extractSellingPrices(form.getItems());
+        List<String> barcodesInOrder = extractBarcodes(form.getItems());
+        Map<String, ProductPojo> productByBarcode = orderFlow.getProductsByBarcode(barcodesInOrder);
 
-        OrderPojo orderToCreate = OrderHelper.buildOrderForCreate(quantities, sellingPrices);
-        OrderPojo createdOrder = orderFlow.create(orderToCreate, barcodes);
+        OrderPojo orderToCreate = OrderHelper.buildOrderPojo(form.getItems(), productByBarcode);
+        orderToCreate.setOrderReferenceId(OrderHelper.generateOrderReferenceId());
 
-        return buildOrderData(createdOrder);
+        OrderPojo created = orderFlow.create(orderToCreate);
+        return buildOrderData(created);
     }
 
     public OrderData updateOrder(OrderUpdateForm form) throws ApiException {
         NormalizationUtil.normalizeOrderUpdateForm(form);
-        formValidator.validate(form);
+        FormValidationUtil.validate(form);
 
-        String orderReferenceId = form.getOrderReferenceId();
-        ValidationUtil.validateOrderReferenceId(orderReferenceId);
+        // keep this validation because it's not a bean-validation constraint on form fields in many implementations
+        ValidationUtil.validateOrderReferenceId(form.getOrderReferenceId());
 
-        List<String> barcodes = extractBarcodes(form.getItems());
-        List<Integer> quantities = extractQuantities(form.getItems());
-        List<Double> sellingPrices = extractSellingPrices(form.getItems());
+        List<String> barcodesInOrder = extractBarcodes(form.getItems());
+        Map<String, ProductPojo> productByBarcode = orderFlow.getProductsByBarcode(barcodesInOrder);
 
-        OrderPojo updateRequest = OrderHelper.buildOrderForCreate(quantities, sellingPrices);
-        OrderPojo updatedOrder = orderFlow.update(orderReferenceId, updateRequest, barcodes);
+        OrderPojo updateRequest = OrderHelper.buildOrderPojo(form.getItems(), productByBarcode);
+        updateRequest.setOrderReferenceId(form.getOrderReferenceId());
 
-        return buildOrderData(updatedOrder);
+        OrderPojo updated = orderFlow.update(updateRequest);
+        return buildOrderData(updated);
     }
 
     public OrderData cancelOrder(String orderReferenceId) throws ApiException {
@@ -87,14 +80,9 @@ public class OrderDto {
 
     public Page<OrderData> searchOrders(OrderSearchForm form) throws ApiException {
         NormalizationUtil.normalizeOrderSearchForm(form);
-        formValidator.validate(form);
-
-        if (form.getOrderReferenceId() != null) {
-            ValidationUtil.validateOrderReferenceId(form.getOrderReferenceId());
-        }
+        FormValidationUtil.validate(form);
 
         TimeRange timeRange = computeTimeRange(form.getTimeframe());
-
         Page<OrderPojo> orders = orderFlow.search(
                 form.getOrderReferenceId(),
                 form.getStatus(),
@@ -104,10 +92,6 @@ public class OrderDto {
                 form.getSize()
         );
 
-        return buildOrderDataPage(orders);
-    }
-
-    private Page<OrderData> buildOrderDataPage(Page<OrderPojo> orders) {
         List<OrderData> data = orders.getContent().stream()
                 .map(this::buildOrderData)
                 .toList();
@@ -116,60 +100,24 @@ public class OrderDto {
     }
 
     private OrderData buildOrderData(OrderPojo order) {
-        List<String> productIds = order.getOrderItems().stream()
+        List<String> productIdsInOrder = order.getOrderItems().stream()
                 .map(OrderItemPojo::getProductId)
                 .distinct()
                 .toList();
 
-        Map<String, ProductPojo> productById = fetchProductsById(productIds);
+        Map<String, ProductPojo> productById = orderFlow.getProductsByIds(productIdsInOrder);
 
-        List<OrderItemData> items = order.getOrderItems().stream()
-                .map(item -> buildOrderItemData(item, productById.get(item.getProductId())))
+        List<OrderItemData> itemData = order.getOrderItems().stream()
+                .map(item -> OrderHelper.buildOrderItemData(item, productById.get(item.getProductId())))
                 .toList();
 
-        return OrderHelper.buildOrderData(order, items);
+        return OrderHelper.buildOrderData(order, itemData);
     }
 
-    private Map<String, ProductPojo> fetchProductsById(List<String> productIds) {
-        if (productIds == null || productIds.isEmpty()) return Map.of();
-
-        List<ProductPojo> products = productApi.findByIds(productIds);
-
-        Map<String, ProductPojo> productById = new HashMap<>();
-        for (ProductPojo p : products) {
-            productById.put(p.getId(), p);
-        }
-        return productById;
-    }
-
-    private OrderItemData buildOrderItemData(OrderItemPojo item, ProductPojo product) {
-        OrderItemData data = new OrderItemData();
-        data.setQuantity(item.getOrderedQuantity());
-        data.setSellingPrice(item.getSellingPrice());
-        data.setProductBarcode(product == null ? null : product.getBarcode());
-        return data;
-    }
-
-    private List<String> extractBarcodes(List<OrderCreateItemForm> items) throws ApiException {
-        List<String> barcodes = items.stream()
+    private static List<String> extractBarcodes(List<OrderCreateItemForm> items) {
+        return items.stream()
                 .map(OrderCreateItemForm::getProductBarcode)
                 .toList();
-
-        Set<String> unique = new HashSet<>();
-        for (String barcode : barcodes) {
-            if (!unique.add(barcode)) {
-                throw new ApiException("Duplicate product barcode in order: " + barcode);
-            }
-        }
-        return barcodes;
-    }
-
-    private List<Integer> extractQuantities(List<OrderCreateItemForm> items) {
-        return items.stream().map(OrderCreateItemForm::getQuantity).toList();
-    }
-
-    private List<Double> extractSellingPrices(List<OrderCreateItemForm> items) {
-        return items.stream().map(OrderCreateItemForm::getSellingPrice).toList();
     }
 
     private TimeRange computeTimeRange(OrderTimeframe timeframe) {

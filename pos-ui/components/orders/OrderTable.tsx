@@ -217,7 +217,7 @@ export default function OrderTable({ orders, loading, onInvoiceGenerated, onEdit
                                             </TableCell>
 
                                             <TableCell className="font-medium">{order.orderReferenceId}</TableCell>
-                                            <TableCell>{formatDate(order.orderTime)}</TableCell>
+                                            <TableCell>{formatDate(order.createdAt)}</TableCell>
 
                                             <TableCell>
                         <span

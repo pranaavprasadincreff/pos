@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 
 @Repository
 public class OrderDao extends AbstractDao<OrderPojo> {
+
     public OrderDao(MongoOperations mongoOperations) {
         super(
                 new MongoRepositoryFactory(mongoOperations).getEntityInformation(OrderPojo.class),
@@ -52,11 +53,11 @@ public class OrderDao extends AbstractDao<OrderPojo> {
         }
 
         if (fromTime != null) {
-            criteriaList.add(Criteria.where("orderTime").gte(fromTime));
+            criteriaList.add(Criteria.where("createdAt").gte(fromTime));
         }
 
         if (toTime != null) {
-            criteriaList.add(Criteria.where("orderTime").lte(toTime));
+            criteriaList.add(Criteria.where("createdAt").lte(toTime));
         }
 
         Query query = new Query();
@@ -64,7 +65,7 @@ public class OrderDao extends AbstractDao<OrderPojo> {
             query.addCriteria(new Criteria().andOperator(criteriaList));
         }
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "orderTime"));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return pageableQuery(query, pageable);
     }
 }

@@ -10,7 +10,8 @@ import java.util.List;
 @Setter
 public class OrderData {
     private String orderReferenceId;
-    private ZonedDateTime orderTime;
     private String status;
+    private ZonedDateTime createdAt;
     private List<OrderItemData> items;
+
 }

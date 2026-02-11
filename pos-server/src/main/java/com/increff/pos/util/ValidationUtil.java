@@ -1,9 +1,10 @@
 package com.increff.pos.util;
 
-import com.increff.pos.db.InventoryPojo;
-import com.increff.pos.db.ProductPojo;
 import com.increff.pos.model.exception.ApiException;
-import com.increff.pos.model.form.*;
+import com.increff.pos.model.form.OrderCreateItemForm;
+import com.increff.pos.model.form.OrderCreateForm;
+import com.increff.pos.model.form.PageForm;
+import com.increff.pos.model.form.ProductSearchForm;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
@@ -17,11 +18,10 @@ public class ValidationUtil {
     private static final int NAME_MAX = 30;
     private static final int BULK_MAX_ROWS = 5000;
     private static final int INVENTORY_MAX = 1000;
-
     private static final int BARCODE_MAX = 40;
 
     private static final int ORDER_REFERENCE_ID_MAX = 50;
-    private static final int STATUS_MAX = 30;
+    private static final int STATUS_MAX = 15;
 
     private static final Set<String> ORDER_STATUS_ALLOWED = Set.of(
             "FULFILLABLE",
@@ -32,6 +32,10 @@ public class ValidationUtil {
 
     private static final Pattern SIMPLE_EMAIL =
             Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+
+    private ValidationUtil() {}
+
+    // ---------------- BASIC ----------------
 
     public static void validateEmail(String email) throws ApiException {
         if (!StringUtils.hasText(email)) {
@@ -54,6 +58,32 @@ public class ValidationUtil {
         }
     }
 
+    // ---------------- getCheck parsers (single entry-point for parsing) ----------------
+
+    public static Double getCheckMrp(String rawMrp) throws ApiException {
+        if (!StringUtils.hasText(rawMrp)) {
+            throw new ApiException("MRP is required");
+        }
+        try {
+            return Double.parseDouble(rawMrp);
+        } catch (Exception e) {
+            throw new ApiException("MRP must be a number");
+        }
+    }
+
+    public static Integer getCheckInventoryDelta(String rawQty) throws ApiException {
+        if (!StringUtils.hasText(rawQty)) {
+            throw new ApiException("Quantity is required");
+        }
+        try {
+            return Integer.parseInt(rawQty);
+        } catch (Exception e) {
+            throw new ApiException("Quantity must be a valid integer");
+        }
+    }
+
+    // ---------------- PRODUCT COMMON (no parsing here) ----------------
+
     private static void validateProductCommon(
             String barcode,
             String clientEmail,
@@ -62,65 +92,51 @@ public class ValidationUtil {
             String imageUrl
     ) throws ApiException {
 
-        if (!StringUtils.hasText(barcode)) throw new ApiException("Barcode cannot be empty");
-        if (barcode.length() > BARCODE_MAX) throw new ApiException("Barcode too long");
+        if (!StringUtils.hasText(barcode)) {
+            throw new ApiException("Barcode cannot be empty");
+        }
+        if (barcode.length() > BARCODE_MAX) {
+            throw new ApiException("Barcode too long");
+        }
 
-        if (!StringUtils.hasText(clientEmail)) throw new ApiException("Client is required");
-        if (clientEmail.length() > EMAIL_MAX) throw new ApiException("Email too long");
+        if (!StringUtils.hasText(clientEmail)) {
+            throw new ApiException("Client is required");
+        }
+        if (clientEmail.length() > EMAIL_MAX) {
+            throw new ApiException("Email too long");
+        }
 
-        if (!StringUtils.hasText(name)) throw new ApiException("Product name cannot be empty");
-        if (name.length() > NAME_MAX) throw new ApiException("Name too long");
+        if (!StringUtils.hasText(name)) {
+            throw new ApiException("Product name cannot be empty");
+        }
+        if (name.length() > NAME_MAX) {
+            throw new ApiException("Name too long");
+        }
 
-        if (mrp == null || mrp <= 0) throw new ApiException("Invalid MRP");
+        if (mrp == null) {
+            throw new ApiException("MRP is required");
+        }
+        if (mrp <= 0) {
+            throw new ApiException("Invalid MRP");
+        }
 
         validateOptionalImageUrl(imageUrl);
     }
 
-    // ---------------- INVENTORY ----------------
-
-    public static void validateInventoryUpdateForm(InventoryUpdateForm form) throws ApiException {
-        if (form == null) throw new ApiException("Invalid inventory update input");
-
-        if (form.getBarcode() == null || form.getBarcode().trim().isEmpty()) {
-            throw new ApiException("Barcode cannot be empty");
-        }
-
-        if (form.getQuantity() == null) {
-            throw new ApiException("Quantity is required");
-        }
-
-        if (form.getQuantity() < 0) {
-            throw new ApiException("Inventory cannot be negative");
-        }
-
-        if (form.getQuantity() > INVENTORY_MAX) {
-            throw new ApiException("Inventory cannot exceed 1000");
-        }
-    }
-
-
-    // ---------------- PAGE ----------------
-
-    public static void validatePageForm(PageForm form) throws ApiException {
-        if (form == null) throw new ApiException("Page form required");
-
-        if (form.getPage() < 0) throw new ApiException("Page number cannot be negative");
-        if (form.getSize() <= 0 || form.getSize() > 100)
-            throw new ApiException("Invalid page size");
-    }
-
-    // ---------------- BULK ----------------
+    // ---------------- BULK (row-level) ----------------
 
     public static void validateBulkProductRow(String[] row) throws ApiException {
         if (row == null || row.length < 4 || row.length > 5) {
             throw new ApiException("Expected columns: barcode, clientEmail, name, mrp, imageUrl(optional)");
         }
 
+        Double mrp = getCheckMrp(row[3]);
+
         validateProductCommon(
                 row[0],
                 row[1],
                 row[2],
-                parseMrp(row[3]),
+                mrp,
                 row.length == 5 ? row[4] : null
         );
     }
@@ -131,114 +147,26 @@ public class ValidationUtil {
         }
 
         String barcode = row[0];
-        if (!StringUtils.hasText(barcode)) throw new ApiException("Barcode cannot be empty");
-        if (barcode.length() > BARCODE_MAX) throw new ApiException("Barcode too long");
-
-        try {
-            int qty = Integer.parseInt(row[1]);
-            if (qty < 0) throw new ApiException("Quantity cannot be negative");
-            if (qty > INVENTORY_MAX) throw new ApiException("Quantity cannot exceed " + INVENTORY_MAX);
-        } catch (NumberFormatException e) {
-            throw new ApiException("Quantity must be a valid integer");
+        if (!StringUtils.hasText(barcode)) {
+            throw new ApiException("Barcode cannot be empty");
         }
-    }
-
-    public static void validateProductFilterForm(ProductSearchForm form) throws ApiException {
-        if (form == null) throw new ApiException("Filter form required");
-
-        if (form.getBarcode() != null && form.getBarcode().length() > BARCODE_MAX)
-            throw new ApiException("Barcode filter too long");
-
-        if (form.getName() != null && form.getName().length() > NAME_MAX)
-            throw new ApiException("Name filter too long");
-
-        if (form.getClient() != null && form.getClient().length() > EMAIL_MAX)
-            throw new ApiException("Client filter too long");
-
-        validatePageBounds(form.getPage(), form.getSize());
-    }
-
-    // ---------------- ORDER CREATE (items validation; price<=MRP must be in service) ----------------
-
-    public static void validateOrderReferenceId(String ref) throws ApiException {
-        if (!StringUtils.hasText(ref)) throw new ApiException("Order reference id is required");
-        if (ref.length() > 50) throw new ApiException("Order reference id too long");
-    }
-
-    public static void validateOrderCreateForm(OrderCreateForm form) throws ApiException {
-        if (form == null) throw new ApiException("Order form required");
-        if (form.getItems() == null || form.getItems().isEmpty()) {
-            throw new ApiException("At least one order item required");
+        if (barcode.length() > BARCODE_MAX) {
+            throw new ApiException("Barcode too long");
         }
 
-        for (OrderCreateItemForm item : form.getItems()) {
-            validateOrderItem(item);
-        }
+        getCheckInventoryDelta(row[1]);
     }
 
-    private static void validateOrderItem(OrderCreateItemForm item) throws ApiException {
-        if (item == null) throw new ApiException("Order item required");
-
-        if (!StringUtils.hasText(item.getProductBarcode())) throw new ApiException("Barcode required");
-        if (item.getProductBarcode().length() > BARCODE_MAX) throw new ApiException("Barcode too long");
-
-        if (item.getQuantity() == null || item.getQuantity() <= 0)
-            throw new ApiException("Quantity must be > 0");
-        if (item.getQuantity() > INVENTORY_MAX)
-            throw new ApiException("Quantity cannot exceed " + INVENTORY_MAX);
-
-        if (item.getSellingPrice() == null || item.getSellingPrice() <= 0)
-            throw new ApiException("Selling price must be > 0");
-    }
-
-    // ---------------- ORDER FILTER ----------------
-
-    public static void validateOrderSearchForm(OrderSearchForm form) throws ApiException {
-        if (form == null) throw new ApiException("Order filter form required");
-        validatePageBounds(form.getPage(), form.getSize());
-
-        if (StringUtils.hasText(form.getOrderReferenceId()) && form.getOrderReferenceId().length() > ORDER_REFERENCE_ID_MAX) {
-            throw new ApiException("Order reference id filter too long");
-        }
-
-        if (StringUtils.hasText(form.getStatus())) {
-            if (form.getStatus().length() > STATUS_MAX) {
-                throw new ApiException("Status filter too long");
-            }
-            if (!ORDER_STATUS_ALLOWED.contains(form.getStatus().toUpperCase())) {
-                throw new ApiException("Invalid status filter");
-            }
-        }
-    }
-
-    // ---------------- COMMON ----------------
-
-    private static void validateOptionalImageUrl(String url) throws ApiException {
-        if (url == null || url.isBlank()) return;
-        if (url.length() > 500) throw new ApiException("Image URL too long");
-    }
-
-    private static void validatePageBounds(int page, int size) throws ApiException {
-        if (page < 0) throw new ApiException("Page cannot be negative");
-        if (size <= 0 || size > 100) throw new ApiException("Invalid page size");
-    }
-
-    private static Double parseMrp(String v) throws ApiException {
-        try {
-            return Double.parseDouble(v);
-        } catch (Exception e) {
-            throw new ApiException("MRP must be a number");
-        }
-    }
-
-    // ---------------- BULK VALIDATION ----------------
+    // ---------------- BULK (file-level) ----------------
 
     public static void validateBulkProductData(Map<String, Integer> headers, List<String[]> rows) throws ApiException {
         validateBulkRowLimit(rows);
 
         List<String> requiredCols = List.of("barcode", "clientemail", "name", "mrp");
         for (String col : requiredCols) {
-            if (!headers.containsKey(col)) throw new ApiException("Missing required column: " + col);
+            if (!headers.containsKey(col)) {
+                throw new ApiException("Missing required column: " + col);
+            }
         }
     }
 
@@ -251,20 +179,147 @@ public class ValidationUtil {
     }
 
     private static void validateBulkRowLimit(List<String[]> rows) throws ApiException {
-        if (rows == null) throw new ApiException("File is empty");
-
-        int dataRows = rows.size();
-        if (dataRows > BULK_MAX_ROWS) {
+        if (rows == null) {
+            throw new ApiException("File is empty");
+        }
+        if (rows.size() > BULK_MAX_ROWS) {
             throw new ApiException("Bulk upload supports at most " + BULK_MAX_ROWS + " rows");
         }
     }
 
-    public static void validateOrderReferenceIdRequired(String ref) throws ApiException {
-        if (ref == null || ref.trim().isEmpty()) {
+    // ---------------- ORDER ----------------
+
+    public static void validateOrderReferenceId(String ref) throws ApiException {
+        if (!StringUtils.hasText(ref)) {
             throw new ApiException("Order reference id is required");
         }
         if (ref.trim().length() > ORDER_REFERENCE_ID_MAX) {
             throw new ApiException("Order reference id too long");
+        }
+    }
+
+    public static void validateOrderCreateForm(OrderCreateForm form) throws ApiException {
+        if (form == null) {
+            throw new ApiException("Order form required");
+        }
+        if (form.getItems() == null || form.getItems().isEmpty()) {
+            throw new ApiException("At least one order item required");
+        }
+
+        for (OrderCreateItemForm item : form.getItems()) {
+            validateOrderItem(item);
+        }
+    }
+
+    private static void validateOrderItem(OrderCreateItemForm item) throws ApiException {
+        if (item == null) {
+            throw new ApiException("Order item required");
+        }
+
+        if (!StringUtils.hasText(item.getProductBarcode())) {
+            throw new ApiException("Barcode required");
+        }
+        if (item.getProductBarcode().length() > BARCODE_MAX) {
+            throw new ApiException("Barcode too long");
+        }
+
+        if (item.getQuantity() == null || item.getQuantity() <= 0) {
+            throw new ApiException("Quantity must be > 0");
+        }
+        if (item.getQuantity() > INVENTORY_MAX) {
+            throw new ApiException("Quantity cannot exceed " + INVENTORY_MAX);
+        }
+
+        if (item.getSellingPrice() == null || item.getSellingPrice() <= 0) {
+            throw new ApiException("Selling price must be > 0");
+        }
+    }
+
+    // ---------------- COMMON ----------------
+
+    private static void validateOptionalImageUrl(String url) throws ApiException {
+        if (url == null || url.isBlank()) return;
+        if (url.length() > 500) {
+            throw new ApiException("Image URL too long");
+        }
+    }
+
+    public static void validatePageForm(PageForm form) throws ApiException {
+        if (form == null) {
+            throw new ApiException("Page form required");
+        }
+        if (form.getPage() < 0) {
+            throw new ApiException("Page number cannot be negative");
+        }
+        if (form.getSize() <= 0 || form.getSize() > 100) {
+            throw new ApiException("Invalid page size");
+        }
+    }
+
+    public static void validateProductFilterForm(ProductSearchForm form) throws ApiException {
+        if (form == null) {
+            throw new ApiException("Filter form required");
+        }
+
+        if (form.getBarcode() != null && form.getBarcode().length() > BARCODE_MAX) {
+            throw new ApiException("Barcode filter too long");
+        }
+
+        if (form.getName() != null && form.getName().length() > NAME_MAX) {
+            throw new ApiException("Name filter too long");
+        }
+
+        if (form.getClient() != null && form.getClient().length() > EMAIL_MAX) {
+            throw new ApiException("Client filter too long");
+        }
+
+        validatePageBounds(form.getPage(), form.getSize());
+    }
+
+    private static void validatePageBounds(int page, int size) throws ApiException {
+        if (page < 0) throw new ApiException("Page cannot be negative");
+        if (size <= 0 || size > 100) throw new ApiException("Invalid page size");
+    }
+
+    public static void validateToken(String token) throws ApiException {
+        if (token == null || token.isBlank()) {
+            throw new ApiException("Missing or invalid token");
+        }
+    }
+
+    public static void validateOrderUpdateForm(com.increff.pos.model.form.OrderUpdateForm form) throws ApiException {
+        if (form == null) {
+            throw new ApiException("Order update form required");
+        }
+        validateOrderReferenceId(form.getOrderReferenceId());
+
+        if (form.getItems() == null || form.getItems().isEmpty()) {
+            throw new ApiException("At least one order item required");
+        }
+
+        for (OrderCreateItemForm item : form.getItems()) {
+            validateOrderItem(item);
+        }
+    }
+
+    public static void validateOrderSearchForm(com.increff.pos.model.form.OrderSearchForm form) throws ApiException {
+        if (form == null) {
+            throw new ApiException("Search form required");
+        }
+        validatePageBounds(form.getPage(), form.getSize());
+
+        if (form.getOrderReferenceId() != null) {
+            validateOrderReferenceId(form.getOrderReferenceId());
+        }
+
+        if (form.getStatus() != null) {
+            String normalizedStatus = form.getStatus().trim().toUpperCase();
+            if (normalizedStatus.length() > STATUS_MAX) {
+                throw new ApiException("Status too long");
+            }
+            if (!ORDER_STATUS_ALLOWED.contains(normalizedStatus)) {
+                throw new ApiException("Invalid status");
+            }
         }
     }
 

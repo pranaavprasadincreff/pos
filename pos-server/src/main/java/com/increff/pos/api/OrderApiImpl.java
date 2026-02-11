@@ -16,12 +16,12 @@ public class OrderApiImpl implements OrderApi {
     private OrderDao orderDao;
 
     @Override
-    public OrderPojo createOrder(OrderPojo order) throws ApiException {
+    public OrderPojo createOrder(OrderPojo order) {
         return orderDao.save(order);
     }
 
     @Override
-    public OrderPojo updateOrder(OrderPojo order) throws ApiException {
+    public OrderPojo updateOrder(OrderPojo order) {
         return orderDao.save(order);
     }
 
