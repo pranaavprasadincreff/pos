@@ -1,6 +1,6 @@
 package com.increff.pos.controller;
 
-import com.increff.pos.dto.ProductDto;
+import com.increff.pos.dto.InventoryDto;
 import com.increff.pos.model.data.BulkUploadData;
 import com.increff.pos.model.data.ProductData;
 import com.increff.pos.model.exception.ApiException;
@@ -18,17 +18,17 @@ import org.springframework.web.bind.annotation.*;
 public class InventoryController {
 
     @Autowired
-    private ProductDto productDto;
+    private InventoryDto inventoryDto;
 
     @Operation(summary = "Update inventory")
     @PutMapping
     public ProductData updateInventory(@RequestBody InventoryUpdateForm form) throws ApiException {
-        return productDto.updateInventory(form);
+        return inventoryDto.updateInventory(form);
     }
 
     @Operation(summary = "Bulk inventory update")
     @PostMapping("/bulk-inventory-update")
     public BulkUploadData bulkInventory(@RequestBody BulkUploadForm form) throws ApiException {
-        return productDto.bulkUpdateInventory(form);
+        return inventoryDto.bulkUpdateInventory(form);
     }
 }

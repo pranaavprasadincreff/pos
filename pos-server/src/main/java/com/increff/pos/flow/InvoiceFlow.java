@@ -2,7 +2,7 @@ package com.increff.pos.flow;
 
 import com.increff.pos.api.OrderApi;
 import com.increff.pos.api.ProductApi;
-import com.increff.pos.db.OrderItemPojo;
+import com.increff.pos.db.subdocs.OrderItemPojo;
 import com.increff.pos.db.OrderPojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.model.constants.OrderStatus;
@@ -36,8 +36,9 @@ public class InvoiceFlow {
         if (isOrderInvoiced(order)) {
             throw new ApiException("Invoice already exists for order: " + orderReferenceId);
         }
-
-        validateOrderEligibleForInvoicing(order);
+        if (isNotOrderFulfillable(order)) {
+            throw new ApiException("Only fulfillable orders can be invoiced");
+        }
         return buildInvoiceRequest(order);
     }
 
@@ -51,18 +52,6 @@ public class InvoiceFlow {
     }
 
     // ---------------- private helpers ----------------
-
-    private void validateOrderEligibleForInvoicing(OrderPojo order) throws ApiException {
-        if (order == null) {
-            throw new ApiException("Order not found");
-        }
-        if (isNotOrderFulfillable(order)) {
-            throw new ApiException("Only fulfillable orders can be invoiced");
-        }
-        if (order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
-            throw new ApiException("Order has no items");
-        }
-    }
 
     private InvoiceGenerateForm buildInvoiceRequest(OrderPojo order) throws ApiException {
         Map<String, ProductPojo> productById = loadProductsById(order);

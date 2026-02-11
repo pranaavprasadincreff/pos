@@ -7,12 +7,9 @@ import java.util.List;
 import java.util.Map;
 
 public interface InventoryApi {
-    void createInventoryIfAbsent(String productId) throws ApiException;
+    InventoryPojo createInventoryIfAbsent(String productId) throws ApiException;
     InventoryPojo getByProductId(String productId) throws ApiException;
     InventoryPojo updateInventory(InventoryPojo inventoryPojo) throws ApiException;
-
-    void incrementInventory(String productId, int delta) throws ApiException;
-    void deductInventory(String productId, int quantity) throws ApiException;
 
     List<InventoryPojo> getByProductIds(List<String> ids);
     void saveAll(List<InventoryPojo> list);

@@ -2,6 +2,7 @@ package com.increff.pos.dto;
 
 import com.increff.pos.db.InventoryPojo;
 import com.increff.pos.db.ProductPojo;
+import com.increff.pos.flow.InventoryFlow;
 import com.increff.pos.flow.ProductFlow;
 import com.increff.pos.model.data.BulkUploadData;
 import com.increff.pos.model.form.BulkUploadForm;
@@ -20,13 +21,19 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-public class ProductBulkUploadDtoJumbledTest extends AbstractUnitTest {
+public class BulkUploadDtoJumbledTest extends AbstractUnitTest {
 
     @Autowired
     private ProductDto productDto;
 
+    @Autowired
+    private InventoryDto inventoryDto;
+
     @MockBean
     private ProductFlow productFlow;
+
+    @MockBean
+    private InventoryFlow inventoryFlow;
 
     private static final String EMAIL_1 = "pranaav@increff.com";
     private static final String EMAIL_2 = "user@gmail.com";
@@ -62,7 +69,7 @@ public class ProductBulkUploadDtoJumbledTest extends AbstractUnitTest {
         BulkUploadData out = productDto.bulkAddProducts(formFromTsv(tsv));
         assertNotNull(out);
         assertNotNull(out.file());
-        assertTrue(decodeB64(out.file()).contains("barcode\tstatus\tcomment"));
+        assertTrue(decodeB64(out.file()).toLowerCase().contains("barcode\tstatus\tcomment"));
 
         ArgumentCaptor<List<ProductPojo>> cap = ArgumentCaptor.forClass(List.class);
         verify(productFlow, times(1)).bulkAddProducts(cap.capture());
@@ -85,13 +92,13 @@ public class ProductBulkUploadDtoJumbledTest extends AbstractUnitTest {
     }
 
     @Test
-    public void bulkUpdateInventory_jumbledColumns_mapsCorrectly() throws Exception {
+    public void bulkUpdateInventory_jumbledColumns_mapsCorrectly_allowsNegative() throws Exception {
         String tsv = ""
                 + "inventory\tbarcode\n"
                 + "5\tb910\n"
-                + "10\tB911\n";
+                + "-10\tB911\n";
 
-        when(productFlow.bulkUpdateInventory(ArgumentMatchers.<InventoryPojo>anyList()))
+        when(inventoryFlow.bulkUpdateInventory(ArgumentMatchers.<InventoryPojo>anyList()))
                 .thenAnswer(inv -> {
                     List<InventoryPojo> pojos = inv.getArgument(0);
                     List<String[]> res = new ArrayList<>();
@@ -102,11 +109,13 @@ public class ProductBulkUploadDtoJumbledTest extends AbstractUnitTest {
                     return res;
                 });
 
-        BulkUploadData out = productDto.bulkUpdateInventory(formFromTsv(tsv));
+        BulkUploadData out = inventoryDto.bulkUpdateInventory(formFromTsv(tsv));
         assertNotNull(out);
+        assertNotNull(out.file());
+        assertTrue(decodeB64(out.file()).toLowerCase().contains("barcode\tstatus\tcomment"));
 
         ArgumentCaptor<List<InventoryPojo>> cap = ArgumentCaptor.forClass(List.class);
-        verify(productFlow, times(1)).bulkUpdateInventory(cap.capture());
+        verify(inventoryFlow, times(1)).bulkUpdateInventory(cap.capture());
 
         List<InventoryPojo> sent = cap.getValue();
         assertEquals(2, sent.size());
@@ -117,6 +126,6 @@ public class ProductBulkUploadDtoJumbledTest extends AbstractUnitTest {
 
         InventoryPojo i1 = sent.get(1);
         assertEquals("B911", i1.getProductId());
-        assertEquals(10, i1.getQuantity());
+        assertEquals(-10, i1.getQuantity());
     }
 }

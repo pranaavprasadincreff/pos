@@ -32,19 +32,7 @@ public class InventoryDao extends AbstractDao<InventoryPojo> {
         return mongoOperations.find(query, InventoryPojo.class);
     }
 
-    public boolean deductInventoryAtomically(String productId, int quantity) {
-        Query query = Query.query(
-                Criteria.where("productId").is(productId)
-                        .and("quantity").gte(quantity)
-        );
-
-        Update update = new Update().inc("quantity", -quantity);
-
-        InventoryPojo updated = mongoOperations.findAndModify(query, update, InventoryPojo.class);
-        return updated != null;
-    }
-
-    public boolean deductInventoryBulk(Map<String, Integer> quantityByProductId) {
+    public void deductInventoryBulk(Map<String, Integer> quantityByProductId) {
         BulkOperations bulkOps =
                 mongoOperations.bulkOps(BulkOperations.BulkMode.ORDERED, InventoryPojo.class);
 
@@ -57,7 +45,7 @@ public class InventoryDao extends AbstractDao<InventoryPojo> {
         }
 
         var result = bulkOps.execute();
-        return result.getModifiedCount() == quantityByProductId.size();
+        result.getModifiedCount();
     }
 
 

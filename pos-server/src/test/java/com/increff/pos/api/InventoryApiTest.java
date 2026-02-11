@@ -24,36 +24,27 @@ public class InventoryApiTest extends AbstractUnitTest {
     }
 
     @Test
-    public void testUpdateInventoryNegativeShouldFail() throws ApiException {
+    public void testUpdateInventoryPersistsQuantity() throws ApiException {
         inventoryApi.createInventoryIfAbsent("p1");
 
         InventoryPojo upd = new InventoryPojo();
         upd.setProductId("p1");
-        upd.setQuantity(-1);
+        upd.setQuantity(10);
+
+        InventoryPojo updated = inventoryApi.updateInventory(upd);
+        assertNotNull(updated);
+        assertEquals(10, updated.getQuantity().intValue());
+
+        InventoryPojo fetched = inventoryApi.getByProductId("p1");
+        assertEquals(10, fetched.getQuantity().intValue());
+    }
+
+    @Test
+    public void testUpdateInventoryMissingProductShouldFail() {
+        InventoryPojo upd = new InventoryPojo();
+        upd.setProductId("missing");
+        upd.setQuantity(10);
 
         assertThrows(ApiException.class, () -> inventoryApi.updateInventory(upd));
-    }
-
-    @Test
-    public void testIncrementInventoryCapExceeded() throws ApiException {
-        inventoryApi.createInventoryIfAbsent("p1");
-        assertThrows(ApiException.class, () -> inventoryApi.incrementInventory("p1", 1001));
-    }
-
-    @Test
-    public void testDeductInventoryInsufficientShouldFail() throws ApiException {
-        inventoryApi.createInventoryIfAbsent("p1");
-        assertThrows(ApiException.class, () -> inventoryApi.deductInventory("p1", 1));
-    }
-
-    @Test
-    public void testDeductInventorySuccess() throws ApiException {
-        inventoryApi.createInventoryIfAbsent("p1");
-        inventoryApi.incrementInventory("p1", 10);
-
-        assertDoesNotThrow(() -> inventoryApi.deductInventory("p1", 3));
-
-        InventoryPojo inv = inventoryApi.getByProductId("p1");
-        assertEquals(7, inv.getQuantity().intValue());
     }
 }

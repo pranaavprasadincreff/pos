@@ -2,7 +2,7 @@ package com.increff.pos.flow;
 
 import com.increff.pos.api.OrderApi;
 import com.increff.pos.api.ProductApi;
-import com.increff.pos.db.OrderItemPojo;
+import com.increff.pos.db.subdocs.OrderItemPojo;
 import com.increff.pos.db.OrderPojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.model.constants.OrderStatus;

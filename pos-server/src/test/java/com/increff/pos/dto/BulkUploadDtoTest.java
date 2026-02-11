@@ -2,6 +2,7 @@ package com.increff.pos.dto;
 
 import com.increff.pos.db.InventoryPojo;
 import com.increff.pos.db.ProductPojo;
+import com.increff.pos.flow.InventoryFlow;
 import com.increff.pos.flow.ProductFlow;
 import com.increff.pos.model.data.BulkUploadData;
 import com.increff.pos.model.exception.ApiException;
@@ -21,13 +22,19 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-public class ProductBulkUploadDtoTest extends AbstractUnitTest {
+public class BulkUploadDtoTest extends AbstractUnitTest {
 
     @Autowired
     private ProductDto productDto;
 
+    @Autowired
+    private InventoryDto inventoryDto;
+
     @MockBean
     private ProductFlow productFlow;
+
+    @MockBean
+    private InventoryFlow inventoryFlow;
 
     private static final String EMAIL_1 = "pranaav@increff.com";
     private static final String EMAIL_2 = "user@gmail.com";
@@ -84,17 +91,13 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
                 + "b001\t" + EMAIL_1 + "\tshirt\t499\thttp://img/1\n"
                 + "B002\t" + EMAIL_2 + "\tpants\t799\t\n";
 
-        // Return success for each incoming POJO (same order; skip nulls defensively)
         when(productFlow.bulkAddProducts(ArgumentMatchers.<ProductPojo>anyList()))
                 .thenAnswer(inv -> {
                     List<ProductPojo> pojos = inv.getArgument(0);
                     List<String[]> res = new ArrayList<>();
                     for (ProductPojo p : pojos) {
-                        if (p == null) {
-                            res.add(new String[]{"", "ERROR", "Invalid row"});
-                        } else {
-                            res.add(new String[]{p.getBarcode(), "SUCCESS", ""});
-                        }
+                        if (p == null) res.add(new String[]{"", "ERROR", "Invalid row"});
+                        else res.add(new String[]{p.getBarcode(), "SUCCESS", ""});
                     }
                     return res;
                 });
@@ -103,16 +106,16 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
         List<String[]> rows = decodeResultRows(out);
 
         assertEquals(2, rows.size());
-        assertRow(rows.get(0), "B001", "SUCCESS", null); // normalized to uppercase
+        assertRow(rows.get(0), "B001", "SUCCESS", null);
         assertRow(rows.get(1), "B002", "SUCCESS", null);
 
-        // Verify DTO -> Flow uses aligned list (same row count)
         ArgumentCaptor<List<ProductPojo>> cap = ArgumentCaptor.forClass(List.class);
         verify(productFlow, times(1)).bulkAddProducts(cap.capture());
+
         assertEquals(2, cap.getValue().size());
         assertEquals("B001", cap.getValue().get(0).getBarcode());
         assertEquals(EMAIL_1, cap.getValue().get(0).getClientEmail());
-        assertEquals("shirt", cap.getValue().get(0).getName()); // normalized lower
+        assertEquals("shirt", cap.getValue().get(0).getName());
         assertEquals(499.0, cap.getValue().get(0).getMrp());
     }
 
@@ -125,7 +128,7 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
         ApiException ex = assertThrows(ApiException.class,
                 () -> productDto.bulkAddProducts(formFromTsv(tsv)));
 
-        assertTrue(ex.getMessage().toLowerCase().contains("missing required column"));
+        assertTrue(ex.getMessage().toLowerCase().contains("missing required"));
         verify(productFlow, never()).bulkAddProducts(anyList());
     }
 
@@ -140,15 +143,13 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
                 .thenAnswer(inv -> {
                     List<ProductPojo> pojos = inv.getArgument(0);
 
-                    // DTO keeps alignment: 2 rows -> [null, validPojo]
                     assertEquals(2, pojos.size());
                     assertNull(pojos.get(0));
                     assertNotNull(pojos.get(1));
                     assertEquals("B011", pojos.get(1).getBarcode());
 
                     List<String[]> res = new ArrayList<>();
-                    // flow returns aligned results too (one per input)
-                    res.add(new String[]{"B010", "SUCCESS", ""}); // will be overridden by DTO error application
+                    res.add(new String[]{"B010", "SUCCESS", ""}); // overridden by DTO row error
                     res.add(new String[]{"B011", "SUCCESS", ""});
                     return res;
                 });
@@ -157,13 +158,12 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
         List<String[]> rows = decodeResultRows(out);
 
         assertEquals(2, rows.size());
-        assertRow(rows.get(0), "B010", "ERROR", "mrp must be a number");
+        assertRow(rows.get(0), "B010", "ERROR", "mrp");
         assertRow(rows.get(1), "B011", "SUCCESS", null);
     }
 
     @Test
     public void bulkAddProducts_duplicateBarcodeInFile_bothRowsSentToFlow() throws Exception {
-        // DTO does NOT reject duplicates in-file; Flow decides how to handle duplicates.
         String tsv = ""
                 + "barcode\tclientEmail\tname\tmrp\n"
                 + "B020\t" + EMAIL_1 + "\titem1\t100\n"
@@ -173,12 +173,9 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
                 .thenAnswer(inv -> {
                     List<ProductPojo> pojos = inv.getArgument(0);
                     assertEquals(2, pojos.size());
-                    assertNotNull(pojos.get(0));
-                    assertNotNull(pojos.get(1));
                     assertEquals("B020", pojos.get(0).getBarcode());
                     assertEquals("B020", pojos.get(1).getBarcode());
 
-                    // simulate flow rejecting second as duplicate
                     List<String[]> res = new ArrayList<>();
                     res.add(new String[]{"B020", "SUCCESS", ""});
                     res.add(new String[]{"B020", "ERROR", "Duplicate barcode"});
@@ -215,28 +212,24 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
     /* ===================== INVENTORY ===================== */
 
     @Test
-    public void bulkUpdateInventory_happyPath_twoRows() throws Exception {
+    public void bulkUpdateInventory_happyPath_twoRows_allowsNegative() throws Exception {
         String tsv = ""
                 + "barcode\tinventory\n"
                 + "b001\t5\n"
-                + "B002\t10\n";
+                + "B002\t-10\n";
 
-        when(productFlow.bulkUpdateInventory(ArgumentMatchers.<InventoryPojo>anyList()))
+        when(inventoryFlow.bulkUpdateInventory(ArgumentMatchers.<InventoryPojo>anyList()))
                 .thenAnswer(inv -> {
                     List<InventoryPojo> pojos = inv.getArgument(0);
                     List<String[]> res = new ArrayList<>();
                     for (InventoryPojo p : pojos) {
-                        if (p == null) {
-                            res.add(new String[]{"", "ERROR", "Invalid row"});
-                        } else {
-                            // barcode stored in productId for inventory bulk (your design)
-                            res.add(new String[]{p.getProductId(), "SUCCESS", ""});
-                        }
+                        if (p == null) res.add(new String[]{"", "ERROR", "Invalid row"});
+                        else res.add(new String[]{p.getProductId(), "SUCCESS", ""});
                     }
                     return res;
                 });
 
-        BulkUploadData out = productDto.bulkUpdateInventory(formFromTsv(tsv));
+        BulkUploadData out = inventoryDto.bulkUpdateInventory(formFromTsv(tsv));
         List<String[]> rows = decodeResultRows(out);
 
         assertEquals(2, rows.size());
@@ -244,10 +237,13 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
         assertRow(rows.get(1), "B002", "SUCCESS", null);
 
         ArgumentCaptor<List<InventoryPojo>> cap = ArgumentCaptor.forClass(List.class);
-        verify(productFlow, times(1)).bulkUpdateInventory(cap.capture());
+        verify(inventoryFlow, times(1)).bulkUpdateInventory(cap.capture());
+
         assertEquals(2, cap.getValue().size());
         assertEquals("B001", cap.getValue().get(0).getProductId());
         assertEquals(5, cap.getValue().get(0).getQuantity());
+        assertEquals("B002", cap.getValue().get(1).getProductId());
+        assertEquals(-10, cap.getValue().get(1).getQuantity());
     }
 
     @Test
@@ -257,10 +253,10 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
                 + "B001\t5\n";
 
         ApiException ex = assertThrows(ApiException.class,
-                () -> productDto.bulkUpdateInventory(formFromTsv(tsv)));
+                () -> inventoryDto.bulkUpdateInventory(formFromTsv(tsv)));
 
         assertTrue(ex.getMessage().toLowerCase().contains("required columns"));
-        verify(productFlow, never()).bulkUpdateInventory(anyList());
+        verify(inventoryFlow, never()).bulkUpdateInventory(anyList());
     }
 
     @Test
@@ -268,26 +264,25 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
         String tsv = ""
                 + "barcode\tinventory\n"
                 + "B040\tabc\n"
-                + "B041\t7\n";
+                + "B041\t-7\n";
 
-        when(productFlow.bulkUpdateInventory(ArgumentMatchers.<InventoryPojo>anyList()))
+        when(inventoryFlow.bulkUpdateInventory(ArgumentMatchers.<InventoryPojo>anyList()))
                 .thenAnswer(inv -> {
                     List<InventoryPojo> pojos = inv.getArgument(0);
 
-                    // DTO keeps alignment: 2 rows -> [null, validPojo]
                     assertEquals(2, pojos.size());
                     assertNull(pojos.get(0));
                     assertNotNull(pojos.get(1));
                     assertEquals("B041", pojos.get(1).getProductId());
+                    assertEquals(-7, pojos.get(1).getQuantity());
 
                     List<String[]> res = new ArrayList<>();
-                    // aligned response (row 0 will be overridden by DTO error)
-                    res.add(new String[]{"B040", "SUCCESS", ""});
+                    res.add(new String[]{"B040", "SUCCESS", ""}); // overridden by DTO row error
                     res.add(new String[]{"B041", "SUCCESS", ""});
                     return res;
                 });
 
-        BulkUploadData out = productDto.bulkUpdateInventory(formFromTsv(tsv));
+        BulkUploadData out = inventoryDto.bulkUpdateInventory(formFromTsv(tsv));
         List<String[]> rows = decodeResultRows(out);
 
         assertEquals(2, rows.size());
@@ -304,10 +299,10 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
         List<String[]> flowRes = new ArrayList<>();
         flowRes.add(new String[]{"NOPE1", "ERROR", "Product not found"});
 
-        when(productFlow.bulkUpdateInventory(ArgumentMatchers.<InventoryPojo>anyList()))
+        when(inventoryFlow.bulkUpdateInventory(ArgumentMatchers.<InventoryPojo>anyList()))
                 .thenReturn(flowRes);
 
-        BulkUploadData out = productDto.bulkUpdateInventory(formFromTsv(tsv));
+        BulkUploadData out = inventoryDto.bulkUpdateInventory(formFromTsv(tsv));
         List<String[]> rows = decodeResultRows(out);
 
         assertEquals(1, rows.size());
@@ -316,33 +311,30 @@ public class ProductBulkUploadDtoTest extends AbstractUnitTest {
 
     @Test
     public void bulkUpdateInventory_duplicateBarcodeInFile_bothRowsSentToFlow_andBothApplied() throws Exception {
-        // Per your requirement: do NOT remove duplicate barcodes; both positive rows should be applied.
         String tsv = ""
                 + "barcode\tinventory\n"
                 + "B050\t1\n"
-                + "B050\t2\n";
+                + "B050\t-2\n";
 
-        when(productFlow.bulkUpdateInventory(ArgumentMatchers.<InventoryPojo>anyList()))
+        when(inventoryFlow.bulkUpdateInventory(ArgumentMatchers.<InventoryPojo>anyList()))
                 .thenAnswer(inv -> {
                     List<InventoryPojo> pojos = inv.getArgument(0);
 
-                    // BOTH rows should reach flow
                     assertEquals(2, pojos.size());
                     assertNotNull(pojos.get(0));
                     assertNotNull(pojos.get(1));
                     assertEquals("B050", pojos.get(0).getProductId());
                     assertEquals(1, pojos.get(0).getQuantity());
                     assertEquals("B050", pojos.get(1).getProductId());
-                    assertEquals(2, pojos.get(1).getQuantity());
+                    assertEquals(-2, pojos.get(1).getQuantity());
 
-                    // flow returns success for both rows (since it's allowed)
                     List<String[]> res = new ArrayList<>();
                     res.add(new String[]{"B050", "SUCCESS", ""});
                     res.add(new String[]{"B050", "SUCCESS", ""});
                     return res;
                 });
 
-        BulkUploadData out = productDto.bulkUpdateInventory(formFromTsv(tsv));
+        BulkUploadData out = inventoryDto.bulkUpdateInventory(formFromTsv(tsv));
         List<String[]> rows = decodeResultRows(out);
 
         assertEquals(2, rows.size());

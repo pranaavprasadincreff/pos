@@ -22,16 +22,16 @@ public class InventoryApiImpl implements InventoryApi {
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public void createInventoryIfAbsent(String productId) {
+    public InventoryPojo createInventoryIfAbsent(String productId) {
         InventoryPojo existingInventory = inventoryDao.findByProductId(productId);
         if (existingInventory != null) {
-            return;
+            return null;
         }
 
         InventoryPojo inventoryToCreate = new InventoryPojo();
         inventoryToCreate.setProductId(productId);
         inventoryToCreate.setQuantity(0);
-        inventoryDao.save(inventoryToCreate);
+        return inventoryDao.save(inventoryToCreate);
     }
 
     @Override
@@ -42,32 +42,9 @@ public class InventoryApiImpl implements InventoryApi {
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public InventoryPojo updateInventory(InventoryPojo inventoryUpdate) throws ApiException {
-        validateInventoryUpdate(inventoryUpdate);
-
         InventoryPojo existingInventory = fetchInventoryByProductId(inventoryUpdate.getProductId());
         existingInventory.setQuantity(inventoryUpdate.getQuantity());
-
         return inventoryDao.save(existingInventory);
-    }
-
-    @Override
-    @Transactional(rollbackFor = ApiException.class)
-    public void incrementInventory(String productId, int delta) throws ApiException {
-        validateNonNegativeDelta(delta);
-
-        InventoryPojo existingInventory = fetchInventoryByProductId(productId);
-        int nextQuantity = calculateNextQuantity(existingInventory.getQuantity(), delta);
-
-        existingInventory.setQuantity(nextQuantity);
-        inventoryDao.save(existingInventory);
-    }
-
-    @Override
-    public void deductInventory(String productId, int quantity) throws ApiException {
-        boolean updated = inventoryDao.deductInventoryAtomically(productId, quantity);
-        if (!updated) {
-            throw new ApiException(INSUFFICIENT_INVENTORY);
-        }
     }
 
     @Override
@@ -81,14 +58,6 @@ public class InventoryApiImpl implements InventoryApi {
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public void saveAll(List<InventoryPojo> inventoriesToSave) {
-        if (inventoriesToSave == null || inventoriesToSave.isEmpty()) {
-            return;
-        }
-
-        for (InventoryPojo inventory : inventoriesToSave) {
-            validateInventoryForBulkSave(inventory);
-        }
-
         inventoryDao.saveAll(inventoriesToSave);
     }
 
@@ -142,35 +111,13 @@ public class InventoryApiImpl implements InventoryApi {
         return inventory;
     }
 
-    private void validateNonNegativeDelta(int delta) throws ApiException {
-        if (delta < 0) {
-            throw new ApiException("Delta cannot be negative");
-        }
-    }
-
-    private int calculateNextQuantity(Integer currentQuantity, int delta) throws ApiException {
-        int current = currentQuantity == null ? 0 : currentQuantity;
-        int next = current + delta;
+    private int increaseQuantity(Integer currentQuantity, int delta) throws ApiException {
+        int next = currentQuantity + delta;
 
         if (next > INVENTORY_MAX) {
             throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
         }
         return next;
-    }
-
-    private void validateInventoryUpdate(InventoryPojo inventoryUpdate) throws ApiException {
-        if (inventoryUpdate == null || inventoryUpdate.getProductId() == null) {
-            throw new ApiException("Invalid inventory input");
-        }
-
-        Integer quantity = inventoryUpdate.getQuantity();
-        if (quantity == null || quantity < 0) {
-            throw new ApiException("Inventory cannot be negative");
-        }
-
-        if (quantity > INVENTORY_MAX) {
-            throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
-        }
     }
 
     private void validateInventoryForBulkSave(InventoryPojo inventory) {
