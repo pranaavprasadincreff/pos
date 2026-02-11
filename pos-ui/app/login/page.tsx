@@ -42,7 +42,7 @@ export default function LoginPage() {
             setSubmitting(true)
             toastId = toast.loading(mode === "LOGIN" ? "Logging in..." : "Creating account...")
 
-            const endpoint = mode === "LOGIN" ? "/auth/login" : "/auth/signup"
+            const endpoint = mode === "LOGIN" ? "/auth" : "/auth/signup"
             const res = await api.post(endpoint, { email: normalizedEmail, password })
 
             const { token, role, email: resEmail } = res.data || {}

@@ -213,20 +213,6 @@ public class ProductFlow {
         }
     }
 
-    private void markBulkInventoryRowsError(List<String[]> resultRows, List<Integer> rowIndexList, String message) {
-        for (Integer rowIndex : rowIndexList) {
-            resultRows.get(rowIndex)[1] = "ERROR";
-            resultRows.get(rowIndex)[2] = message;
-        }
-    }
-
-    private void markBulkInventoryRowsSuccess(List<String[]> resultRows, List<Integer> rowIndexList) {
-        for (Integer rowIndex : rowIndexList) {
-            resultRows.get(rowIndex)[1] = "SUCCESS";
-            resultRows.get(rowIndex)[2] = "";
-        }
-    }
-
     private Page<Pair<ProductPojo, InventoryPojo>> attachInventoryToProductPage(Page<ProductPojo> productPage) {
         List<String> productIdList = productPage.getContent().stream().map(ProductPojo::getId).toList();
 

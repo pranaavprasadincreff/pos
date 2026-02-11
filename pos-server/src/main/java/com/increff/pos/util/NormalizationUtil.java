@@ -7,6 +7,8 @@ import java.util.List;
 
 public class NormalizationUtil {
 
+    private NormalizationUtil() {}
+
     public static void normalizeClientForm(ClientForm form) {
         if (form == null) return;
         form.setEmail(normalizeEmail(form.getEmail()));
@@ -63,23 +65,22 @@ public class NormalizationUtil {
         form.setName(normalizeName(form.getName()));
     }
 
-    public static void normalizeBulkProductRows(List<String[]> rows) {
-        if (rows == null) return;
-        for (String[] r : rows) {
-            if (r == null || r.length < 4) continue;
-            r[0] = normalizeBarcode(r[0]);   // barcode
-            r[1] = normalizeEmail(r[1]);     // clientEmail
-            r[2] = normalizeName(r[2]);      // name
-            if (r.length == 5 && r[4] != null) r[4] = r[4].trim(); // imageUrl
+    public static void normalizeBulkProductRow(String[] canonicalRow) {
+        if (canonicalRow == null || canonicalRow.length < 4) return;
+
+        canonicalRow[0] = normalizeBarcode(canonicalRow[0]);
+        canonicalRow[1] = normalizeEmail(canonicalRow[1]);
+        canonicalRow[2] = normalizeName(canonicalRow[2]);
+
+        if (canonicalRow.length == 5 && canonicalRow[4] != null) {
+            String trimmed = canonicalRow[4].trim();
+            canonicalRow[4] = trimmed.isBlank() ? null : trimmed;
         }
     }
 
-    public static void normalizeBulkInventoryRows(List<String[]> rows) {
-        if (rows == null) return;
-        for (String[] r : rows) {
-            if (r == null || r.length < 1) continue;
-            r[0] = normalizeBarcode(r[0]); // barcode
-        }
+    public static void normalizeBulkInventoryRow(String[] canonicalRow) {
+        if (canonicalRow == null || canonicalRow.length < 1) return;
+        canonicalRow[0] = normalizeBarcode(canonicalRow[0]);
     }
 
     public static void normalizeOrderCreateForm(OrderCreateForm form) {
@@ -99,15 +100,9 @@ public class NormalizationUtil {
 
     public static void normalizeInventoryUpdateForm(InventoryUpdateForm form) {
         if (form == null) return;
-
         if (form.getBarcode() != null) {
             form.setBarcode(form.getBarcode().trim().toUpperCase());
         }
-    }
-
-    public static void normalizeSalesReportForm(SalesReportForm form) {
-        if (form == null) return;
-        form.setClientEmail(normalizeEmail(form.getClientEmail()));
     }
 
     public static String normalizeOrderReferenceId(String ref) {
@@ -125,4 +120,28 @@ public class NormalizationUtil {
         }
     }
 
+    public static void normalizeSignupForm(SignupForm form) {
+        if (form == null) return;
+        form.setEmail(normalizeEmail(form.getEmail()));
+    }
+
+    public static void normalizeLoginForm(LoginForm form) {
+        if (form == null) return;
+        form.setEmail(normalizeEmail(form.getEmail()));
+    }
+
+    public static String normalizeBearerTokenFromHeader(String authHeader) {
+        if (!StringUtils.hasText(authHeader)) return null;
+
+        String h = authHeader.trim();
+        if (!h.startsWith("Bearer ")) return null;
+
+        String token = h.substring(7).trim();
+        return StringUtils.hasText(token) ? token : null;
+    }
+
+    public static void normalizeCreateOperatorForm(CreateOperatorForm form) {
+        if (form == null) return;
+        form.setEmail(normalizeEmail(form.getEmail()));
+    }
 }

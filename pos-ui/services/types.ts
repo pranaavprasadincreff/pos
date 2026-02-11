@@ -63,7 +63,6 @@ export type OrderStatus =
 
 export interface OrderData {
     orderReferenceId: string
-    orderTime: string
     status: OrderStatus
     items: OrderItemData[]
 }

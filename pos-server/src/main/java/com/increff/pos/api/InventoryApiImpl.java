@@ -14,9 +14,6 @@ import java.util.Map;
 @Service
 public class InventoryApiImpl implements InventoryApi {
 
-    private static final int INVENTORY_MAX = 1000;
-    private static final String INSUFFICIENT_INVENTORY = "Insufficient inventory";
-
     @Autowired
     private InventoryDao inventoryDao;
 
@@ -62,42 +59,49 @@ public class InventoryApiImpl implements InventoryApi {
     }
 
     @Override
-    public boolean isSufficientInventoryBulk(Map<String, Integer> qtyByProductId)
+    public boolean isSufficientInventoryBulk(Map<String, Integer> requiredQuantityByProductId)
             throws ApiException {
 
-        // TODO: remogve if not required
-        validateBulkQuantityMap(qtyByProductId);
-
-        List<String> productIds = qtyByProductId.keySet().stream().toList();
-        List<InventoryPojo> inventories = inventoryDao.findByProductIds(productIds);
-
-        Map<String, Integer> availableByProductId = new HashMap<>();
-        for (InventoryPojo inv : inventories) {
-            availableByProductId.put(inv.getProductId(), inv.getQuantity());
+        if (requiredQuantityByProductId == null || requiredQuantityByProductId.isEmpty()) {
+            return true;
         }
 
-        for (var entry : qtyByProductId.entrySet()) {
-            int available = availableByProductId.getOrDefault(entry.getKey(), 0);
-            if (available < entry.getValue()) {
+        for (Map.Entry<String, Integer> entry : requiredQuantityByProductId.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null) {
                 return false;
             }
         }
+
+        List<String> productIds = requiredQuantityByProductId.keySet().stream().toList();
+        List<InventoryPojo> inventories = inventoryDao.findByProductIds(productIds);
+
+        Map<String, Integer> availableQuantityByProductId = new HashMap<>();
+        for (InventoryPojo inv : inventories) {
+            availableQuantityByProductId.put(inv.getProductId(), inv.getQuantity());
+        }
+
+        for (Map.Entry<String, Integer> entry : requiredQuantityByProductId.entrySet()) {
+            String productId = entry.getKey();
+            int requiredQty = entry.getValue();
+
+            int availableQty = availableQuantityByProductId.getOrDefault(productId, 0);
+            if (availableQty < requiredQty) {
+                return false;
+            }
+        }
+
         return true;
     }
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public void deductInventoryBulk(Map<String, Integer> quantityByProductId)
-            throws ApiException {
-
-        validateBulkQuantityMap(quantityByProductId);
+    public void deductInventoryBulk(Map<String, Integer> quantityByProductId) throws ApiException {
         inventoryDao.deductInventoryBulk(quantityByProductId);
     }
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
     public void incrementInventoryBulk(Map<String, Integer> quantityByProductId) throws ApiException {
-        validateBulkQuantityMap(quantityByProductId);
         inventoryDao.incrementInventoryBulk(quantityByProductId);
     }
 
@@ -109,47 +113,5 @@ public class InventoryApiImpl implements InventoryApi {
             throw new ApiException("Inventory not found for productId: " + productId);
         }
         return inventory;
-    }
-
-    private int increaseQuantity(Integer currentQuantity, int delta) throws ApiException {
-        int next = currentQuantity + delta;
-
-        if (next > INVENTORY_MAX) {
-            throw new ApiException("Inventory cannot exceed " + INVENTORY_MAX);
-        }
-        return next;
-    }
-
-    private void validateInventoryForBulkSave(InventoryPojo inventory) {
-        if (inventory == null || inventory.getProductId() == null) {
-            throw new RuntimeException("Invalid inventory input");
-        }
-
-        Integer quantity = inventory.getQuantity();
-        if (quantity == null || quantity < 0) {
-            throw new RuntimeException("Inventory cannot be negative");
-        }
-
-        if (quantity > INVENTORY_MAX) {
-            throw new RuntimeException("Inventory cannot exceed " + INVENTORY_MAX);
-        }
-    }
-
-    private void validateBulkQuantityMap(Map<String, Integer> quantityByProductId) throws ApiException {
-        if (quantityByProductId == null || quantityByProductId.isEmpty()) {
-            throw new ApiException("No inventory updates provided");
-        }
-
-        for (var entry : quantityByProductId.entrySet()) {
-            String productId = entry.getKey();
-            Integer quantity = entry.getValue();
-
-            if (productId == null) {
-                throw new ApiException("Invalid product id");
-            }
-            if (quantity == null || quantity <= 0) {
-                throw new ApiException("Invalid quantity for product id: " + productId);
-            }
-        }
     }
 }

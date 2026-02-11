@@ -47,6 +47,7 @@ public class ClientDto {
         return clientPage.map(ClientHelper::convertFormToData);
     }
 
+    //TODO:: remove the unique constraint editing
     public ClientData update(ClientUpdateForm clientUpdateForm) throws ApiException {
         NormalizationUtil.normalizeClientUpdateForm(clientUpdateForm);
         FormValidationUtil.validate(clientUpdateForm);

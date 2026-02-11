@@ -34,7 +34,7 @@ export default function RootShell({ children }: { children: React.ReactNode }) {
             return
         }
 
-        api.get("/auth/me")
+        api.get("/auth")
             .then((res) => {
                 // keep email/role synced (nice to have)
                 if (res?.data?.email) sessionStorage.setItem("auth.email", res.data.email)
