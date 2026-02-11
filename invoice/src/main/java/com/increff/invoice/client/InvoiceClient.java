@@ -18,7 +18,6 @@ public class InvoiceClient {
 
     public InvoiceData generateInvoice(InvoiceGenerateForm invoiceRequest) throws ApiException {
         String url = invoiceServiceBaseUrl + "/api/invoices/generate";
-
         try {
             return restTemplate.postForObject(url, invoiceRequest, InvoiceData.class);
         } catch (HttpStatusCodeException e) {
@@ -30,7 +29,6 @@ public class InvoiceClient {
 
     public InvoiceData getInvoice(String orderReferenceId) throws ApiException {
         String url = invoiceServiceBaseUrl + "/api/invoices/get/{orderReferenceId}";
-
         try {
             return restTemplate.getForObject(url, InvoiceData.class, orderReferenceId);
         } catch (HttpStatusCodeException e) {

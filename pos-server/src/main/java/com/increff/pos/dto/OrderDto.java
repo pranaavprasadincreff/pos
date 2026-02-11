@@ -2,7 +2,7 @@ package com.increff.pos.dto;
 
 import com.increff.pos.db.OrderPojo;
 import com.increff.pos.db.ProductPojo;
-import com.increff.pos.db.subdocs.OrderItemPojo;
+import com.increff.pos.db.subdocument.OrderItemPojo;
 import com.increff.pos.flow.OrderFlow;
 import com.increff.pos.helper.OrderHelper;
 import com.increff.pos.model.constants.OrderTimeframe;

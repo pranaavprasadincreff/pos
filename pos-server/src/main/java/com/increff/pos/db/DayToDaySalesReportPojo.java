@@ -1,6 +1,6 @@
 package com.increff.pos.db;
 
-import com.increff.pos.db.subdocs.SalesReportClientBlock;
+import com.increff.pos.db.subdocument.SalesReportClientBlock;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;

@@ -1,45 +1,22 @@
 package com.increff.pos.config;
 
 import lombok.Getter;
-import lombok.Setter;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
-import java.util.List;
-
-@Setter
 @Getter
-@Configuration
-@ConfigurationProperties
+@Component
 public class ApplicationProperties {
 
-    private Auth auth = new Auth();
-    private Invoice invoice = new Invoice();
+    @Value("${auth.supervisors:}")
+    private String supervisorsCsv;
 
-    @Setter
-    @Getter
-    public static class Auth {
+    @Value("${auth.jwt.secret:}")
+    private String jwtSecret;
 
-        private List<String> supervisors;
-        private Jwt jwt = new Jwt();
+    @Value("${auth.jwt.expiryMinutes:120}")
+    private long jwtExpiryMinutes;
 
-        @Getter
-        @Setter
-        public static class Jwt {
-            private String secret;
-            private long expiryMinutes;
-        }
-    }
-
-    @Setter
-    @Getter
-    public static class Invoice {
-        private Self self = new Self();
-
-        @Setter
-        @Getter
-        public static class Self {
-            private String url;
-        }
-    }
+    @Value("${invoice.self.url:}")
+    private String invoiceSelfUrl;
 }

@@ -1,7 +1,7 @@
 package com.increff.pos.api;
 
 import com.increff.pos.db.OrderPojo;
-import com.increff.pos.db.subdocs.OrderItemPojo;
+import com.increff.pos.db.subdocument.OrderItemPojo;
 import com.increff.pos.model.constants.OrderStatus;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.test.AbstractUnitTest;

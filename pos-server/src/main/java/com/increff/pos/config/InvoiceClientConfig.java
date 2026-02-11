@@ -11,6 +11,6 @@ public class InvoiceClientConfig {
     @Bean
     public InvoiceClient invoiceClient(RestTemplate restTemplate,
                                        ApplicationProperties properties) {
-        return new InvoiceClient(restTemplate, properties.getInvoice().getSelf().getUrl());
+        return new InvoiceClient(restTemplate, properties.getInvoiceSelfUrl());
     }
 }

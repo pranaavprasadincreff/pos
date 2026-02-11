@@ -1,6 +1,6 @@
 package com.increff.pos.db;
 
-import com.increff.pos.db.subdocs.OrderItemPojo;
+import com.increff.pos.db.subdocument.OrderItemPojo;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.mongodb.core.index.CompoundIndex;

@@ -5,7 +5,7 @@ import com.increff.pos.api.OrderApi;
 import com.increff.pos.api.ProductApi;
 import com.increff.pos.db.OrderPojo;
 import com.increff.pos.db.ProductPojo;
-import com.increff.pos.db.subdocs.OrderItemPojo;
+import com.increff.pos.db.subdocument.OrderItemPojo;
 import com.increff.pos.model.constants.OrderStatus;
 import com.increff.pos.model.exception.ApiException;
 import org.springframework.beans.factory.annotation.Autowired;

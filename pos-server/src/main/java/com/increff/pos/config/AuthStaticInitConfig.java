@@ -2,10 +2,8 @@ package com.increff.pos.config;
 
 import com.increff.pos.helper.JwtHelper;
 import com.increff.pos.helper.SupervisorEmailHelper;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
-
 import jakarta.annotation.PostConstruct;
+import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class AuthStaticInitConfig {
@@ -18,15 +16,11 @@ public class AuthStaticInitConfig {
 
     @PostConstruct
     public void init() {
-
-        SupervisorEmailHelper.init(
-                String.join(",", properties.getAuth().getSupervisors())
-        );
+        SupervisorEmailHelper.init(properties.getSupervisorsCsv());
 
         JwtHelper.init(
-                properties.getAuth().getJwt().getSecret(),
-                properties.getAuth().getJwt().getExpiryMinutes()
+                properties.getJwtSecret(),
+                properties.getJwtExpiryMinutes()
         );
     }
 }
-

@@ -1,4 +1,4 @@
-package com.increff.pos.db.subdocs;
+package com.increff.pos.db.subdocument;
 
 import com.increff.pos.db.AbstractPojo;
 import lombok.Getter;

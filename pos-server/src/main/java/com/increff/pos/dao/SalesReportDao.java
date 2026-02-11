@@ -1,8 +1,8 @@
 package com.increff.pos.dao;
 
 import com.increff.pos.db.DayToDaySalesReportPojo;
-import com.increff.pos.db.subdocs.SalesReportClientBlock;
-import com.increff.pos.db.subdocs.SalesReportProductBlock;
+import com.increff.pos.db.subdocument.SalesReportClientBlock;
+import com.increff.pos.db.subdocument.SalesReportProductBlock;
 import com.increff.pos.model.constants.OrderStatus;
 import com.increff.pos.model.constants.ReportRowType;
 import com.increff.pos.model.data.SalesReportRowData;
