@@ -71,7 +71,8 @@ public class AuthApiImpl implements AuthApi {
 
     private void ensureEmailIsNotSupervisor(String email) throws ApiException {
         if (SupervisorEmailHelper.isSupervisorEmail(email)) {
-            throw new ApiException("This email is configured as a supervisor in application.properties. Remove it from auth.supervisors to create as operator.");
+            throw new ApiException("This email is configured as a supervisor in application.properties. " +
+                    "Remove it from auth.supervisors to create as operator.");
         }
     }
 

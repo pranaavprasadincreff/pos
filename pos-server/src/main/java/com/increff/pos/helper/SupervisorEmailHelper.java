@@ -11,7 +11,6 @@ public class SupervisorEmailHelper {
 
     private SupervisorEmailHelper() {}
 
-    // Called once from a Spring config initializer
     public static void init(String supervisorsCsv) {
         if (supervisorsCsv == null) {
             supervisors = Collections.emptySet();
