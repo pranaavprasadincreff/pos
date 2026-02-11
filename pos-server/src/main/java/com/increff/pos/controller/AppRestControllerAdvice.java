@@ -43,10 +43,6 @@ public class AppRestControllerAdvice {
                 .body(new MessageData("Invalid request body"));
     }
 
-    /**
-     * ✅ Unwraps reflection-wrapped exceptions (InvocationTargetException) so that
-     * ApiException is handled correctly instead of falling into Throwable -> 500.
-     */
     @ExceptionHandler(InvocationTargetException.class)
     public ResponseEntity<MessageData> handle(InvocationTargetException exception) {
         Throwable target = exception.getTargetException();
@@ -82,10 +78,6 @@ public class AppRestControllerAdvice {
                 .body(new MessageData("A record with this key already exists"));
     }
 
-    /**
-     * ✅ Some Mongo/Spring duplicate-key scenarios come as DataIntegrityViolationException
-     * instead of DuplicateKeyException. Treat them the same.
-     */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<MessageData> handle(DataIntegrityViolationException exception) {
         log.warn("DataIntegrityViolationException", exception);
@@ -97,7 +89,6 @@ public class AppRestControllerAdvice {
     public ResponseEntity<MessageData> handle(Throwable exception) {
         log.error("Unhandled exception", exception);
 
-        // ✅ Last-chance unwrap if something wrapped ApiException as a cause
         Throwable cause = exception.getCause();
         if (cause instanceof ApiException apiEx) {
             return handle(apiEx);

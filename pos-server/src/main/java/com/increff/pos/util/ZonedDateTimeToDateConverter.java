@@ -1,7 +1,6 @@
-package com.increff.pos.config;
+package com.increff.pos.util;
 
 import org.springframework.core.convert.converter.Converter;
-import org.springframework.data.convert.WritingConverter;
 
 import java.time.ZonedDateTime;
 import java.util.Date;

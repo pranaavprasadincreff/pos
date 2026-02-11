@@ -1,10 +1,9 @@
-package com.increff.pos.config;
+package com.increff.pos.util;
 
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.convert.ReadingConverter;
 
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Date;
 
