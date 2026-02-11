@@ -7,7 +7,6 @@ import com.increff.pos.db.OrderPojo;
 import com.increff.pos.db.ProductPojo;
 import com.increff.pos.db.subdocs.OrderItemPojo;
 import com.increff.pos.model.constants.OrderStatus;
-import com.increff.pos.model.data.OrderData;
 import com.increff.pos.model.exception.ApiException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,13 +50,12 @@ class OrderFlowTest {
 
         when(orderApi.createOrder(any(OrderPojo.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        OrderData out = orderFlow.create(orderRequest);
+        OrderPojo out = orderFlow.create(orderRequest);
 
         assertNotNull(out);
         assertEquals(OrderStatus.FULFILLABLE.name(), out.getStatus());
         assertEquals("ORD-1", out.getOrderReferenceId());
-        assertEquals(2, out.getItems().size());
-        assertEquals("B1", out.getItems().getFirst().getProductBarcode());
+        assertEquals(2, out.getOrderItems().size());
 
         verify(productApi, atLeastOnce()).findByIds(eq(List.of("ID1")));
         verify(inventoryApi).isSufficientInventoryBulk(eq(Map.of("ID1", 5)));
@@ -77,7 +75,7 @@ class OrderFlowTest {
 
         when(orderApi.createOrder(any(OrderPojo.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        OrderData out = orderFlow.create(orderRequest);
+        OrderPojo out = orderFlow.create(orderRequest);
 
         assertEquals(OrderStatus.UNFULFILLABLE.name(), out.getStatus());
 
@@ -127,7 +125,7 @@ class OrderFlowTest {
 
         when(orderApi.updateOrder(any(OrderPojo.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        OrderData out = orderFlow.update(updateRequest);
+        OrderPojo out = orderFlow.update(updateRequest);
 
         assertEquals(OrderStatus.FULFILLABLE.name(), out.getStatus());
 
@@ -160,7 +158,7 @@ class OrderFlowTest {
 
         when(orderApi.updateOrder(any(OrderPojo.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        OrderData out = orderFlow.update(updateRequest);
+        OrderPojo out = orderFlow.update(updateRequest);
 
         assertEquals(OrderStatus.UNFULFILLABLE.name(), out.getStatus());
 
@@ -183,18 +181,14 @@ class OrderFlowTest {
 
         when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
 
-        ProductPojo product = product("ID1", "B1", 100.0);
-        when(productApi.findByIds(eq(List.of("ID1")))).thenReturn(List.of(product));
-
         doNothing().when(inventoryApi).incrementInventoryBulk(eq(Map.of("ID1", 3)));
         when(orderApi.updateOrder(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        OrderData cancelled = orderFlow.cancel("ORD-1");
+        OrderPojo cancelled = orderFlow.cancel("ORD-1");
 
         assertEquals(OrderStatus.CANCELLED.name(), cancelled.getStatus());
         verify(inventoryApi).incrementInventoryBulk(eq(Map.of("ID1", 3)));
         verify(orderApi).updateOrder(any());
-        verify(productApi, atLeastOnce()).findByIds(eq(List.of("ID1")));
     }
 
     @Test
@@ -206,17 +200,13 @@ class OrderFlowTest {
 
         when(orderApi.getByOrderReferenceId("ORD-1")).thenReturn(existing);
 
-        ProductPojo product = product("ID1", "B1", 100.0);
-        when(productApi.findByIds(eq(List.of("ID1")))).thenReturn(List.of(product));
-
         when(orderApi.updateOrder(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        OrderData cancelled = orderFlow.cancel("ORD-1");
+        OrderPojo cancelled = orderFlow.cancel("ORD-1");
 
         assertEquals(OrderStatus.CANCELLED.name(), cancelled.getStatus());
         verify(inventoryApi, never()).incrementInventoryBulk(anyMap());
         verify(orderApi).updateOrder(any());
-        verify(productApi, atLeastOnce()).findByIds(eq(List.of("ID1")));
     }
 
     // ---------------- helpers ----------------

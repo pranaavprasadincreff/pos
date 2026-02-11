@@ -1,10 +1,12 @@
 package com.increff.pos.dto;
 
+import com.increff.pos.db.OrderPojo;
+import com.increff.pos.db.ProductPojo;
+import com.increff.pos.db.subdocs.OrderItemPojo;
 import com.increff.pos.flow.OrderFlow;
 import com.increff.pos.model.constants.OrderStatus;
 import com.increff.pos.model.constants.OrderTimeframe;
 import com.increff.pos.model.data.OrderData;
-import com.increff.pos.model.data.OrderItemData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.OrderSearchForm;
 import com.increff.pos.util.FormValidationUtil;
@@ -19,6 +21,7 @@ import org.springframework.data.domain.PageRequest;
 
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -34,7 +37,7 @@ class OrderDtoTest {
     private OrderDto orderDto;
 
     @Test
-    void searchOrders_happyPath_normalizesInputs_validates_andDelegatesToFlow() throws Exception {
+    void searchOrders_happyPath_normalizesInputs_validates_andDelegatesToFlow_andBuildsData() throws Exception {
         OrderSearchForm form = new OrderSearchForm();
         form.setOrderReferenceId(" ord-12 ");
         form.setStatus("fulfillable");
@@ -42,21 +45,30 @@ class OrderDtoTest {
         form.setPage(0);
         form.setSize(10);
 
-        OrderItemData item = new OrderItemData();
-        item.setProductBarcode("B1");
-        item.setQuantity(1);
-        item.setSellingPrice(10.0);
+        // Flow returns OrderPojo (DB stores productId)
+        OrderItemPojo itemPojo = new OrderItemPojo();
+        itemPojo.setProductId("PID-1");
+        itemPojo.setOrderedQuantity(1);
+        itemPojo.setSellingPrice(10.0);
 
-        OrderData data = new OrderData();
-        data.setOrderReferenceId("ORD-0000-0000");
-        data.setStatus(OrderStatus.FULFILLABLE.name());
-        data.setCreatedAt(ZonedDateTime.now());
-        data.setItems(List.of(item));
+        OrderPojo pojo = new OrderPojo();
+        pojo.setOrderReferenceId("ORD-0000-0000");
+        pojo.setStatus(OrderStatus.FULFILLABLE.name());
+        pojo.setCreatedAt(ZonedDateTime.now());
+        pojo.setOrderItems(List.of(itemPojo));
 
-        Page<OrderData> returned = new PageImpl<>(List.of(data), PageRequest.of(0, 10), 1);
+        Page<OrderPojo> returned = new PageImpl<>(List.of(pojo), PageRequest.of(0, 10), 1);
 
-        when(orderFlow.searchOrderData(anyString(), anyString(), any(), any(), anyInt(), anyInt()))
+        when(orderFlow.search(anyString(), anyString(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(returned);
+
+        // DTO builds response -> needs productId -> barcode mapping via flow
+        ProductPojo product = new ProductPojo();
+        product.setId("PID-1");
+        product.setBarcode("B1");
+
+        when(orderFlow.getProductsByIds(eq(List.of("PID-1"))))
+                .thenReturn(Map.of("PID-1", product));
 
         try (MockedStatic<FormValidationUtil> mockedValidator = Mockito.mockStatic(FormValidationUtil.class)) {
             mockedValidator.when(() -> FormValidationUtil.validate(Mockito.any(OrderSearchForm.class)))
@@ -74,7 +86,7 @@ class OrderDtoTest {
             ArgumentCaptor<ZonedDateTime> fromCaptor = ArgumentCaptor.forClass(ZonedDateTime.class);
             ArgumentCaptor<ZonedDateTime> toCaptor = ArgumentCaptor.forClass(ZonedDateTime.class);
 
-            verify(orderFlow).searchOrderData(
+            verify(orderFlow).search(
                     refCaptor.capture(),
                     statusCaptor.capture(),
                     fromCaptor.capture(),
@@ -91,6 +103,7 @@ class OrderDtoTest {
             assertNotNull(toCaptor.getValue());
             assertTrue(fromCaptor.getValue().isBefore(toCaptor.getValue()));
 
+            verify(orderFlow).getProductsByIds(eq(List.of("PID-1")));
             mockedValidator.verify(() -> FormValidationUtil.validate(Mockito.any(OrderSearchForm.class)));
         }
     }
@@ -111,7 +124,6 @@ class OrderDtoTest {
             assertTrue(ex.getMessage().toLowerCase().contains("status"));
 
             verifyNoInteractions(orderFlow);
-
             mockedValidator.verify(() -> FormValidationUtil.validate(Mockito.any(OrderSearchForm.class)));
         }
     }
@@ -132,25 +144,31 @@ class OrderDtoTest {
             assertTrue(ex.getMessage().toLowerCase().contains("page"));
 
             verifyNoInteractions(orderFlow);
-
             mockedValidator.verify(() -> FormValidationUtil.validate(Mockito.any(OrderSearchForm.class)));
         }
     }
 
     @Test
-    void cancelOrder_normalizesReferenceId_andDelegatesToFlow() throws Exception {
-        OrderItemData item = new OrderItemData();
-        item.setProductBarcode("B1");
-        item.setQuantity(1);
-        item.setSellingPrice(10.0);
+    void cancelOrder_normalizesReferenceId_andDelegatesToFlow_andBuildsData() throws Exception {
+        // Flow returns OrderPojo
+        OrderItemPojo itemPojo = new OrderItemPojo();
+        itemPojo.setProductId("PID-1");
+        itemPojo.setOrderedQuantity(1);
+        itemPojo.setSellingPrice(10.0);
 
-        OrderData cancelled = new OrderData();
-        cancelled.setOrderReferenceId("ORD-12");
-        cancelled.setStatus(OrderStatus.CANCELLED.name());
-        cancelled.setCreatedAt(ZonedDateTime.now());
-        cancelled.setItems(List.of(item));
+        OrderPojo cancelledPojo = new OrderPojo();
+        cancelledPojo.setOrderReferenceId("ORD-12");
+        cancelledPojo.setStatus(OrderStatus.CANCELLED.name());
+        cancelledPojo.setCreatedAt(ZonedDateTime.now());
+        cancelledPojo.setOrderItems(List.of(itemPojo));
 
-        when(orderFlow.cancel(eq("ORD-12"))).thenReturn(cancelled);
+        when(orderFlow.cancel(eq("ORD-12"))).thenReturn(cancelledPojo);
+
+        ProductPojo product = new ProductPojo();
+        product.setId("PID-1");
+        product.setBarcode("B1");
+        when(orderFlow.getProductsByIds(eq(List.of("PID-1"))))
+                .thenReturn(Map.of("PID-1", product));
 
         OrderData out = orderDto.cancelOrder("  ord-12  ");
 
@@ -160,5 +178,6 @@ class OrderDtoTest {
         assertEquals("B1", out.getItems().getFirst().getProductBarcode());
 
         verify(orderFlow).cancel(eq("ORD-12"));
+        verify(orderFlow).getProductsByIds(eq(List.of("PID-1")));
     }
 }

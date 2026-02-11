@@ -146,8 +146,8 @@ export default function SalesReportTable({
                         ) : (
                             <TableHead>Client Email</TableHead>
                         )}
-                        <TableHead className="text-right">Orders</TableHead>
-                        <TableHead className="text-right">Items</TableHead>
+                        <TableHead className="text-center">Orders</TableHead>
+                        <TableHead className="text-center">Items</TableHead>
                         <TableHead className="text-right">Revenue</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -198,8 +198,8 @@ export default function SalesReportTable({
                                         <TableCell className="text-sm">{r.clientEmail}</TableCell>
                                     )}
 
-                                    <TableCell className="text-right">{r.ordersCount}</TableCell>
-                                    <TableCell className="text-right">{r.itemsCount}</TableCell>
+                                    <TableCell className="text-center">{r.ordersCount}</TableCell>
+                                    <TableCell className="text-center">{r.itemsCount}</TableCell>
                                     <TableCell className="text-right font-medium">
                                         ₹{formatINR(r.totalRevenue || 0)}
                                     </TableCell>
@@ -223,8 +223,8 @@ export default function SalesReportTable({
                                                             )}
                                                         >
                                                             <TableHead>Product Barcode</TableHead>
-                                                            <TableHead className="text-right">Orders</TableHead>
-                                                            <TableHead className="text-right">Items</TableHead>
+                                                            <TableHead className="text-center">Orders</TableHead>
+                                                            <TableHead className="text-center">Items</TableHead>
                                                             <TableHead className="text-right">Revenue</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
@@ -233,8 +233,8 @@ export default function SalesReportTable({
                                                         {(childrenByClient[clientEmail] || []).map((cr, idx) => (
                                                             <TableRow key={`${cr.productBarcode}-${idx}`} className="hover:bg-muted/30">
                                                                 <TableCell className="font-medium">{cr.productBarcode}</TableCell>
-                                                                <TableCell className="text-right">{cr.ordersCount}</TableCell>
-                                                                <TableCell className="text-right">{cr.itemsCount}</TableCell>
+                                                                <TableCell className="text-center">{cr.ordersCount}</TableCell>
+                                                                <TableCell className="text-center">{cr.itemsCount}</TableCell>
                                                                 <TableCell className="text-right font-medium">
                                                                     ₹{formatINR(cr.totalRevenue || 0)}
                                                                 </TableCell>

@@ -182,9 +182,9 @@ export default function OrderTable({ orders, loading, onInvoiceGenerated, onEdit
                         <TableHeader>
                             <TableRow>
                                 <TableHead />
-                                <TableHead>Order ID</TableHead>
-                                <TableHead>Created</TableHead>
-                                <TableHead>Status</TableHead>
+                                <TableHead className="w-[220px]">Order ID</TableHead>
+                                <TableHead className="text-center">Created</TableHead>
+                                <TableHead className="text-center">Status</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -216,10 +216,12 @@ export default function OrderTable({ orders, loading, onInvoiceGenerated, onEdit
                                                 </Button>
                                             </TableCell>
 
-                                            <TableCell className="font-medium">{order.orderReferenceId}</TableCell>
-                                            <TableCell>{formatDate(order.createdAt)}</TableCell>
+                                            <TableCell className="font-medium w-[220px] max-w-[220px] truncate" title={order.orderReferenceId}>
+                                              {order.orderReferenceId}
+                                            </TableCell>
+                                            <TableCell className="text-center">{formatDate(order.createdAt)}</TableCell>
 
-                                            <TableCell>
+                                            <TableCell className="text-center">
                         <span
                             className={`inline-block px-2 py-1 rounded-md text-xs font-semibold ${statusMeta.badgeClass}`}
                             style={{ minWidth: '88px', textAlign: 'center' }}
