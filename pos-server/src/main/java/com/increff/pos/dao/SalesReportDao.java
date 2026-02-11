@@ -1,6 +1,8 @@
 package com.increff.pos.dao;
 
 import com.increff.pos.db.DayToDaySalesReportPojo;
+import com.increff.pos.db.subdocs.SalesReportClientBlock;
+import com.increff.pos.db.subdocs.SalesReportProductBlock;
 import com.increff.pos.model.constants.OrderStatus;
 import com.increff.pos.model.constants.ReportRowType;
 import com.increff.pos.model.data.SalesReportRowData;
@@ -28,6 +30,9 @@ public class SalesReportDao {
     private static final String DAILY_REPORT_COLLECTION = "sales_report_daily";
     private static final String ORDERS_COLLECTION = "orders";
     private static final String PRODUCTS_COLLECTION = "products";
+
+    // Orders now use createdAt instead of orderTime
+    private static final String ORDER_CREATED_AT_FIELD = "createdAt";
 
     private static final String ORDER_ITEMS_PATH = "orderItems";
     private static final String ORDER_ITEMS_PRODUCT_ID_PATH = "orderItems.productId";
@@ -73,6 +78,7 @@ public class SalesReportDao {
             ReportRowType rowType
     ) {
         if (startDate == null || endDate == null) return List.of();
+
         if (rowType == ReportRowType.CLIENT) {
             return aggregateRangeClientRowsFromOrders(startDate, endDate, OrderStatus.INVOICED);
         }
@@ -80,6 +86,7 @@ public class SalesReportDao {
         if (!StringUtils.hasText(clientEmail)) {
             return List.of();
         }
+
         return aggregateRangeProductRowsForClientFromOrders(startDate, endDate, clientEmail, OrderStatus.INVOICED);
     }
 
@@ -96,6 +103,7 @@ public class SalesReportDao {
     }
 
     private String getDailyDocumentId(LocalDate reportDate) {
+        // daily doc id = ISO date string (matches your code + existing DB usage)
         return reportDate.toString();
     }
 
@@ -134,7 +142,7 @@ public class SalesReportDao {
                 mongoOperations.aggregate(aggregation, ORDERS_COLLECTION, ClientAgg.class);
 
         DayToDaySalesReportPojo reportDocument = new DayToDaySalesReportPojo();
-        reportDocument.setId(reportDate.toString());
+        reportDocument.setId(reportDate.toString()); // _id equals date string
         reportDocument.setDate(reportDate);
         reportDocument.setClients(mapClientBlocks(results.getMappedResults()));
         return reportDocument;
@@ -145,7 +153,7 @@ public class SalesReportDao {
         ZonedDateTime endExclusive = reportDate.plusDays(1).atStartOfDay(IST_TIMEZONE);
 
         MatchOperation matchInvoicedOrders = match(new Criteria().andOperator(
-                Criteria.where("orderTime").gte(start).lt(endExclusive),
+                Criteria.where(ORDER_CREATED_AT_FIELD).gte(start).lt(endExclusive),
                 Criteria.where("status").is(requiredOrderStatus.name())
         ));
 
@@ -216,16 +224,18 @@ public class SalesReportDao {
         );
     }
 
-    private List<DayToDaySalesReportPojo.ClientBlock> mapClientBlocks(List<ClientAgg> clientAggs) {
-        List<DayToDaySalesReportPojo.ClientBlock> clients = new ArrayList<>();
+    private List<SalesReportClientBlock> mapClientBlocks(List<ClientAgg> clientAggs) {
+        List<SalesReportClientBlock> clients = new ArrayList<>();
         if (clientAggs == null) return clients;
 
         for (ClientAgg clientAgg : clientAggs) {
-            DayToDaySalesReportPojo.ClientBlock client = new DayToDaySalesReportPojo.ClientBlock();
+            if (clientAgg == null) continue;
+
+            SalesReportClientBlock client = new SalesReportClientBlock();
             client.setClientEmail(clientAgg.getClientEmail());
-            client.setOrdersCount(nullSafeLong(clientAgg.getOrdersCount()));
-            client.setItemsCount(nullSafeLong(clientAgg.getItemsCount()));
-            client.setTotalRevenue(nullSafeDouble(clientAgg.getTotalRevenue()));
+            client.setOrdersCount(nullSafeLongObj(clientAgg.getOrdersCount()));
+            client.setItemsCount(nullSafeLongObj(clientAgg.getItemsCount()));
+            client.setTotalRevenue(nullSafeDoubleObj(clientAgg.getTotalRevenue()));
             client.setProducts(mapProductBlocks(clientAgg.getProducts()));
             clients.add(client);
         }
@@ -233,16 +243,18 @@ public class SalesReportDao {
         return clients;
     }
 
-    private List<DayToDaySalesReportPojo.ProductBlock> mapProductBlocks(List<ProductAgg> productAggs) {
-        List<DayToDaySalesReportPojo.ProductBlock> products = new ArrayList<>();
+    private List<SalesReportProductBlock> mapProductBlocks(List<ProductAgg> productAggs) {
+        List<SalesReportProductBlock> products = new ArrayList<>();
         if (productAggs == null) return products;
 
         for (ProductAgg productAgg : productAggs) {
-            DayToDaySalesReportPojo.ProductBlock product = new DayToDaySalesReportPojo.ProductBlock();
+            if (productAgg == null) continue;
+
+            SalesReportProductBlock product = new SalesReportProductBlock();
             product.setProductBarcode(productAgg.getProductBarcode());
-            product.setOrdersCount(nullSafeLong(productAgg.getOrdersCount()));
-            product.setItemsCount(nullSafeLong(productAgg.getItemsCount()));
-            product.setTotalRevenue(nullSafeDouble(productAgg.getTotalRevenue()));
+            product.setOrdersCount(nullSafeLongObj(productAgg.getOrdersCount()));
+            product.setItemsCount(nullSafeLongObj(productAgg.getItemsCount()));
+            product.setTotalRevenue(nullSafeDoubleObj(productAgg.getTotalRevenue()));
             products.add(product);
         }
 
@@ -260,7 +272,7 @@ public class SalesReportDao {
         ZonedDateTime endExclusive = endDate.plusDays(1).atStartOfDay(IST_TIMEZONE);
 
         MatchOperation matchOrders = match(new Criteria().andOperator(
-                Criteria.where("orderTime").gte(start).lt(endExclusive),
+                Criteria.where(ORDER_CREATED_AT_FIELD).gte(start).lt(endExclusive),
                 Criteria.where("status").is(requiredOrderStatus.name())
         ));
 
@@ -314,7 +326,7 @@ public class SalesReportDao {
         ZonedDateTime endExclusive = endDate.plusDays(1).atStartOfDay(IST_TIMEZONE);
 
         MatchOperation matchOrders = match(new Criteria().andOperator(
-                Criteria.where("orderTime").gte(start).lt(endExclusive),
+                Criteria.where(ORDER_CREATED_AT_FIELD).gte(start).lt(endExclusive),
                 Criteria.where("status").is(requiredOrderStatus.name())
         ));
 
@@ -370,6 +382,7 @@ public class SalesReportDao {
     private List<SalesReportRowData> mapRangeClientAggToRows(List<RangeClientRowAgg> aggs) {
         if (aggs == null) return List.of();
         List<SalesReportRowData> out = new ArrayList<>();
+
         for (RangeClientRowAgg a : aggs) {
             if (a == null) continue;
             SalesReportRowData r = new SalesReportRowData();
@@ -380,12 +393,14 @@ public class SalesReportDao {
             r.setTotalRevenue(nullSafeDouble(a.getTotalRevenue()));
             out.add(r);
         }
+
         return out;
     }
 
     private List<SalesReportRowData> mapRangeProductAggToRows(List<RangeProductRowAgg> aggs) {
         if (aggs == null) return List.of();
         List<SalesReportRowData> out = new ArrayList<>();
+
         for (RangeProductRowAgg a : aggs) {
             if (a == null) continue;
             SalesReportRowData r = new SalesReportRowData();
@@ -396,6 +411,7 @@ public class SalesReportDao {
             r.setTotalRevenue(nullSafeDouble(a.getTotalRevenue()));
             out.add(r);
         }
+
         return out;
     }
 
@@ -417,11 +433,11 @@ public class SalesReportDao {
         return mapProductRowsForClient(reportDocument.getClients(), clientEmail);
     }
 
-    private List<SalesReportRowData> mapClientRows(List<DayToDaySalesReportPojo.ClientBlock> clientBlocks) {
+    private List<SalesReportRowData> mapClientRows(List<SalesReportClientBlock> clientBlocks) {
         List<SalesReportRowData> rows = new ArrayList<>();
         if (clientBlocks == null) return rows;
 
-        for (DayToDaySalesReportPojo.ClientBlock clientBlock : clientBlocks) {
+        for (SalesReportClientBlock clientBlock : clientBlocks) {
             if (clientBlock == null) continue;
 
             SalesReportRowData row = new SalesReportRowData();
@@ -438,16 +454,16 @@ public class SalesReportDao {
     }
 
     private List<SalesReportRowData> mapProductRowsForClient(
-            List<DayToDaySalesReportPojo.ClientBlock> clientBlocks,
+            List<SalesReportClientBlock> clientBlocks,
             String clientEmail
     ) {
         if (!StringUtils.hasText(clientEmail)) return List.of();
 
-        DayToDaySalesReportPojo.ClientBlock clientBlock = findClientBlock(clientBlocks, clientEmail);
+        SalesReportClientBlock clientBlock = findClientBlock(clientBlocks, clientEmail);
         if (clientBlock == null || clientBlock.getProducts() == null) return List.of();
 
         List<SalesReportRowData> rows = new ArrayList<>();
-        for (DayToDaySalesReportPojo.ProductBlock productBlock : clientBlock.getProducts()) {
+        for (SalesReportProductBlock productBlock : clientBlock.getProducts()) {
             if (productBlock == null) continue;
 
             SalesReportRowData row = new SalesReportRowData();
@@ -463,13 +479,13 @@ public class SalesReportDao {
         return rows;
     }
 
-    private DayToDaySalesReportPojo.ClientBlock findClientBlock(
-            List<DayToDaySalesReportPojo.ClientBlock> clientBlocks,
+    private SalesReportClientBlock findClientBlock(
+            List<SalesReportClientBlock> clientBlocks,
             String clientEmail
     ) {
         if (clientBlocks == null || !StringUtils.hasText(clientEmail)) return null;
 
-        for (DayToDaySalesReportPojo.ClientBlock clientBlock : clientBlocks) {
+        for (SalesReportClientBlock clientBlock : clientBlocks) {
             if (clientBlock == null) continue;
             if (clientEmail.equals(clientBlock.getClientEmail())) return clientBlock;
         }
@@ -482,6 +498,14 @@ public class SalesReportDao {
     }
 
     private double nullSafeDouble(Double value) {
+        return value == null ? 0.0 : value;
+    }
+
+    private Long nullSafeLongObj(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    private Double nullSafeDoubleObj(Double value) {
         return value == null ? 0.0 : value;
     }
 
