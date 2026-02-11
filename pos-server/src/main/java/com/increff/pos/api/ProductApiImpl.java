@@ -28,14 +28,16 @@ public class ProductApiImpl implements ProductApi {
 
     @Override
     public ProductPojo getProductByBarcode(String barcode) throws ApiException {
-        return loadProductByBarcode(barcode);
+        ProductPojo product = productDao.findByBarcode(barcode);
+        if (product == null) {
+            throw new ApiException("Product not found");
+        }
+        return product;
     }
 
     @Override
-    public Page<ProductPojo> getAllProducts(int page, int size) {
-        return productDao.findAll(
-                PageRequest.of(page, size, Sort.by("createdAt").descending())
-        );
+    public ProductPojo getById(String productId) throws ApiException {
+        return loadProductById(productId);
     }
 
     @Override
@@ -50,13 +52,10 @@ public class ProductApiImpl implements ProductApi {
 
     @Override
     @Transactional(rollbackFor = ApiException.class)
-    public ProductPojo updateProduct(ProductPojo productToUpdate, String oldBarcode) throws ApiException {
-        ProductPojo existingProduct = loadProductByBarcode(oldBarcode);
-
+    public ProductPojo updateProduct(ProductPojo productToUpdate) throws ApiException {
+        ProductPojo existingProduct = loadProductById(productToUpdate.getId());
         ensureBarcodeIsUnique(productToUpdate.getBarcode(), existingProduct.getId());
-
-        applyUpdate(existingProduct, productToUpdate);
-        return productDao.save(existingProduct);
+        return productDao.save(productToUpdate);
     }
 
     @Override
@@ -71,14 +70,6 @@ public class ProductApiImpl implements ProductApi {
 
     // -------------------- private helpers --------------------
 
-    private ProductPojo loadProductByBarcode(String barcode) throws ApiException {
-        ProductPojo product = productDao.findByBarcode(barcode);
-        if (product == null) {
-            throw new ApiException("Product not found");
-        }
-        return product;
-    }
-
     private void ensureBarcodeIsUnique(String barcode, String allowedProductId) throws ApiException {
         ProductPojo existing = productDao.findByBarcode(barcode);
         if (existing == null) {
@@ -92,11 +83,12 @@ public class ProductApiImpl implements ProductApi {
         throw new ApiException("Duplicate barcode");
     }
 
-    private void applyUpdate(ProductPojo existingProduct, ProductPojo productToUpdate) {
-        existingProduct.setBarcode(productToUpdate.getBarcode());
-        existingProduct.setClientEmail(productToUpdate.getClientEmail());
-        existingProduct.setName(productToUpdate.getName());
-        existingProduct.setMrp(productToUpdate.getMrp());
-        existingProduct.setImageUrl(productToUpdate.getImageUrl());
+    private ProductPojo loadProductById(String productId) throws ApiException {
+        if (productId == null || productId.isBlank()) {
+            throw new ApiException("Product not found");
+        }
+
+        return productDao.findById(productId)
+                .orElseThrow(() -> new ApiException("Product not found"));
     }
 }

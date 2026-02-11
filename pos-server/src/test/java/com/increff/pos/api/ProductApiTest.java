@@ -36,15 +36,17 @@ public class ProductApiTest extends AbstractUnitTest {
 
     @Test
     public void testUpdateToDuplicateBarcodeShouldFail() throws ApiException {
-        productApi.addProduct(product("b1"));
+        ProductPojo p1 = productApi.addProduct(product("b1"));
         productApi.addProduct(product("b2"));
 
         ProductPojo update = product("b2");
+        update.setId(p1.getId());
         update.setClientEmail("c@example.com");
         update.setName("n");
         update.setMrp(10.0);
         update.setImageUrl("x");
 
-        assertThrows(ApiException.class, () -> productApi.updateProduct(update, "b1"));
+        assertThrows(ApiException.class, () -> productApi.updateProduct(update));
     }
+
 }
