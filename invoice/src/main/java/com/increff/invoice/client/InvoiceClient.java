@@ -3,21 +3,17 @@ package com.increff.invoice.client;
 import com.increff.pos.model.data.InvoiceData;
 import com.increff.pos.model.exception.ApiException;
 import com.increff.pos.model.form.InvoiceGenerateForm;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
-@Component
 public class InvoiceClient {
+
     private final RestTemplate restTemplate;
+    private final String invoiceServiceBaseUrl;
 
-    // TODO use class
-    @Value("${invoice.self.url}") // keep your current property name
-    private String invoiceServiceBaseUrl;
-
-    public InvoiceClient(RestTemplate restTemplate) {
+    public InvoiceClient(RestTemplate restTemplate, String invoiceServiceBaseUrl) {
         this.restTemplate = restTemplate;
+        this.invoiceServiceBaseUrl = invoiceServiceBaseUrl;
     }
 
     public InvoiceData generateInvoice(InvoiceGenerateForm invoiceRequest) throws ApiException {

@@ -10,27 +10,23 @@ import jakarta.annotation.PostConstruct;
 @Configuration
 public class AuthStaticInitConfig {
 
-    private final Environment env;
+    private final ApplicationProperties properties;
 
-    public AuthStaticInitConfig(Environment env) {
-        this.env = env;
+    public AuthStaticInitConfig(ApplicationProperties properties) {
+        this.properties = properties;
     }
 
     @PostConstruct
     public void init() {
-        String supervisors = env.getProperty("auth.supervisors", "");
-        SupervisorEmailHelper.init(supervisors);
 
-        String secret = env.getProperty("auth.jwt.secret");
-        String expiryStr = env.getProperty("auth.jwt.expiryMinutes", "120");
+        SupervisorEmailHelper.init(
+                String.join(",", properties.getAuth().getSupervisors())
+        );
 
-        long expiry;
-        try {
-            expiry = Long.parseLong(expiryStr);
-        } catch (Exception e) {
-            expiry = 120;
-        }
-
-        JwtHelper.init(secret, expiry);
+        JwtHelper.init(
+                properties.getAuth().getJwt().getSecret(),
+                properties.getAuth().getJwt().getExpiryMinutes()
+        );
     }
 }
+

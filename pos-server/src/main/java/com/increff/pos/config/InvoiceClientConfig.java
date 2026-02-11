@@ -9,7 +9,8 @@ import org.springframework.web.client.RestTemplate;
 public class InvoiceClientConfig {
 
     @Bean
-    public InvoiceClient invoiceClient(RestTemplate restTemplate) {
-        return new InvoiceClient(restTemplate);
+    public InvoiceClient invoiceClient(RestTemplate restTemplate,
+                                       ApplicationProperties properties) {
+        return new InvoiceClient(restTemplate, properties.getInvoice().getSelf().getUrl());
     }
 }
